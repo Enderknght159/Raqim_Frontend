@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../config/app_config.dart';
+import '../logging/api_log_interceptor.dart';
 import '../storage/secure_storage.dart';
 import 'api_exception.dart';
 import 'token_refresher.dart';
@@ -23,13 +24,12 @@ class ApiClient {
       ),
     );
     _refresher = TokenRefresher(storage: _storage, dio: _dio);
+    // Request/response logging (redacts passwords & tokens).
+    _dio.interceptors.add(
+      ApiLogInterceptor(logBodies: AppConfig.logApiBodies),
+    );
     _dio.interceptors.add(_authInterceptor);
     _dio.interceptors.add(_errorInterceptor);
-    if (AppConfig.isDev) {
-      _dio.interceptors.add(
-        LogInterceptor(requestBody: true, responseBody: false),
-      );
-    }
   }
 
   static ApiClient? _instance;
@@ -107,10 +107,10 @@ class ApiClient {
       return const ApiException.network();
     }
     final status = error.response?.statusCode;
-    if (status == 401) return const ApiException.unauthorized();
-    if (status != null && status >= 500) return ApiException.server(statusCode: status);
     final data = error.response?.data;
-    if (data is Map<String, dynamic>) {
+    // Prefer the backend's structured error ({code, message:{ar,en}, field})
+    // for any status — this includes 401 on login (E1/E2), not just 5xx.
+    if (data is Map) {
       final message = data['message'];
       return ApiException(
         code: data['code'] as String?,
@@ -119,6 +119,10 @@ class ApiClient {
         field: data['field'] as String?,
         statusCode: status,
       );
+    }
+    if (status == 401) return const ApiException.unauthorized();
+    if (status != null && status >= 500) {
+      return ApiException.server(statusCode: status);
     }
     return ApiException.server(statusCode: status);
   }

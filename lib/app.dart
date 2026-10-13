@@ -7,15 +7,21 @@ import 'core/localization/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/data/auth_repository.dart';
 import 'features/auth/presentation/cubits/auth_cubit.dart';
+import 'features/student/data/student_local_repository.dart';
+import 'features/student/presentation/student_shell.dart';
 
 /// App dependencies shared across the tree.
 class AppDependencies {
   const AppDependencies({
     required this.authRepository,
+    required this.studentRepository,
+    required this.sessionTick,
     required this.router,
   });
 
   final AuthRepository authRepository;
+  final StudentLocalRepository studentRepository;
+  final ValueNotifier<int> sessionTick;
   final GoRouter router;
 }
 
@@ -30,19 +36,25 @@ class RaqimApp extends StatelessWidget {
     return MultiBlocProvider(
       providers: [
         BlocProvider<AuthCubit>(
-          create: (_) => AuthCubit(dependencies.authRepository),
+          create: (_) => AuthCubit(
+            dependencies.authRepository,
+            onAuthChanged: () => dependencies.sessionTick.value++,
+          ),
         ),
       ],
-      child: MaterialApp.router(
-        title: 'رقيم',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light(),
-        darkTheme: AppTheme.dark(),
-        themeMode: ThemeMode.dark,
-        locale: const Locale(AppConfig.defaultLocale),
-        supportedLocales: AppLocalizations.supportedLocales,
-        localizationsDelegates: appLocalizationsDelegates(),
-        routerConfig: dependencies.router,
+      child: StudentRepositoryScope(
+        repository: dependencies.studentRepository,
+        child: MaterialApp.router(
+          title: 'رقيم',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: ThemeMode.light,
+          locale: const Locale(AppConfig.defaultLocale),
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: appLocalizationsDelegates(),
+          routerConfig: dependencies.router,
+        ),
       ),
     );
   }

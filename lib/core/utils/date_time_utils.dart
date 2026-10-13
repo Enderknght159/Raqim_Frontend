@@ -13,6 +13,13 @@ String formatDate(DateTime date) {
   return '$y-$m-$d';
 }
 
+/// Compact `dd/mm` used in compact card meta lines.
+String formatShortDate(DateTime date) {
+  final m = date.month.toString().padLeft(2, '0');
+  final d = date.day.toString().padLeft(2, '0');
+  return '$d/$m';
+}
+
 /// Parses an ISO `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS` string to [DateTime].
 DateTime? parseDateTime(String? value) {
   if (value == null || value.isEmpty) return null;

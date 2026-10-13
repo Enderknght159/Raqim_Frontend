@@ -21,6 +21,14 @@ enum AppRole {
 
 /// App section names returned by `/me/` and used to build the nav.
 enum AppSection {
+  // Student (B1–B5) tabs.
+  myCourses('my_courses'),
+  quran('quran'),
+  achievement('achievement'),
+  teams('teams'),
+  profile('profile'),
+
+  // Supervisor / teacher sections.
   myProgress('my_progress'),
   courses('courses'),
   students('students'),

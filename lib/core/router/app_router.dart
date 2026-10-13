@@ -1,8 +1,17 @@
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../features/attendance/presentation/screens/attendance_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
+import '../../features/auth/presentation/screens/welcome_screen.dart';
 import '../../features/courses/presentation/screens/courses_screen.dart';
+import '../../features/student/presentation/screens/achievement_screen.dart';
+import '../../features/student/presentation/screens/course_detail_screen.dart';
+import '../../features/student/presentation/screens/my_courses_screen.dart';
+import '../../features/student/presentation/screens/my_teams_screen.dart';
+import '../../features/student/presentation/screens/notifications_screen.dart';
+import '../../features/student/presentation/screens/profile_screen.dart';
+import '../../features/student/presentation/screens/quran_screen.dart';
+import '../../features/student/presentation/student_shell.dart';
 import '../../features/students/presentation/screens/students_screen.dart';
 import '../../shared/coming_soon_screen.dart';
 import '../../shared/role_shell.dart';
@@ -11,11 +20,15 @@ import 'route_guards.dart';
 
 /// Central go_router configuration with auth + section guards.
 class AppRouter {
-  AppRouter();
+  AppRouter({Listenable? refreshListenable})
+      : _refreshListenable = refreshListenable;
+
+  final Listenable? _refreshListenable;
 
   late final GoRouter router = GoRouter(
     initialLocation: '/',
     redirect: authRedirect,
+    refreshListenable: _refreshListenable,
     routes: [
       GoRoute(
         path: '/',
@@ -23,9 +36,16 @@ class AppRouter {
         builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(
+        path: '/welcome',
+        name: 'welcome',
+        builder: (context, state) => const WelcomeScreen(),
+      ),
+      GoRoute(
         path: '/login',
         name: 'login',
-        builder: (context, state) => const LoginScreen(),
+        builder: (context, state) => LoginScreen(
+          username: state.uri.queryParameters['username'] ?? '',
+        ),
       ),
       GoRoute(
         path: '/not-allowed',
@@ -33,30 +53,58 @@ class AppRouter {
         builder: (context, state) =>
             const ComingSoonScreen(title: 'غير مسموح'),
       ),
+      // Full-screen pushed pages (no tabs).
+      GoRoute(
+        path: '/my-progress/courses/:id',
+        name: 'studentCourseDetail',
+        builder: (context, state) => CourseDetailScreen(
+          courseId: int.parse(state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: '/my-progress/notifications',
+        name: 'notifications',
+        builder: (context, state) => const NotificationsScreen(),
+      ),
       ShellRoute(
-        builder: (context, state, child) => RoleShell(child: child),
+        builder: (context, state, child) {
+          if (state.uri.path.startsWith('/my-progress')) {
+            return StudentShell(child: child);
+          }
+          return RoleShell(child: child);
+        },
         routes: [
+          GoRoute(
+            path: '/my-progress',
+            name: 'myProgress',
+            builder: (context, state) => const MyCoursesScreen(),
+          ),
+          GoRoute(
+            path: '/my-progress/quran',
+            name: 'quran',
+            builder: (context, state) => const QuranScreen(),
+          ),
+          GoRoute(
+            path: '/my-progress/achievement',
+            name: 'achievement',
+            builder: (context, state) => const AchievementScreen(),
+          ),
+          GoRoute(
+            path: '/my-progress/teams',
+            name: 'myTeams',
+            builder: (context, state) => const MyTeamsScreen(),
+          ),
+          GoRoute(
+            path: '/my-progress/profile',
+            name: 'profile',
+            builder: (context, state) => const ProfileScreen(),
+          ),
           GoRoute(
             path: '/courses',
             name: 'courses',
             redirect: (context, state) =>
                 sectionRedirect(context, state, section: 'courses'),
             builder: (context, state) => const CoursesScreen(),
-          ),
-          GoRoute(
-            path: '/courses/:id',
-            name: 'courseDetail',
-            redirect: (context, state) =>
-                sectionRedirect(context, state, section: 'courses'),
-            builder: (context, state) => const ComingSoonScreen(title: 'الدورة'),
-          ),
-          GoRoute(
-            path: '/courses/:id/sessions/:sessionId',
-            name: 'sessionDetail',
-            redirect: (context, state) =>
-                sectionRedirect(context, state, section: 'courses'),
-            builder: (context, state) =>
-                const ComingSoonScreen(title: 'الجلسة'),
           ),
           GoRoute(
             path: '/students',
@@ -66,75 +114,9 @@ class AppRouter {
             builder: (context, state) => const StudentsScreen(),
           ),
           GoRoute(
-            path: '/students/:id',
-            name: 'studentDetail',
-            redirect: (context, state) =>
-                sectionRedirect(context, state, section: 'students'),
-            builder: (context, state) =>
-                const ComingSoonScreen(title: 'الطالب'),
-          ),
-          GoRoute(
-            path: '/scan/:sessionId',
-            name: 'scan',
-            redirect: (context, state) =>
-                sectionRedirect(context, state, section: 'courses'),
-            builder: (context, state) => const AttendanceScreen(),
-          ),
-          GoRoute(
-            path: '/my-progress',
-            name: 'myProgress',
-            redirect: (context, state) =>
-                sectionRedirect(context, state, section: 'my_progress'),
-            builder: (context, state) =>
-                const ComingSoonScreen(title: 'تقدّمي'),
-          ),
-          GoRoute(
-            path: '/more',
+            path: '/mosaics',
             name: 'more',
             builder: (context, state) => const ComingSoonScreen(title: 'المزيد'),
-          ),
-          GoRoute(
-            path: '/imports',
-            name: 'imports',
-            redirect: (context, state) =>
-                sectionRedirect(context, state, section: 'imports'),
-            builder: (context, state) => const ComingSoonScreen(title: 'الاستيراد'),
-          ),
-          GoRoute(
-            path: '/messages',
-            name: 'messages',
-            redirect: (context, state) =>
-                sectionRedirect(context, state, section: 'messages'),
-            builder: (context, state) => const ComingSoonScreen(title: 'الرسائل'),
-          ),
-          GoRoute(
-            path: '/sync',
-            name: 'sync',
-            redirect: (context, state) =>
-                sectionRedirect(context, state, section: 'sync'),
-            builder: (context, state) => const ComingSoonScreen(title: 'المزامنة'),
-          ),
-          GoRoute(
-            path: '/admin/users',
-            name: 'adminUsers',
-            redirect: (context, state) =>
-                sectionRedirect(context, state, section: 'admin'),
-            builder: (context, state) => const ComingSoonScreen(title: 'المستخدمون'),
-          ),
-          GoRoute(
-            path: '/admin/audit',
-            name: 'adminAudit',
-            redirect: (context, state) =>
-                sectionRedirect(context, state, section: 'admin'),
-            builder: (context, state) => const ComingSoonScreen(title: 'سجل التدقيق'),
-          ),
-          GoRoute(
-            path: '/admin/permissions/:userId',
-            name: 'adminPermissions',
-            redirect: (context, state) =>
-                sectionRedirect(context, state, section: 'admin'),
-            builder: (context, state) =>
-                const ComingSoonScreen(title: 'الصلاحيات'),
           ),
         ],
       ),
@@ -143,4 +125,5 @@ class AppRouter {
 }
 
 /// Central go_router configuration with auth + section guards.
-GoRouter createAppRouter() => AppRouter().router;
+GoRouter createAppRouter({Listenable? refreshListenable}) =>
+    AppRouter(refreshListenable: refreshListenable).router;

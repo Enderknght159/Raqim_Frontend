@@ -9,20 +9,26 @@ class UserProfile {
   const UserProfile({
     required this.id,
     required this.name,
+    this.username,
     this.email,
+    this.mosqueName,
     this.role = AppRole.student,
     this.sections = const [],
     this.permissions = const {},
     this.scopes,
     this.specialAbilities = const [],
+    this.usesDefaultPassword = false,
+    this.isDemo = false,
   });
 
   final int id;
   final String name;
+  final String? username;
   final String? email;
+  final String? mosqueName;
   final AppRole role;
 
-  /// Ordered nav sections, e.g. [myProgress, courses, students, more].
+  /// Ordered nav sections, e.g. [myCourses, quran, achievement, teams, profile].
   final List<AppSection> sections;
 
   /// Module → permission grant map.
@@ -33,6 +39,14 @@ class UserProfile {
 
   /// Kiosk abilities etc.
   final List<String> specialAbilities;
+
+  /// True while the account still uses the seeded default password
+  /// (`admin`/`admin1234`). Drives the non-blocking change-password banner.
+  final bool usesDefaultPassword;
+
+  /// True when this profile is the local demo fallback (server `/me` was
+  /// unavailable). UI shows an "وضع تجريبي" badge.
+  final bool isDemo;
 
   bool get isAdmin => role == AppRole.admin;
   bool get isSupervisor => role == AppRole.supervisor;
@@ -50,6 +64,27 @@ class UserProfile {
 
   bool canExport(String module) => permissions[module]?.canExport ?? false;
 
+  /// Local demo profile used when the backend `/me` is not available yet.
+  /// Drives the full student experience against local seeded data.
+  factory UserProfile.demo({String? username}) {
+    return UserProfile(
+      id: 1,
+      name: 'عبد الرحمن',
+      username: username,
+      email: null,
+      mosqueName: 'جامع الفرقان',
+      role: AppRole.student,
+      sections: const [
+        AppSection.myCourses,
+        AppSection.quran,
+        AppSection.achievement,
+        AppSection.teams,
+        AppSection.profile,
+      ],
+      isDemo: true,
+    );
+  }
+
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     final sectionsJson = json['sections'] as List<dynamic>? ?? const [];
     final permsJson = json['permissions'] as Map<String, dynamic>? ?? const {};
@@ -59,7 +94,9 @@ class UserProfile {
     return UserProfile(
       id: json['id'] as int? ?? 0,
       name: json['name'] as String? ?? '',
+      username: json['username'] as String?,
       email: json['email'] as String?,
+      mosqueName: (json['mosque'] as Map<String, dynamic>?)?['name'] as String?,
       role: AppRole.fromValue(json['role'] as String?),
       sections: sectionsJson
           .map((s) => AppSection.fromValue(s as String?))
@@ -72,6 +109,10 @@ class UserProfile {
       },
       scopes: scopesJson?.cast<int>(),
       specialAbilities: abilitiesJson.cast<String>(),
+      usesDefaultPassword:
+          json['uses_default_password'] as bool? ??
+              json['usesDefaultPassword'] as bool? ??
+              false,
     );
   }
 }

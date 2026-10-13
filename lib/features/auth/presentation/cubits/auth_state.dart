@@ -45,11 +45,6 @@ class AuthLoginFailure extends AuthState {
   List<Object?> get props => [error];
 }
 
-/// Session restore failed (no/invalid token) — fall back to login.
-class AuthSessionExpired extends AuthState {
-  const AuthSessionExpired();
-}
-
 /// Logged out cleanly.
 class AuthLoggedOut extends AuthState {
   const AuthLoggedOut();

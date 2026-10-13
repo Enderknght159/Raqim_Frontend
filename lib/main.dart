@@ -6,6 +6,9 @@ import 'core/router/app_router.dart';
 import 'core/storage/secure_storage.dart';
 import 'features/auth/data/auth_remote_data_source.dart';
 import 'features/auth/data/auth_repository.dart';
+import 'features/student/data/local/demo_seed.dart';
+import 'features/student/data/local/student_database.dart';
+import 'features/student/data/student_local_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,19 +19,34 @@ Future<void> main() async {
 
   // Auth feature.
   final authRepository = AuthRepository(
-    remote: AuthRemoteDataSource(apiClient: apiClient),
+    remote: AuthRemoteDataSource(dio: apiClient.dio),
     storage: secureStorage,
   );
 
+  // Local student DB (drift, seeded once) — powers the trial build until the
+  // backend is ready.
+  final studentRepository = StudentLocalRepository(await _openStudentDb());
+
+  // Bumped on every auth-state change so go_router re-runs its redirects.
+  final sessionTick = ValueNotifier<int>(0);
+
   // Router (guards read the AuthCubit via context).
-  final router = createAppRouter();
+  final router = createAppRouter(refreshListenable: sessionTick);
 
   runApp(
     RaqimApp(
       dependencies: AppDependencies(
         authRepository: authRepository,
+        studentRepository: studentRepository,
+        sessionTick: sessionTick,
         router: router,
       ),
     ),
   );
+}
+
+Future<StudentDatabase> _openStudentDb() async {
+  final database = StudentDatabase();
+  await seedDemoDataIfNeeded(database);
+  return database;
 }

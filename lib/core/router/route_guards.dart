@@ -9,18 +9,36 @@ import '../../features/auth/domain/models/user_profile.dart';
 import '../../features/auth/presentation/cubits/auth_cubit.dart';
 import '../../features/auth/presentation/cubits/auth_state.dart';
 
-/// Top-level auth redirect: unauthenticated users are sent to `/login`.
+/// Top-level auth redirect: keeps the splash while the session is restoring;
+/// unauthenticated users are sent to `/welcome`; authenticated users who land
+/// on the splash (`/`) go to their first available section.
 FutureOr<String?> authRedirect(BuildContext context, GoRouterState state) {
   final auth = context.read<AuthCubit>().state;
-  final isLoginRoute = state.uri.path == '/login';
+  final path = state.uri.path;
+  final isPublic = path == '/welcome' || path == '/login';
+
+  if (auth is AuthRestoring) {
+    // Session restore in progress — leave the splash visible.
+    return null;
+  }
+
   if (auth is AuthAuthenticated) {
-    return isLoginRoute ? '/' : null;
+    if (path == '/') return firstSectionPath(auth.profile);
+    return isPublic ? '/' : null;
   }
-  if (auth is AuthUnauthenticated || auth is AuthSessionExpired) {
-    return isLoginRoute ? null : '/login';
+  if (auth is AuthUnauthenticated || auth is AuthLoggedOut) {
+    return isPublic ? null : '/welcome';
   }
-  // Restoring / loading — keep the splash visible.
+  // Unknown state — keep the splash.
   return null;
+}
+
+/// Path of the user's first section (their landing screen).
+String firstSectionPath(UserProfile profile) {
+  if (profile.isAdmin || profile.isSupervisor) return '/courses';
+  if (profile.isTeacher) return '/courses';
+  if (profile.isStudent || profile.isDemo) return '/my-progress';
+  return '/my-progress';
 }
 
 /// Role-section redirect used per-route-group. Returns a redirect location or

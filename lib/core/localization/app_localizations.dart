@@ -10,9 +10,10 @@ class AppLocalizations {
 
   final Locale locale;
 
+  /// Arabic-only for the current build (design rule §5). English wiring kept
+  /// for future, but not surfaced.
   static const List<Locale> supportedLocales = [
     Locale('ar'),
-    Locale('en'),
   ];
 
   static AppLocalizations of(BuildContext context) =>

@@ -51,6 +51,6 @@ void main() {
       ),
     );
     expect(find.text('الطلاب'), findsOneWidget);
-    expect(find.text('٤٢'), findsOneWidget); // Arabic-Indic numerals
+    expect(find.text('42'), findsOneWidget); // Western numerals (design rule)
   });
 }

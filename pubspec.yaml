@@ -61,8 +61,12 @@ dependencies:
   # File picking (Excel import)
   file_picker: ^8.3.4
 
+  # SVG rendering (brand logo)
+  flutter_svg: ^2.0.10+1
+
   # Cupertino icons
   cupertino_icons: ^1.0.8
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:
@@ -89,6 +93,22 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/logo/
+
+  fonts:
+    - family: Zain
+      fonts:
+        - asset: assets/fonts/Zain-Regular.ttf
+        - asset: assets/fonts/Zain-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Zain-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Zain-Black.ttf
+          weight: 900
+        - asset: assets/fonts/Zain-Light.ttf
+          weight: 300
 
   # To add assets to your application, add an assets section, like this:
   # assets:

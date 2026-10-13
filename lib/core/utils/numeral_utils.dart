@@ -1,34 +1,39 @@
-const _easternDigits = '٠١٢٣٤٥٦٧٨٩';
-const _westernDigits = '0123456789';
+/// Western-only number formatting (design rule: numerals always 0-9,
+/// overriding the Arabic-Indic variant once shown in wireframes).
+library;
 
-/// Converts western digits to Arabic-Indic digits (optional per locale).
-String toArabicNumerals(String input) {
-  final buffer = StringBuffer();
-  for (final rune in input.runes) {
-    final char = String.fromCharCode(rune);
-    final index = _westernDigits.indexOf(char);
-    if (index >= 0) {
-      buffer.write(_easternDigits[index]);
-    } else {
-      buffer.write(char);
-    }
-  }
-  return buffer.toString();
+/// Formats an integer with thousands separators using Western digits.
+String formatNumber(int value) {
+  return _groupThousands(value);
 }
 
-/// Formats an integer with optional thousands separators and Arabic digits.
-String formatNumber(int value, {bool arabic = true}) {
-  final grouped = _groupThousands(value);
-  return arabic ? toArabicNumerals(grouped) : grouped;
+/// Formats a double with an optional number of decimals using Western digits.
+String formatDecimal(double value, {int decimals = 2}) {
+  final fixed = value.toStringAsFixed(decimals);
+  return _groupThousandsFixed(fixed);
 }
 
 String _groupThousands(int value) {
   final s = value.abs().toString();
+  final grouped = _groupString(s);
+  return value < 0 ? '-$grouped' : grouped;
+}
+
+String _groupThousandsFixed(String s) {
+  final negative = s.startsWith('-');
+  final unsigned = negative ? s.substring(1) : s;
+  final dot = unsigned.indexOf('.');
+  final intPart = dot == -1 ? unsigned : unsigned.substring(0, dot);
+  final fracPart = dot == -1 ? '' : unsigned.substring(dot);
+  final grouped = _groupString(intPart);
+  return '${negative ? '-' : ''}$grouped$fracPart';
+}
+
+String _groupString(String s) {
   final buffer = StringBuffer();
   for (var i = 0; i < s.length; i++) {
     if (i > 0 && (s.length - i) % 3 == 0) buffer.write(',');
     buffer.write(s[i]);
   }
-  final result = buffer.toString();
-  return value < 0 ? '-$result' : result;
+  return buffer.toString();
 }
