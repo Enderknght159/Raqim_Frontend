@@ -11,6 +11,7 @@ class AppCard extends StatelessWidget {
     super.key,
     required this.child,
     this.onTap,
+    this.onLongPress,
     this.padding = const EdgeInsets.all(16),
     this.color,
     this.borderColor,
@@ -20,6 +21,7 @@ class AppCard extends StatelessWidget {
 
   final Widget child;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final EdgeInsetsGeometry padding;
 
   /// Card background color. Defaults to `tokens.surfaceCard`.
@@ -45,7 +47,7 @@ class AppCard extends StatelessWidget {
       ),
     );
 
-    if (onTap == null) {
+    if (onTap == null && onLongPress == null) {
       return DecoratedBox(
         decoration: decoration,
         child: Padding(padding: padding, child: child),
@@ -55,6 +57,7 @@ class AppCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(radiusValue),
         child: DecoratedBox(
           decoration: decoration,

@@ -6,6 +6,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/icon_toggle_group.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../auth/presentation/cubits/auth_cubit.dart';
@@ -119,7 +120,7 @@ class ProfileScreen extends StatelessWidget {
                 const SizedBox(height: 8),
                 AppButton(
                   label: 'خروج',
-                  variant: AppButtonVariant.dangerOutline,
+                  variant: AppButtonVariant.destructive,
                   icon: Icons.logout,
                   onPressed: () => context.read<AuthCubit>().logout(),
                 ),
@@ -372,17 +373,23 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: type,
-                decoration: const InputDecoration(labelText: 'النوع'),
-                items: const [
-                  DropdownMenuItem(value: 'parent', child: Text('ولي الأمر')),
-                  DropdownMenuItem(value: 'student', child: Text('الطالب')),
-                  DropdownMenuItem(value: 'landline', child: Text('هاتف أرضي')),
+              IconToggleGroup<String>(
+                value: type,
+                onChanged: (v) => setState(() => type = v),
+                options: const [
+                  IconToggleOption(
+                      value: 'parent',
+                      icon: Icons.family_restroom,
+                      label: 'ولي الأمر'),
+                  IconToggleOption(
+                      value: 'student',
+                      icon: Icons.person_outline,
+                      label: 'الطالب'),
+                  IconToggleOption(
+                      value: 'landline',
+                      icon: Icons.phone_in_talk_outlined,
+                      label: 'هاتف أرضي'),
                 ],
-                onChanged: (v) {
-                  if (v != null) setState(() => type = v);
-                },
               ),
               const SizedBox(height: 16),
               AppButton(

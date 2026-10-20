@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../core/widgets/animated_entrance.dart';
 import '../core/widgets/raqim_logo.dart';
 import '../../features/auth/presentation/cubits/auth_cubit.dart';
 
@@ -15,16 +16,27 @@ class SplashScreen extends StatelessWidget {
       context.read<AuthCubit>().restoreSession();
     });
     return Scaffold(
+      // Light-only app: keep a white surface so the dark brand mark
+      // (Raqim_Logo_LTBG) keeps its contrast (A1-splash.md §5).
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const RaqimLogo(size: 280),
+            AnimatedEntrance(
+              duration: const Duration(milliseconds: 400),
+              delay: const Duration(milliseconds: 60),
+              child: const RaqimLogo(size: 240),
+            ),
             const SizedBox(height: 40),
-            const SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(strokeWidth: 3),
+            AnimatedEntrance(
+              duration: const Duration(milliseconds: 250),
+              delay: const Duration(milliseconds: 260),
+              child: const SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
             ),
           ],
         ),

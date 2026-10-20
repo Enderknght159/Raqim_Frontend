@@ -4,6 +4,7 @@ import 'app.dart';
 import 'core/network/api_client.dart';
 import 'core/router/app_router.dart';
 import 'core/storage/secure_storage.dart';
+import 'features/admin/data/admin_local_repository.dart';
 import 'features/auth/data/auth_remote_data_source.dart';
 import 'features/auth/data/auth_repository.dart';
 import 'features/student/data/local/demo_seed.dart';
@@ -23,9 +24,11 @@ Future<void> main() async {
     storage: secureStorage,
   );
 
-  // Local student DB (drift, seeded once) — powers the trial build until the
-  // backend is ready.
-  final studentRepository = StudentLocalRepository(await _openStudentDb());
+  // Local DB (drift, seeded once) — powers the trial build until the backend
+  // is ready. Both the student and admin repositories share it.
+  final database = await _openDb();
+  final studentRepository = StudentLocalRepository(database);
+  final adminRepository = AdminLocalRepository(database);
 
   // Bumped on every auth-state change so go_router re-runs its redirects.
   final sessionTick = ValueNotifier<int>(0);
@@ -38,6 +41,7 @@ Future<void> main() async {
       dependencies: AppDependencies(
         authRepository: authRepository,
         studentRepository: studentRepository,
+        adminRepository: adminRepository,
         sessionTick: sessionTick,
         router: router,
       ),
@@ -45,7 +49,7 @@ Future<void> main() async {
   );
 }
 
-Future<StudentDatabase> _openStudentDb() async {
+Future<StudentDatabase> _openDb() async {
   final database = StudentDatabase();
   await seedDemoDataIfNeeded(database);
   return database;

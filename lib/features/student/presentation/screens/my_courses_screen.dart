@@ -8,15 +8,36 @@ import '../student_shell.dart';
 import '../widgets/course_card.dart';
 
 /// B1 — دوراتي (landing tab). Smart-watch course cards.
-class MyCoursesScreen extends StatelessWidget {
+class MyCoursesScreen extends StatefulWidget {
   const MyCoursesScreen({super.key});
 
   @override
+  State<MyCoursesScreen> createState() => _MyCoursesScreenState();
+}
+
+class _MyCoursesScreenState extends State<MyCoursesScreen> {
+  late Future<List<CourseOverview>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = StudentRepositoryScope.of(context).courseOverviews();
+  }
+
+  Future<void> _refresh() async {
+    final future = StudentRepositoryScope.of(context).courseOverviews();
+    if (!mounted) return;
+    setState(() {
+      _future = future;
+    });
+    await future;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final repo = StudentRepositoryScope.of(context);
     return Scaffold(
       body: AsyncView<List<CourseOverview>>(
-        future: repo.courseOverviews(),
+        future: _future,
         builder: (context, overviews) {
           if (overviews.isEmpty) {
             return const EmptyState(
@@ -26,7 +47,7 @@ class MyCoursesScreen extends StatelessWidget {
             );
           }
           return RefreshIndicator(
-            onRefresh: () async {},
+            onRefresh: _refresh,
             child: ListView.separated(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),

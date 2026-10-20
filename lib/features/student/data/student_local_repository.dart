@@ -197,6 +197,9 @@ class StudentLocalRepository {
     final overviews = <CourseOverview>[];
     for (final course in courses) {
       final bundle = await courseBundle(course.id);
+      // Only courses the student has records in (BR-406: membership is
+      // inferred from records; upcoming/empty courses are skipped).
+      if (_hasNoRecords(bundle)) continue;
       final lastUpdated = _lastUpdated(bundle);
       overviews.add(CourseOverview(
         course: course,
@@ -214,7 +217,18 @@ class StudentLocalRepository {
     return overviews;
   }
 
-  Future<StudentCourseBundle> courseBundle(int courseId) async {
+  bool _hasNoRecords(StudentCourseBundle bundle) =>
+      bundle.attendance.isEmpty &&
+      bundle.memorizations.isEmpty &&
+      bundle.transactions.isEmpty &&
+      bundle.examSubmissions.isEmpty &&
+      bundle.certificates.isEmpty &&
+      bundle.matnRecitations.isEmpty;
+
+  Future<StudentCourseBundle> courseBundle(
+    int courseId, {
+    int studentId = 1,
+  }) async {
     final courseRow = await (_database.select(_database.courses)
           ..where((t) => t.id.equals(courseId)))
         .getSingle();
@@ -241,7 +255,9 @@ class StudentLocalRepository {
     final attendance = sessionIds.isEmpty
         ? <AttendanceRecord>[]
         : (await (_database.select(_database.attendances)
-                ..where((t) => t.studentId.equals(1) & t.sessionId.isIn(sessionIds)))
+                ..where((t) =>
+                    t.studentId.equals(studentId) &
+                    t.sessionId.isIn(sessionIds)))
               .get())
             .map((a) =>
                 AttendanceRecord(sessionId: a.sessionId, arrivalTime: a.arrivalTime))
@@ -250,7 +266,9 @@ class StudentLocalRepository {
     final memorizations = sessionIds.isEmpty
         ? <Memorization>[]
         : (await (_database.select(_database.memorizations)
-                ..where((t) => t.studentId.equals(1) & t.sessionId.isIn(sessionIds)))
+                ..where((t) =>
+                    t.studentId.equals(studentId) &
+                    t.sessionId.isIn(sessionIds)))
               .get())
             .map(_mapMemorization)
             .toList();
@@ -258,7 +276,9 @@ class StudentLocalRepository {
     final transactions = sessionIds.isEmpty
         ? <StudentTransaction>[]
         : (await (_database.select(_database.transactions)
-                ..where((t) => t.studentId.equals(1) & t.sessionId.isIn(sessionIds)))
+                ..where((t) =>
+                    t.studentId.equals(studentId) &
+                    t.sessionId.isIn(sessionIds)))
               .get())
             .map(_mapTransaction)
             .toList();
@@ -272,19 +292,21 @@ class StudentLocalRepository {
     final examSubmissions = examIds.isEmpty
         ? <ExamSubmission>[]
         : (await (_database.select(_database.examSubmissions)
-                ..where((t) => t.studentId.equals(1) & t.examId.isIn(examIds)))
+                ..where((t) =>
+                    t.studentId.equals(studentId) & t.examId.isIn(examIds)))
               .get())
             .map((s) => ExamSubmission(examId: s.examId, mark: s.mark, date: s.date))
             .toList();
 
     final certificates = (await (_database.select(_database.certificates)
-              ..where((t) => t.studentId.equals(1) & t.courseId.equals(courseId)))
+              ..where((t) =>
+                  t.studentId.equals(studentId) & t.courseId.equals(courseId)))
           .get())
         .map(_mapCertificate)
         .toList();
 
     final matns = await this.matns();
-    final matnRecitations = await this.matnRecitations();
+    final matnRecitations = await this.matnRecitations(studentId: studentId);
 
     return StudentCourseBundle(
       course: _mapCourse(courseRow),
@@ -327,9 +349,9 @@ class StudentLocalRepository {
         .toList();
   }
 
-  Future<List<MatnRecitation>> matnRecitations() async {
+  Future<List<MatnRecitation>> matnRecitations({int studentId = 1}) async {
     final rows = await (_database.select(_database.matnRecitations)
-          ..where((t) => t.studentId.equals(1)))
+          ..where((t) => t.studentId.equals(studentId)))
         .get();
     return rows
         .map((r) => MatnRecitation(

@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../utils/numeral_utils.dart';
 import 'app_card.dart';
+import 'icon_tile.dart';
 import '../theme/app_theme.dart';
 
-/// A compact stat tile used on dashboards (summary cards).
+/// A compact stat tile used on dashboards (summary cards): the icon sits on
+/// top, with the value and its label stacked beneath it (avoids cramped rows
+/// on narrow cards).
 class StatTile extends StatelessWidget {
   const StatTile({
     super.key,
@@ -25,38 +28,33 @@ class StatTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final accent = color ?? tokens.brand;
-    final scheme = Theme.of(context).colorScheme;
     return AppCard(
       onTap: onTap,
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 20, color: accent),
-                const SizedBox(width: 8),
-              ],
-              Expanded(
-                child: Text(
-                  label,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
+          if (icon != null) ...[
+            IconTile(icon: icon!, color: accent, size: 34, iconSize: 17),
+            const SizedBox(height: 8),
+          ],
           Text(
             formatNumber(value),
             style: Theme.of(context)
                 .textTheme
-                .headlineMedium
-                ?.copyWith(fontWeight: FontWeight.bold, color: accent),
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.w900, color: accent),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: tokens.textMuted),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

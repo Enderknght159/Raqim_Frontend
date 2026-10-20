@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../shared/notifications_bell.dart';
+import '../../../shared/role_switch_button.dart';
 import '../data/student_local_repository.dart';
 
 /// Provides the local [StudentLocalRepository] to all student screens.
@@ -15,7 +17,7 @@ class StudentRepositoryScope extends InheritedWidget {
 
   static StudentLocalRepository of(BuildContext context) {
     final scope =
-        context.dependOnInheritedWidgetOfExactType<StudentRepositoryScope>();
+        context.getInheritedWidgetOfExactType<StudentRepositoryScope>();
     assert(scope != null, 'StudentRepositoryScope is missing in the tree');
     return scope!.repository;
   }
@@ -49,7 +51,7 @@ class StudentShell extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(_titleFor(path)),
-        actions: [const NotificationsBell()],
+        actions: const [RoleSwitchButton(toAdmin: true), NotificationsBell()],
       ),
       body: Column(
         children: [
@@ -84,58 +86,6 @@ class StudentShell extends StatelessWidget {
     if (path.startsWith('/my-progress/teams')) return 'حلقاتي';
     if (path.startsWith('/my-progress/profile')) return 'الملف';
     return 'دوراتي';
-  }
-}
-
-/// Bell + unread badge in the shell's top app bar.
-class NotificationsBell extends StatefulWidget {
-  const NotificationsBell({super.key});
-
-  @override
-  State<NotificationsBell> createState() => _NotificationsBellState();
-}
-
-class _NotificationsBellState extends State<NotificationsBell> {
-  int _unread = 0;
-  bool _loaded = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_loaded) {
-      _loadUnread();
-    }
-  }
-
-  Future<void> _loadUnread() async {
-    final repo = StudentRepositoryScope.of(context);
-    final count = await repo.unreadNotifications();
-    if (mounted) {
-      setState(() {
-        _unread = count;
-        _loaded = true;
-      });
-    }
-  }
-
-  Future<void> _open() async {
-    await context.push('/my-progress/notifications');
-    // Screen marks everything as read on open; reload the badge afterwards.
-    _loaded = false;
-    await _loadUnread();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: 'الإشعارات',
-      onPressed: _open,
-      icon: Badge(
-        isLabelVisible: _unread > 0,
-        label: Text('$_unread'),
-        child: const Icon(Icons.notifications_outlined),
-      ),
-    );
   }
 }
 

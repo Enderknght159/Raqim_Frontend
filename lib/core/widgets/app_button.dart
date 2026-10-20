@@ -54,18 +54,22 @@ class _AppButtonState extends State<AppButton> {
         else ...[
           if (widget.icon != null) ...[
             Icon(widget.icon, size: 18, color: fg),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
           ],
-          Text(
-            widget.label,
-            style: TextStyle(
-              color: fg,
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
+          Flexible(
+            child: Text(
+              widget.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: fg,
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+              ),
             ),
           ),
           if (widget.trailingIcon != null) ...[
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Icon(widget.trailingIcon, size: 18, color: fg),
           ],
         ],
@@ -82,7 +86,7 @@ class _AppButtonState extends State<AppButton> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 90),
           transform: Matrix4.translationValues(0, _pressed ? 2 : 0, 0),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(tokens.radiusSmall),

@@ -190,6 +190,62 @@ class AppMeta extends Table {
   Set<Column> get primaryKey => {key};
 }
 
+// ── Admin-centric tables (E6–E14) ───────────────────────────────────────────
+
+class TeamTypes extends Table {
+  IntColumn get id => integer()();
+  TextColumn get name => text()();
+  TextColumn get note => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+class Subjects extends Table {
+  IntColumn get id => integer()();
+  TextColumn get name => text()();
+  TextColumn get book => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+class Distributables extends Table {
+  IntColumn get id => integer()();
+  TextColumn get name => text()();
+  TextColumn get note => text().nullable()();
+  BoolColumn get active => boolean().withDefault(const Constant(true))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+class Distributions extends Table {
+  IntColumn get id => integer()();
+  IntColumn get studentId => integer()();
+  IntColumn get distributableId => integer()();
+  IntColumn get count => integer().withDefault(const Constant(1))();
+  DateTimeColumn get date => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+class ChangeRequests extends Table {
+  IntColumn get id => integer()();
+  IntColumn get studentId => integer()();
+  TextColumn get field => text()(); // name|fatherName|yearOfBirth|phoneNumber
+  TextColumn get currentValue => text().nullable()();
+  TextColumn get requestedValue => text()();
+  TextColumn get status => text().withDefault(const Constant('pending'))();
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get reviewedAt => dateTime().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 @DriftDatabase(tables: [
   Courses,
   Sessions,
@@ -206,6 +262,11 @@ class AppMeta extends Table {
   Matns,
   MatnRecitations,
   AppMeta,
+  TeamTypes,
+  Subjects,
+  Distributables,
+  Distributions,
+  ChangeRequests,
 ])
 class StudentDatabase extends _$StudentDatabase {
   StudentDatabase() : super(_openConnection());
@@ -213,7 +274,7 @@ class StudentDatabase extends _$StudentDatabase {
   StudentDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -225,6 +286,13 @@ class StudentDatabase extends _$StudentDatabase {
             await customStatement(
                 "UPDATE student_teams SET date = datetime('now') "
                 'WHERE date IS NULL');
+          }
+          if (from < 3) {
+            await m.createTable(teamTypes);
+            await m.createTable(subjects);
+            await m.createTable(distributables);
+            await m.createTable(distributions);
+            await m.createTable(changeRequests);
           }
         },
       );

@@ -108,19 +108,24 @@ class PageGridCell extends StatelessWidget {
               ),
             ),
             Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '$page',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: rated ? _textColor(color, tokens) : tokens.textMuted,
-                        ),
-                  ),
-                  if (rated && rating! >= 3)
-                    Icon(Icons.star, size: 10, color: color),
-                ],
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$page',
+                      maxLines: 1,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color:
+                                rated ? _textColor(color, tokens) : tokens.textMuted,
+                          ),
+                    ),
+                    if (rated && rating! >= 3)
+                      Icon(Icons.star, size: 10, color: color),
+                  ],
+                ),
               ),
             ),
           ],

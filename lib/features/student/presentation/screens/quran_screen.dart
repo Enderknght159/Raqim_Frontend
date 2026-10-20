@@ -10,30 +10,26 @@ import '../../data/student_local_repository.dart';
 import '../../domain/models/student_models.dart';
 import '../../domain/student_stats.dart';
 import '../student_shell.dart';
-import '../widgets/quran_grid.dart';
+import '../widgets/quran_map.dart';
 import '../widgets/rating_stars.dart';
+import '../widgets/tasmi_log_sheet.dart';
 
-/// B2 — القرآن: stats + horizontally-paged 30-juz map + certificates + tasmi'.
-class QuranScreen extends StatelessWidget {
+/// B2 — القرآن: stats + map of the whole mushaf (juz-paged) + certificates +
+/// tasmi' log.
+class QuranScreen extends StatefulWidget {
   const QuranScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final repo = StudentRepositoryScope.of(context);
-    return Scaffold(
-      body: FutureBuilder(
-        future: _load(repo),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError || !snapshot.hasData) {
-            return const Center(child: Text('تعذر التحميل'));
-          }
-          return _QuranBody(data: snapshot.data!);
-        },
-      ),
-    );
+  State<QuranScreen> createState() => _QuranScreenState();
+}
+
+class _QuranScreenState extends State<QuranScreen> {
+  Future<_QuranData>? _future;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _future ??= _load(StudentRepositoryScope.of(context));
   }
 
   Future<_QuranData> _load(StudentLocalRepository repo) async {
@@ -45,7 +41,6 @@ class QuranScreen extends StatelessWidget {
       memorizations: mems,
       certificates: certs,
       testedJuz: _testedJuz(certs),
-      pageStatus: _buildPageStatus(mems),
     );
   }
 
@@ -60,31 +55,22 @@ class QuranScreen extends StatelessWidget {
     return tested;
   }
 
-  /// Latest rating per (page,partIndex); per page rating = max rating,
-  /// progress = covered parts / total parts.
-  Map<int, ({int? rating, double progress})> _buildPageStatus(
-      List<Memorization> mems) {
-    final latest = <String, Memorization>{};
-    for (final m in mems) {
-      final key = '${m.page}:${m.partIndex}';
-      final existing = latest[key];
-      if (existing == null || m.date.isAfter(existing.date)) latest[key] = m;
-    }
-    final byPage = <int, List<Memorization>>{};
-    for (final m in latest.values) {
-      byPage.putIfAbsent(m.page, () => []).add(m);
-    }
-    return {
-      for (final entry in byPage.entries)
-        entry.key: (
-          rating: entry.value
-              .map((m) => m.rating)
-              .reduce((a, b) => a > b ? a : b),
-          progress: (entry.value.length /
-                  (entry.value.first.parts <= 0 ? 1 : entry.value.first.parts))
-              .clamp(0.0, 1.0),
-        ),
-    };
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: FutureBuilder<_QuranData>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError || !snapshot.hasData) {
+            return const Center(child: Text('تعذر التحميل'));
+          }
+          return _QuranBody(data: snapshot.data!);
+        },
+      ),
+    );
   }
 }
 
@@ -94,69 +80,22 @@ class _QuranData {
     required this.memorizations,
     required this.certificates,
     required this.testedJuz,
-    required this.pageStatus,
   });
 
   final QuranStats stats;
   final List<Memorization> memorizations;
   final List<Certificate> certificates;
   final Set<int> testedJuz;
-  final Map<int, ({int? rating, double progress})> pageStatus;
 }
 
-class _QuranBody extends StatefulWidget {
+class _QuranBody extends StatelessWidget {
   const _QuranBody({required this.data});
 
   final _QuranData data;
 
   @override
-  State<_QuranBody> createState() => _QuranBodyState();
-}
-
-class _QuranBodyState extends State<_QuranBody> {
-  // A multiple of 30 so `index % 30` always maps to the correct juz — this
-  // gives a looping (infinite) page view from juz 30 back to juz 1.
-  static const int _basePage = 900;
-  static const int _loopCount = 50; // 1500 pages total (50 full cycles).
-
-  late final PageController _controller;
-  late int _currentJuz;
-
-  @override
-  void initState() {
-    super.initState();
-    _currentJuz = _computeInitialJuz();
-    _controller = PageController(initialPage: _pageFor(_currentJuz));
-  }
-
-  int _computeInitialJuz() {
-    if (widget.data.memorizations.isEmpty) return 30;
-    final latestPage = widget.data.memorizations
-        .map((m) => m.page)
-        .reduce((a, b) => a > b ? a : b);
-    return ((latestPage - 1) ~/ 20 + 1).clamp(1, 30);
-  }
-
-  int _pageFor(int juz) => _basePage + (juz - 1);
-
-  void _jumpToJuz(int juz) {
-    _controller.animateToPage(
-      _pageFor(juz),
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    final data = widget.data;
     if (data.memorizations.isEmpty) {
       return const EmptyState(
         title: 'ابدأ رحلتك!',
@@ -171,42 +110,19 @@ class _QuranBodyState extends State<_QuranBody> {
         const SizedBox(height: 14),
         const SectionHeader(icon: Icons.map_outlined, title: 'خريطة الحفظ'),
         const SizedBox(height: 8),
-        // Quick slider: jump instantly between the 30 juz.
-        JuzSlider(
-          selected: _currentJuz,
-          onChanged: _jumpToJuz,
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 250,
-          child: PageView.builder(
-            controller: _controller,
-            itemCount: 30 * _loopCount,
-            onPageChanged: (index) {
-              setState(() => _currentJuz = index % 30 + 1);
-            },
-            itemBuilder: (context, index) {
-              final juz = index % 30 + 1;
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: _JuzPage(
-                  juz: juz,
-                  tested: data.testedJuz.contains(juz),
-                  pageStatus: data.pageStatus,
-                ),
-              );
-            },
-          ),
+        QuranMap(
+          memorizations: data.memorizations,
+          testedJuz: data.testedJuz,
         ),
         const SizedBox(height: 16),
         const SectionHeader(
             icon: Icons.emoji_events_outlined, title: 'شهادات القرآن'),
         const SizedBox(height: 10),
-        _certificatesCard(tokens),
+        _certificatesCard(context, tokens),
         const SizedBox(height: 16),
         const SectionHeader(icon: Icons.history, title: 'سجل التسميع'),
         const SizedBox(height: 10),
-        _tasmiPreview(tokens),
+        _tasmiPreview(context, tokens),
         const SizedBox(height: 24),
       ],
     );
@@ -215,7 +131,7 @@ class _QuranBodyState extends State<_QuranBody> {
   // ── Stats (motivational) ────────────────────────────────────────────────
 
   Widget _statsSection(BuildContext context, AppTokens tokens) {
-    final stats = widget.data.stats;
+    final stats = data.stats;
     return Column(
       children: [
         // Two adjacent cards: khitmah (date is the hero) + monthly rate.
@@ -349,8 +265,8 @@ class _QuranBodyState extends State<_QuranBody> {
 
   // ── Certificates ───────────────────────────────────────────────────────
 
-  Widget _certificatesCard(AppTokens tokens) {
-    final certs = widget.data.certificates;
+  Widget _certificatesCard(BuildContext context, AppTokens tokens) {
+    final certs = data.certificates;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -395,7 +311,7 @@ class _QuranBodyState extends State<_QuranBody> {
               ),
           const SizedBox(height: 4),
           Text(
-            'الأجزاء المختبرة: ${widget.data.testedJuz.length} من 30',
+            'الأجزاء المختبرة: ${data.testedJuz.length} من 30',
             style: Theme.of(context)
                 .textTheme
                 .bodySmall
@@ -408,8 +324,8 @@ class _QuranBodyState extends State<_QuranBody> {
 
   // ── Tasmi' log ─────────────────────────────────────────────────────────
 
-  Widget _tasmiPreview(AppTokens tokens) {
-    final mems = widget.data.memorizations;
+  Widget _tasmiPreview(BuildContext context, AppTokens tokens) {
+    final mems = data.memorizations;
     final rows = mems
         .map((m) => Padding(
               padding: const EdgeInsets.symmetric(vertical: 5),
@@ -440,7 +356,7 @@ class _QuranBodyState extends State<_QuranBody> {
           for (final r in rows.take(3)) r,
           if (rows.length > 3)
             TextButton(
-              onPressed: () => _showFullLog(context),
+              onPressed: () => showTasmiLogSheet(context, mems),
               child: Text('عرض المزيد (${rows.length})',
                   style: TextStyle(color: tokens.brandText)),
             ),
@@ -449,91 +365,5 @@ class _QuranBodyState extends State<_QuranBody> {
     );
   }
 
-  void _showFullLog(BuildContext context) {
-    final tokens = Theme.of(context).extension<AppTokens>()!;
-    final mems = widget.data.memorizations;
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (context) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.85,
-        maxChildSize: 0.95,
-        builder: (context, controller) => ListView(
-          controller: controller,
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-          children: [
-            Row(
-              children: [
-                Text('سجل التسميع',
-                    style: Theme.of(context).textTheme.titleLarge),
-                const Spacer(),
-                StatusBadge(
-                    label: '${mems.length} تسجيلة', color: tokens.brand),
-              ],
-            ),
-            const SizedBox(height: 8),
-            for (final m in mems)
-              ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                    Icons.menu_book,
-                    color: RatingStars.colorFor(m.rating, tokens)),
-                title: Text('صفحة ${m.page} — ${m.surah}'),
-                subtitle: Text('المسمِّع: ${m.reciterName}'),
-                trailing: RatingStars(rating: m.rating),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
   String _fmt(DateTime d) => '${d.day}/${d.month}/${d.year}';
-}
-
-/// One horizontally-paged juz: header (number + test status) + quran grid.
-class _JuzPage extends StatelessWidget {
-  const _JuzPage({
-    required this.juz,
-    required this.tested,
-    required this.pageStatus,
-  });
-
-  final int juz;
-  final bool tested;
-  final Map<int, ({int? rating, double progress})> pageStatus;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = Theme.of(context).extension<AppTokens>()!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Text(
-              'الجزء $juz',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: tokens.info,
-                  ),
-            ),
-            const Spacer(),
-            StatusBadge(
-              label: tested ? 'مختبر' : 'غير مختبَر بعد',
-              color: tested ? tokens.brand : tokens.textMuted,
-              icon: tested ? Icons.check_circle : null,
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Expanded(
-          child: QuranGrid(juz: juz, pageStatus: pageStatus, columns: 7),
-        ),
-      ],
-    );
-  }
 }
