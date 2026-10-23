@@ -116,7 +116,7 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
 
   Widget _row(BuildContext context, _Write w, AppTokens tokens) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: AppCard(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(

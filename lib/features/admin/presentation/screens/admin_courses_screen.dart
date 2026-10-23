@@ -164,7 +164,11 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
   Widget _courseCard(BuildContext context, AdminCourseSummary c) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     return AppCard(
-      onTap: () => context.push('/admin/courses/${c.id}'),
+      // Refresh on return so edits/deletions on the course page are reflected.
+      onTap: () async {
+        await context.push('/admin/courses/${c.id}');
+        if (mounted) _refresh();
+      },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -187,7 +191,8 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              _metric(context, 'حضور اليوم', '${c.todayPresent}/${c.todayTotal}'),
+              _metric(context, 'حضور آخر جلسة',
+                  '${c.lastSessionPresent}/${c.lastSessionTotal}'),
               _metric(context, 'طلاب', '${c.studentsCount}'),
               _metric(context, 'جلسات', '${c.sessionsCount}'),
               _metric(context, 'نسبة الحضور', '${c.attendancePercent}%'),
@@ -211,11 +216,15 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
       child: Column(
         children: [
           Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w900,
                     color: tokens.textPrimary,
                   )),
           Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: Theme.of(context)
                   .textTheme

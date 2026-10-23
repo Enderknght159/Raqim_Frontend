@@ -638,6 +638,9 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
 
   // ── Mark as seeded ─────────────────────────────────────────────────────
   await database.into(database.appMeta).insert(
+        db.AppMetaCompanion.insert(key: 'mosque_name', value: 'جامع الفرقان'),
+      );
+  await database.into(database.appMeta).insert(
         db.AppMetaCompanion.insert(key: 'seeded', value: '2'),
       );
 }

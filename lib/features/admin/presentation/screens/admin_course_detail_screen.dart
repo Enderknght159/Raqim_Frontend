@@ -13,11 +13,12 @@ import '../../../../core/widgets/status_badge.dart';
 import '../../../student/domain/models/student_models.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
+import '../widgets/certificate_editor_sheet.dart';
+import '../widgets/course_editor_sheet.dart';
 import '../widgets/session_setup_sheet.dart';
-import '../widgets/student_picker_field.dart';
 
-/// E2 — Admin course page: overview card + 4 sections (sessions · messages &
-/// export · exams · top students).
+/// E2 — Admin course page: overview card + 5 sections (sessions · messages &
+/// export · exams · top students · certificates).
 class AdminCourseDetailScreen extends StatefulWidget {
   const AdminCourseDetailScreen({super.key, required this.courseId});
 
@@ -30,6 +31,8 @@ class AdminCourseDetailScreen extends StatefulWidget {
 
 class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
   late Future<_Data> _future;
+  bool _selecting = false;
+  final Set<int> _selectedSessions = {};
 
   @override
   void initState() {
@@ -46,10 +49,12 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
       sessions: await repo.courseSessions(widget.courseId),
       exams: await repo.courseExams(widget.courseId),
       leaderboard: (await repo.leaderboard(widget.courseId)).entries,
+      certificates: await repo.courseCertificates(widget.courseId),
     );
   }
 
   void _reload() {
+    if (!mounted) return;
     setState(() {
       _future = _load();
     });
@@ -60,10 +65,18 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
     return AsyncView<_Data>(
       future: _future,
       builder: (context, data) => DefaultTabController(
-        length: 4,
+        length: 5,
         child: Scaffold(
           appBar: AppBar(
             title: Text(data.summary?.name ?? 'الدورة'),
+            actions: [
+              if (data.summary != null)
+                IconButton(
+                  tooltip: 'تعديل الدورة',
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () => _editCourse(data.summary!),
+                ),
+            ],
             bottom: const TabBar(
               isScrollable: true,
               tabAlignment: TabAlignment.start,
@@ -72,6 +85,7 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
                 Tab(text: 'الرسائل والتصدير'),
                 Tab(text: 'الامتحانات'),
                 Tab(text: 'الطلاب الأوائل'),
+                Tab(text: 'الشهادات'),
               ],
             ),
           ),
@@ -85,6 +99,7 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
                     _messagesTab(context),
                     _examsTab(context, data),
                     _leaderboardTab(context, data),
+                    _certificatesTab(context, data),
                   ],
                 ),
               ),
@@ -93,6 +108,18 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
         ),
       ),
     );
+  }
+
+  /// Opens the course editor (identity + dates + criteria) or deletes it.
+  Future<void> _editCourse(AdminCourseSummary summary) async {
+    final result = await showCourseEditorSheet(context, course: summary);
+    if (!mounted || result == null) return;
+    if (result == CourseEditorResult.deleted) {
+      // Back to the courses landing page (it reloads on return).
+      context.pop();
+      return;
+    }
+    _reload();
   }
 
   Widget _overviewCard(BuildContext context, AdminCourseSummary c) {
@@ -105,7 +132,8 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
           children: [
             Row(
               children: [
-                _ov(context, 'اليوم', '${c.todayPresent}/${c.todayTotal}'),
+                _ov(context, 'آخر جلسة',
+                    '${c.lastSessionPresent}/${c.lastSessionTotal}'),
                 _ov(context, 'طلاب', '${c.studentsCount}'),
                 _ov(context, 'جلسات', '${c.sessionsCount}'),
                 _ov(context, 'حضور', '${c.attendancePercent}%'),
@@ -120,11 +148,16 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
                     label: c.isActive ? 'نشطة' : 'منتهية',
                     color: c.isActive ? tokens.brand : tokens.textMuted),
                 const Spacer(),
-                Text('${formatDate(c.startDate)} – ${formatDate(c.endDate)}',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: tokens.textMuted)),
+                Flexible(
+                  child: Text('${formatDate(c.startDate)} – ${formatDate(c.endDate)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: tokens.textMuted)),
+                ),
               ],
             ),
           ],
@@ -139,10 +172,14 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
       child: Column(
         children: [
           Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w900, color: tokens.info)),
           const SizedBox(height: 2),
           Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: Theme.of(context)
                   .textTheme
                   .bodySmall
@@ -152,6 +189,8 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
     );
   }
 
+  // ── Sessions tab ────────────────────────────────────────────────────────
+
   Widget _sessionsTab(BuildContext context, _Data data) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     return ListView(
@@ -160,78 +199,184 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
         AppButton(
           label: 'إنشاء جلسة اليوم',
           icon: Icons.today_outlined,
-          onPressed: () async {
-            final repo = AdminRepositoryScope.of(context);
-            final last = data.sessions.isEmpty ? null : data.sessions.last;
-            final id = await repo.addSession(widget.courseId, DateTime.now());
-            if (!context.mounted) return;
-            _reload();
-            // Show the thresholds right away, prefilled with the last
-            // session's values (BR-402).
-            final setup = await showSessionSetupSheet(
-              context,
-              title: 'إعداد الجلسة الجديدة',
-              initial: SessionSetupValues(
-                earlyPoints: last?.earlyPoints ?? 3,
-                midPoints: last?.midPoints ?? 2,
-                latePoints: last?.latePoints ?? 1,
-                earlyUntil: last?.earlyUntil ?? '16:00',
-                lateFrom: last?.lateFrom ?? '16:30',
-                date: DateTime.now(),
-              ),
-            );
-            if (setup != null) {
-              await repo.updateSession(
-                id,
-                earlyPoints: setup.earlyPoints,
-                midPoints: setup.midPoints,
-                latePoints: setup.latePoints,
-                earlyUntil: setup.earlyUntil,
-                lateFrom: setup.lateFrom,
-                date: setup.date,
-              );
-            }
-            if (!context.mounted) return;
-            context.push('/admin/sessions/$id');
-          },
+          onPressed: () => _createTodaySession(data),
         ),
         const SizedBox(height: 16),
-        const SectionHeader(icon: Icons.event_note_outlined, title: 'الجلسات'),
+        Row(
+          children: [
+            const Expanded(
+              child: SectionHeader(
+                  icon: Icons.event_note_outlined, title: 'الجلسات'),
+            ),
+            if (data.sessions.isNotEmpty)
+              TextButton(
+                onPressed: () => setState(() {
+                  _selecting = !_selecting;
+                  _selectedSessions.clear();
+                }),
+                child: Text(_selecting ? 'إلغاء التحديد' : 'تحديد'),
+              ),
+          ],
+        ),
         const SizedBox(height: 8),
         if (data.sessions.isEmpty)
           const Padding(
               padding: EdgeInsets.all(16), child: Center(child: Text('لا جلسات بعد')))
         else
           for (final s in data.sessions.reversed) ...[
-            AppCard(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              onTap: () => context.push('/admin/sessions/${s.id}'),
-              child: Row(
-                children: [
-                  Icon(Icons.event, color: tokens.brand),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text('جلسة #${s.index} · ${formatDate(s.date)}',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyLarge
-                            ?.copyWith(fontWeight: FontWeight.w700)),
-                  ),
-                  Text('حاضر ${s.present}/${s.total}',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: tokens.textMuted)),
-                  const SizedBox(width: 6),
-                  Icon(Icons.chevron_left, color: tokens.borderStructural),
-                ],
-              ),
-            ),
+            _sessionCard(context, tokens, s),
             const SizedBox(height: 8),
           ],
+        if (_selecting) ...[
+          const SizedBox(height: 8),
+          AppButton(
+            label: 'حذف المحدد (${_selectedSessions.length})',
+            icon: Icons.delete_outline,
+            variant: AppButtonVariant.destructive,
+            onPressed:
+                _selectedSessions.isEmpty ? null : _deleteSelectedSessions,
+          ),
+        ],
       ],
     );
   }
+
+  Widget _sessionCard(
+      BuildContext context, AppTokens tokens, AdminSessionRow s) {
+    final selected = _selectedSessions.contains(s.id);
+    return AppCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: _selecting && selected ? tokens.brandTint : null,
+      borderColor: _selecting && selected ? tokens.brandBorder : null,
+      onTap: () {
+        if (_selecting) {
+          setState(() {
+            if (!_selectedSessions.add(s.id)) _selectedSessions.remove(s.id);
+          });
+        } else {
+          _openSession(s.id);
+        }
+      },
+      onLongPress: () => setState(() {
+        _selecting = true;
+        _selectedSessions.add(s.id);
+      }),
+      child: Row(
+        children: [
+          if (_selecting) ...[
+            Icon(
+              selected ? Icons.check_circle : Icons.radio_button_unchecked,
+              size: 20,
+              color: selected ? tokens.brand : tokens.textMuted,
+            ),
+            const SizedBox(width: 10),
+          ],
+          Icon(Icons.event, color: tokens.brand),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text('جلسة #${s.index} · ${formatDate(s.date)}',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+          ),
+          Text('حاضر ${s.present}/${s.total}',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: tokens.textMuted)),
+          const SizedBox(width: 6),
+          Icon(Icons.chevron_left, color: tokens.borderStructural),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openSession(int sessionId) async {
+    await context.push('/admin/sessions/$sessionId');
+    _reload();
+  }
+
+  /// Creates today's session **after** the setup sheet is confirmed — closing
+  /// the sheet cancels the creation entirely.
+  Future<void> _createTodaySession(_Data data) async {
+    final repo = AdminRepositoryScope.of(context);
+    final last = data.sessions.isEmpty ? null : data.sessions.last;
+    final setup = await showSessionSetupSheet(
+      context,
+      title: 'إعداد الجلسة الجديدة',
+      initial: SessionSetupValues(
+        earlyPoints: last?.earlyPoints ?? 3,
+        midPoints: last?.midPoints ?? 2,
+        latePoints: last?.latePoints ?? 1,
+        earlyUntil: last?.earlyUntil ?? '16:00',
+        lateFrom: last?.lateFrom ?? '16:30',
+        date: DateTime.now(),
+      ),
+    );
+    if (setup == null || !mounted) return;
+    final id = await repo.addSession(widget.courseId, setup.date);
+    await repo.updateSession(
+      id,
+      earlyPoints: setup.earlyPoints,
+      midPoints: setup.midPoints,
+      latePoints: setup.latePoints,
+      earlyUntil: setup.earlyUntil,
+      lateFrom: setup.lateFrom,
+      date: setup.date,
+    );
+    if (!mounted) return;
+    _reload();
+    await context.push('/admin/sessions/$id');
+    _reload();
+  }
+
+  Future<void> _deleteSelectedSessions() async {
+    final ids = _selectedSessions.toList();
+    if (ids.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('حذف الجلسات'),
+        content: Text(
+            'سيتم حذف ${ids.length} جلسة مع كل سجلاتها (حضور، حفظ، متون، '
+            'معاملات). يمكن التراجع بعد الحذف.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('إلغاء')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('حذف')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final repo = AdminRepositoryScope.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final snapshot = await repo.deleteSessionsWithRecords(ids);
+    if (!mounted) return;
+    setState(() {
+      _selecting = false;
+      _selectedSessions.clear();
+    });
+    _reload();
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text('حُذفت ${ids.length} جلسة وسجلاتها'),
+        duration: const Duration(seconds: 8),
+        action: SnackBarAction(
+          label: 'تراجع',
+          onPressed: () async {
+            await repo.restoreSessions(snapshot);
+            _reload();
+          },
+        ),
+      ));
+  }
+
+  // ── Messages & export ───────────────────────────────────────────────────
 
   Widget _messagesTab(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
@@ -274,6 +419,8 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
     );
   }
 
+  // ── Exams tab (details open a full page) ───────────────────────────────
+
   Widget _examsTab(BuildContext context, _Data data) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     return ListView(
@@ -294,7 +441,7 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
           for (final e in data.exams) ...[
             AppCard(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              onTap: () => _examDetail(context, e),
+              onTap: () => _openExam(e.id),
               child: Row(
                 children: [
                   Icon(Icons.edit_note, color: tokens.accentMatn),
@@ -326,233 +473,10 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
     );
   }
 
-  /// Exam detail + edit (tap to open, BR-802 fields editable) + submissions.
-  Future<void> _examDetail(BuildContext context, AdminContentItem item) async {
-    final repo = AdminRepositoryScope.of(context);
-    final detail = await repo.examDetail(item.id);
-    if (!context.mounted || detail == null) return;
-    final subject = TextEditingController(text: detail.subjectName);
-    final maxMark = TextEditingController(text: '${detail.maxMark}');
-    final minSuccess = TextEditingController(text: '${detail.minSuccessMark}');
-    final points = TextEditingController(text: '${detail.points}');
-    var type = detail.type;
-    var submissions = await repo.examSubmissions(detail.id);
-    if (!context.mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) => Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 0,
-            bottom: 28 + MediaQuery.viewInsetsOf(context).bottom,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Text('تفاصيل الامتحان',
-                        style: Theme.of(context).textTheme.titleMedium),
-                    const Spacer(),
-                    IconButton(
-                      tooltip: 'حذف الامتحان',
-                      icon: const Icon(Icons.delete_outline),
-                      color: Theme.of(context).extension<AppTokens>()!.danger,
-                      onPressed: () async {
-                        await repo.deleteExam(detail.id);
-                        if (context.mounted) Navigator.of(context).pop();
-                        _reload();
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                    controller: subject,
-                    decoration: const InputDecoration(labelText: 'المادة')),
-                const SizedBox(height: 12),
-                IconToggleGroup<String>(
-                  value: type,
-                  onChanged: (v) => setSheetState(() => type = v),
-                  options: const [
-                    IconToggleOption(
-                      value: 'oral',
-                      icon: Icons.record_voice_over_outlined,
-                      label: 'شفهي',
-                    ),
-                    IconToggleOption(
-                      value: 'writtenProbe',
-                      icon: Icons.description_outlined,
-                      label: 'سبر كتابي',
-                    ),
-                    IconToggleOption(
-                      value: 'final',
-                      icon: Icons.emoji_events_outlined,
-                      label: 'اختبار نهائي',
-                      color: Color(0xFFF59E0B),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                          controller: maxMark,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                              labelText: 'الدرجة القصوى')),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                          controller: minSuccess,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                              labelText: 'درجة النجاح')),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                    controller: points,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'النقاط')),
-                const SizedBox(height: 16),
-                const Divider(height: 1),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Text('التقديمات (${submissions.length})',
-                        style: Theme.of(context).textTheme.titleMedium),
-                    const Spacer(),
-                    TextButton.icon(
-                      onPressed: () => _addSubmission(
-                          context, detail, () async {
-                        submissions = await repo.examSubmissions(detail.id);
-                        if (mounted) setSheetState(() {});
-                      }),
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('إضافة تقديم'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                if (submissions.isEmpty)
-                  Text('لا تقديمات بعد',
-                      style: Theme.of(context).textTheme.bodyMedium)
-                else
-                  for (final s in submissions)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          Expanded(child: Text(s.studentName)),
-                          Text(
-                            '${_fmtMark(s.mark)} / ${detail.maxMark}',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w800),
-                          ),
-                        ],
-                      ),
-                    ),
-                const SizedBox(height: 16),
-                AppButton(
-                  label: 'حفظ التعديلات',
-                  onPressed: () async {
-                    if (subject.text.trim().isEmpty) return;
-                    await repo.updateExam(
-                      detail.id,
-                      subjectName: subject.text.trim(),
-                      type: type,
-                      maxMark: int.tryParse(maxMark.text) ?? detail.maxMark,
-                      minSuccessMark: int.tryParse(minSuccess.text) ??
-                          detail.minSuccessMark,
-                      points: int.tryParse(points.text) ?? detail.points,
-                    );
-                    if (context.mounted) Navigator.of(context).pop();
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-    if (!mounted) return;
+  Future<void> _openExam(int examId) async {
+    await context
+        .push('/admin/courses/${widget.courseId}/exams/$examId');
     _reload();
-  }
-
-  String _fmtMark(double mark) =>
-      mark == mark.roundToDouble() ? '${mark.toInt()}' : '$mark';
-
-  /// Adds a student's mark for an exam (BR-803/804).
-  Future<void> _addSubmission(
-    BuildContext context,
-    AdminExamDetail detail,
-    Future<void> Function() onSaved,
-  ) async {
-    final repo = AdminRepositoryScope.of(context);
-    AdminStudentRow? student;
-    final mark = TextEditingController();
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) => Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 0,
-            bottom: 28 + MediaQuery.viewInsetsOf(context).bottom,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('إضافة تقديم',
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 16),
-              StudentPickerField(
-                label: 'اختر الطالب',
-                selected: student,
-                onChanged: (s) => setSheetState(() => student = s),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: mark,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
-                  labelText: 'العلامة',
-                  hintText: 'من 0 إلى ${detail.maxMark}',
-                ),
-              ),
-              const SizedBox(height: 16),
-              AppButton(
-                label: 'حفظ التقديم',
-                onPressed: () async {
-                  final s = student;
-                  final m = double.tryParse(mark.text);
-                  if (s == null || m == null) return;
-                  await repo.addExamSubmission(detail.id, s.id, m);
-                  if (context.mounted) Navigator.of(context).pop();
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (!mounted) return;
-    await onSaved();
   }
 
   Future<void> _addExam(BuildContext context) async {
@@ -562,8 +486,7 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
     final maxMark = TextEditingController(text: '100');
     final minSuccess = TextEditingController(text: '50');
     final points = TextEditingController(text: '0');
-    String subjectName =
-        subjects.isEmpty ? '' : subjects.first.name;
+    String subjectName = subjects.isEmpty ? '' : subjects.first.name;
     var type = 'final';
     await showModalBottomSheet<void>(
       context: context,
@@ -661,8 +584,7 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
                       subjectName: subjectName.trim(),
                       type: type,
                       maxMark: int.tryParse(maxMark.text) ?? 100,
-                      minSuccessMark:
-                          int.tryParse(minSuccess.text) ?? 50,
+                      minSuccessMark: int.tryParse(minSuccess.text) ?? 50,
                       points: int.tryParse(points.text) ?? 0,
                     );
                     if (context.mounted) Navigator.of(context).pop();
@@ -674,9 +596,111 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
         ),
       ),
     );
-    if (!mounted) return;
     _reload();
   }
+
+  // ── Certificates tab ────────────────────────────────────────────────────
+
+  Widget _certificatesTab(BuildContext context, _Data data) {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        AppButton(
+          label: 'إضافة شهادة قرآن',
+          icon: Icons.school_outlined,
+          onPressed: () => _addCertificate(data),
+        ),
+        const SizedBox(height: 16),
+        const SectionHeader(
+            icon: Icons.school_outlined, title: 'شهادات القرآن'),
+        const SizedBox(height: 8),
+        if (data.certificates.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(child: Text('لا شهادات في هذه الدورة')),
+          )
+        else
+          for (final c in data.certificates) ...[
+            _certificateTile(context, tokens, c),
+            const SizedBox(height: 8),
+          ],
+      ],
+    );
+  }
+
+  Widget _certificateTile(
+      BuildContext context, AppTokens tokens, AdminCertificateRow c) {
+    return AppCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      onTap: () => _editCertificate(c),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: tokens.reward.withValues(alpha: 0.15),
+            child: Icon(Icons.school_outlined, size: 18, color: tokens.reward),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(c.studentName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyLarge
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+                Text(
+                  'الجزء ${c.startJuz} – ${c.endJuz} · ${formatDate(c.date)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: tokens.textMuted),
+                ),
+              ],
+            ),
+          ),
+          StatusBadge(
+              label: '${c.mark}/100', color: tokens.reward),
+          const SizedBox(width: 6),
+          StatusBadge(
+            label: c.byHeart ? 'بالغيب' : 'عن ظهر قلب',
+            color: c.byHeart ? tokens.brand : tokens.textMuted,
+          ),
+          const SizedBox(width: 6),
+          Icon(Icons.chevron_left, color: tokens.borderStructural),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addCertificate(_Data data) async {
+    final saved = await showCertificateEditorSheet(
+      context,
+      courseId: widget.courseId,
+      certificatePoints: data.summary?.certificatePoints ?? 10,
+    );
+    if (saved == true && mounted) _reload();
+  }
+
+  Future<void> _editCertificate(AdminCertificateRow certificate) async {
+    final data = await _future;
+    if (!mounted) return;
+    final saved = await showCertificateEditorSheet(
+      context,
+      courseId: widget.courseId,
+      certificatePoints: data.summary?.certificatePoints ?? 10,
+      existing: certificate,
+    );
+    if (saved == true && mounted) _reload();
+  }
+
+  // ── Leaderboard tab ─────────────────────────────────────────────────────
 
   Widget _leaderboardTab(BuildContext context, _Data data) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
@@ -774,10 +798,12 @@ class _Data {
     required this.sessions,
     required this.exams,
     required this.leaderboard,
+    required this.certificates,
   });
 
   final AdminCourseSummary? summary;
   final List<AdminSessionRow> sessions;
   final List<AdminContentItem> exams;
   final List<StudentLeaderboardEntry> leaderboard;
+  final List<AdminCertificateRow> certificates;
 }

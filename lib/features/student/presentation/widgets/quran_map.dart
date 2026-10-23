@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/date_time_utils.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../domain/models/student_models.dart';
+import '../../domain/quran_units.dart';
 import 'quran_grid.dart';
+import 'rating_stars.dart';
 
 /// Latest rating per (page,partIndex); per page rating = max rating,
 /// progress = covered parts / total parts.
@@ -83,7 +86,7 @@ class _QuranMapState extends State<QuranMap> {
     final latestPage = widget.memorizations
         .map((m) => m.page)
         .reduce((a, b) => a > b ? a : b);
-    return ((latestPage - 1) ~/ 20 + 1).clamp(1, 30);
+    return juzOfPage(latestPage);
   }
 
   int _pageFor(int juz) => _basePage + (juz - 1);
@@ -100,6 +103,90 @@ class _QuranMapState extends State<QuranMap> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Tap on a page cell → its tasmi' details: each unit with the reciter,
+  /// date and rating.
+  void _showPageTasmi(BuildContext context, int page) {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
+    final pageMems =
+        widget.memorizations.where((m) => m.page == page).toList();
+    // Latest record per unit (page may hold 1–3 units).
+    final latest = <int, Memorization>{};
+    for (final m in pageMems) {
+      final existing = latest[m.partIndex];
+      if (existing == null || m.date.isAfter(existing.date)) {
+        latest[m.partIndex] = m;
+      }
+    }
+    final units = latest.values.toList()
+      ..sort((a, b) => a.partIndex.compareTo(b.partIndex));
+    final surahs = quranPageSurahs[page] ?? const <String>[];
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.auto_stories_outlined, color: tokens.brand),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text('صفحة $page',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge),
+                  ),
+                  const SizedBox(width: 6),
+                  StatusBadge(
+                    label: '${units.length} وحدة مسجّلة',
+                    color: units.isEmpty ? tokens.textMuted : tokens.brand,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                surahs.isEmpty
+                    ? (units.isEmpty ? '—' : quranSurahOf(page, units.first.partIndex))
+                    : surahs.join(' · '),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: tokens.textMuted),
+              ),
+              const SizedBox(height: 8),
+              if (units.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text('لا تسميعات مسجّلة لهذه الصفحة',
+                      style: Theme.of(context).textTheme.bodyMedium),
+                )
+              else
+                for (final m in units)
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.menu_book,
+                        color: RatingStars.colorFor(m.rating, tokens)),
+                    title: Text(
+                        'الوحدة ${m.partIndex} — ${quranSurahOf(page, m.partIndex)}',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text(
+                        'المسمِّع: ${m.reciterName} · ${formatDate(m.date)}'),
+                    trailing: RatingStars(rating: m.rating),
+                  ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -129,6 +216,7 @@ class _QuranMapState extends State<QuranMap> {
                   juz: juz,
                   tested: widget.testedJuz.contains(juz),
                   pageStatus: _pageStatus,
+                  onPageTap: (page) => _showPageTasmi(context, page),
                 ),
               );
             },
@@ -145,11 +233,13 @@ class _JuzPage extends StatelessWidget {
     required this.juz,
     required this.tested,
     required this.pageStatus,
+    required this.onPageTap,
   });
 
   final int juz;
   final bool tested;
   final Map<int, ({int? rating, double progress})> pageStatus;
+  final ValueChanged<int> onPageTap;
 
   @override
   Widget build(BuildContext context) {
@@ -159,12 +249,16 @@ class _JuzPage extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(
-              'الجزء $juz',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: tokens.info,
-                  ),
+            Flexible(
+              child: Text(
+                'الجزء $juz',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: tokens.info,
+                    ),
+              ),
             ),
             const Spacer(),
             StatusBadge(
@@ -176,7 +270,12 @@ class _JuzPage extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Expanded(
-          child: QuranGrid(juz: juz, pageStatus: pageStatus, columns: 7),
+          child: QuranGrid(
+            juz: juz,
+            pageStatus: pageStatus,
+            columns: 7,
+            onPageTap: onPageTap,
+          ),
         ),
       ],
     );

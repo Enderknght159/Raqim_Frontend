@@ -106,7 +106,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
     final (icon, color) = _style(n.kind, tokens);
     final title = _title(n);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: AppCard(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(

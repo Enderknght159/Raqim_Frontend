@@ -12,6 +12,7 @@ import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/stat_tile.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../student/domain/models/student_models.dart';
+import '../../../student/presentation/widgets/certificates_sheet.dart';
 import '../../../student/presentation/widgets/qr_code_view.dart';
 import '../../../student/presentation/widgets/quran_map.dart';
 import '../../../student/presentation/widgets/tasmi_log_sheet.dart';
@@ -79,6 +80,8 @@ class _AdminStudentProfileScreenState
             const SizedBox(height: 12),
             _overview(context, data.profile),
             const SizedBox(height: 12),
+            _teamsCard(context, data),
+            const SizedBox(height: 12),
             _quranCard(context, data.profile),
             const SizedBox(height: 12),
             _achievementCard(context, data.profile),
@@ -132,17 +135,6 @@ class _AdminStudentProfileScreenState
                         .textTheme
                         .bodySmall
                         ?.copyWith(color: tokens.textMuted)),
-                if (p.teams.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (final team in p.teams)
-                        _teamChip(context, data, team),
-                    ],
-                  ),
-                ],
               ],
             ),
           ),
@@ -151,38 +143,54 @@ class _AdminStudentProfileScreenState
     );
   }
 
-  Widget _teamChip(BuildContext context, _Data data, Team team) {
+  /// Explicit access to the student's teams (tap → team manager).
+  Widget _teamsCard(BuildContext context, _Data data) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    return InkWell(
-      borderRadius: BorderRadius.circular(tokens.radiusSmall),
-      onTap: () => _openTeam(data, team),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: tokens.brandTint,
-          borderRadius: BorderRadius.circular(tokens.radiusSmall),
-          border: Border.all(color: tokens.brandBorder, width: 1.5),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.groups_outlined, size: 14, color: tokens.brandText),
-            const SizedBox(width: 5),
-            Flexible(
-              child: Text(
-                team.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    color: tokens.brandText,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700),
-              ),
+    final teams = data.profile.teams;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionHeader(
+            icon: Icons.groups_outlined,
+            title: 'الحلقات',
+            trailing: StatusBadge(
+              label: '${teams.length}',
+              color: teams.isEmpty ? tokens.textMuted : tokens.brand,
             ),
-            const SizedBox(width: 3),
-            Icon(Icons.chevron_left, size: 14, color: tokens.brandText),
-          ],
-        ),
+          ),
+          const SizedBox(height: 4),
+          if (teams.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text('لا حلقات لهذا الطالب',
+                  style: Theme.of(context).textTheme.bodyMedium),
+            )
+          else
+            for (final team in teams)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: tokens.brandTint,
+                  child:
+                      Icon(Icons.hub, size: 16, color: tokens.brandText),
+                ),
+                title: Text(team.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text(
+                  '${team.typeName} · ${team.teacherName.isEmpty ? 'بلا معلم' : team.teacherName}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Icon(Icons.chevron_left,
+                    color: tokens.borderStructural),
+                onTap: () => _openTeam(data, team),
+              ),
+        ],
       ),
     );
   }
@@ -292,63 +300,21 @@ class _AdminStudentProfileScreenState
             color: tokens.reward,
             title: 'شهادات القرآن',
             subtitle: '${p.certificates.length} شهادة',
-            onTap: () => _showCertificates(context, p),
+            onTap: () => showCertificatesSheet(context, [
+              for (final c in p.certificates)
+                (
+                  startJuz: c.startJuz,
+                  endJuz: c.endJuz,
+                  mark: c.mark,
+                  byHeart: c.byHeart,
+                  date: c.date,
+                ),
+            ]),
           ),
         ],
       ),
     );
   }
-
-  /// All Quran certificates of the student (E7), newest first.
-  void _showCertificates(BuildContext context, AdminStudentProfile p) {
-    final tokens = Theme.of(context).extension<AppTokens>()!;
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (context) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.7,
-        maxChildSize: 0.95,
-        builder: (context, controller) => ListView(
-          controller: controller,
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-          children: [
-            Row(
-              children: [
-                Text('شهادات القرآن',
-                    style: Theme.of(context).textTheme.titleLarge),
-                const Spacer(),
-                StatusBadge(
-                    label: '${p.certificates.length} شهادة',
-                    color: tokens.reward),
-              ],
-            ),
-            const SizedBox(height: 4),
-            if (p.certificates.isEmpty)
-              Text('لا شهادات بعد',
-                  style: Theme.of(context).textTheme.bodyMedium)
-            else
-              for (final c in p.certificates)
-                ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.school_outlined, color: tokens.reward),
-                  title: Text('الجزء ${c.startJuz} – ${c.endJuz}',
-                      style: const TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: Text(
-                      'الدرجة: ${c.mark} · ${c.date.day}/${c.date.month}/${c.date.year}'),
-                  trailing: StatusBadge(
-                    label: c.byHeart ? 'بالغيب' : 'عن ظهر قلب',
-                    color: c.byHeart ? tokens.brand : tokens.textMuted,
-                  ),
-                ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // ── Academic output: subjects + exams + matn + show more ──────────────
 
   Widget _achievementCard(BuildContext context, AdminStudentProfile p) {

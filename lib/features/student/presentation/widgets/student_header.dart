@@ -3,12 +3,15 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/models/student_models.dart';
 
-/// Student header used on the profile (B5): photo placeholder, name, id and
-/// relative "آخر ظهور".
+/// Student header used on the profile (B5): photo placeholder, name, id,
+/// mosque name and relative "آخر ظهور".
 class StudentHeader extends StatelessWidget {
-  const StudentHeader({super.key, required this.profile});
+  const StudentHeader({super.key, required this.profile, this.mosqueName});
 
   final StudentProfileModel profile;
+
+  /// Mosque (tenant) name shown under the student's identity.
+  final String? mosqueName;
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +43,26 @@ class StudentHeader extends StatelessWidget {
                     .bodySmall
                     ?.copyWith(color: tokens.textMuted),
               ),
+              if (mosqueName != null && mosqueName!.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(Icons.mosque_outlined,
+                        size: 13, color: tokens.info),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        mosqueName!,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: tokens.info),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               if (profile.lastSeenAt != null) ...[
                 const SizedBox(height: 2),
                 Text(

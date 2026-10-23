@@ -10,29 +10,39 @@ import '../../../../core/widgets/icon_toggle_group.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../auth/presentation/cubits/auth_cubit.dart';
+import '../../data/student_local_repository.dart';
 import '../../domain/models/student_models.dart';
 import '../student_shell.dart';
 import '../widgets/qr_code_view.dart';
 import '../widgets/student_header.dart';
 
-/// B5 — الملف: header + barcode + data + phones + edit requests + account.
+/// B5 — الملف: welcome header (with mosque name) + barcode + data + phones +
+/// edit requests + account.
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
+
+  Future<({StudentProfileModel profile, String mosqueName})> _load(
+      StudentLocalRepository repo) async {
+    final profile = await repo.profile();
+    final mosque = await repo.mosqueName();
+    return (profile: profile, mosqueName: mosque);
+  }
 
   @override
   Widget build(BuildContext context) {
     final repo = StudentRepositoryScope.of(context);
     return Scaffold(
-      body: AsyncView<StudentProfileModel>(
-        future: repo.profile(),
-        builder: (context, profile) {
+      body: AsyncView<({StudentProfileModel profile, String mosqueName})>(
+        future: _load(repo),
+        builder: (context, data) {
+          final profile = data.profile;
           return RefreshIndicator(
             onRefresh: () async {},
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
               children: [
-                StudentHeader(profile: profile),
+                StudentHeader(profile: profile, mosqueName: data.mosqueName),
                 const SizedBox(height: 16),
                 _barcodeCard(context, profile),
                 const SizedBox(height: 16),
@@ -122,7 +132,7 @@ class ProfileScreen extends StatelessWidget {
                   label: 'خروج',
                   variant: AppButtonVariant.destructive,
                   icon: Icons.logout,
-                  onPressed: () => context.read<AuthCubit>().logout(),
+                  onPressed: () => _confirmLogout(context),
                 ),
                 const SizedBox(height: 24),
               ],
@@ -131,6 +141,32 @@ class ProfileScreen extends StatelessWidget {
         },
       ),
     );
+  }
+
+  /// Confirms before ending the session (student side).
+  Future<void> _confirmLogout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('تسجيل الخروج'),
+        content: const Text('هل تريد تسجيل الخروج من حسابك؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).extension<AppTokens>()!.danger,
+            ),
+            child: const Text('خروج'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    context.read<AuthCubit>().logout();
   }
 
   Widget _barcodeCard(BuildContext context, StudentProfileModel profile) {
@@ -165,33 +201,40 @@ class ProfileScreen extends StatelessWidget {
 
   void _showBarcode(BuildContext context, StudentProfileModel profile) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
+    // Scale the QR to the viewport and keep the sheet scrollable so short
+    // screens never overflow (the old fixed sheet overflowed by ~81px).
+    final size = MediaQuery.sizeOf(context);
+    final qrSize = (size.width - 96).clamp(140.0, 220.0);
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('الباركود الخاص بك',
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('الباركود الخاص بك',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: tokens.info,
+                      )),
+              const SizedBox(height: 16),
+              Center(child: QrCodeCard(code: profile.barcode, size: qrSize)),
+              const SizedBox(height: 12),
+              Text(
+                'اعرضه أمام الماسح عند بوابة الحلقة',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: tokens.info,
-                    )),
-            const SizedBox(height: 16),
-            QrCodeCard(code: profile.barcode, size: 200),
-            const SizedBox(height: 12),
-            Text(
-              'اعرضه أمام الماسح عند بوابة الحلقة',
-              textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted),
-            ),
-          ],
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: tokens.textMuted),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -26,14 +26,18 @@ class AdminCourseSummary {
     required this.name,
     required this.startDate,
     required this.endDate,
-    required this.isActive,
-    required this.sessionsCount,
-    required this.studentsCount,
-    required this.todayPresent,
-    required this.todayTotal,
-    required this.attendancePercent,
-    required this.series,
-  });
+      required this.isActive,
+      required this.sessionsCount,
+      required this.studentsCount,
+      required this.lastSessionPresent,
+      required this.lastSessionTotal,
+      required this.attendancePercent,
+      required this.series,
+      this.goodPoints = 1,
+      this.veryGoodPoints = 2,
+      this.excellentPoints = 3,
+      this.certificatePoints = 10,
+    });
 
   final int id;
   final String name;
@@ -42,10 +46,18 @@ class AdminCourseSummary {
   final bool isActive;
   final int sessionsCount;
   final int studentsCount;
-  final int todayPresent;
-  final int todayTotal;
+
+  /// Attendance of the **last** session (not today's).
+  final int lastSessionPresent;
+  final int lastSessionTotal;
   final int attendancePercent;
   final List<double> series;
+
+  /// Course criteria (BR-304): memorization rating points + certificate points.
+  final int goodPoints;
+  final int veryGoodPoints;
+  final int excellentPoints;
+  final int certificatePoints;
 }
 
 class AdminStudentRow {
@@ -118,6 +130,7 @@ class AdminExamDetail {
     required this.maxMark,
     required this.minSuccessMark,
     required this.points,
+    required this.date,
   });
 
   final int id;
@@ -127,6 +140,7 @@ class AdminExamDetail {
   final int maxMark;
   final int minSuccessMark;
   final int points;
+  final DateTime date;
 }
 
 /// One student's mark on an exam (E2 submissions entry).
@@ -135,11 +149,35 @@ class AdminSubmissionRow {
     required this.studentId,
     required this.studentName,
     required this.mark,
+    this.id = 0,
+    this.date,
   });
 
+  final int id;
   final int studentId;
   final String studentName;
   final double mark;
+  final DateTime? date;
+}
+
+/// A record attached to one session, grouped by kind (E3 «سجلات الجلسة»).
+class AdminSessionRecord {
+  const AdminSessionRecord({
+    required this.id,
+    required this.kind,
+    required this.studentName,
+    required this.title,
+    required this.subtitle,
+    required this.when,
+  });
+
+  /// memorization | matn | transaction
+  final String kind;
+  final int id;
+  final String studentName;
+  final String title;
+  final String subtitle;
+  final DateTime when;
 }
 
 class AdminChangeRequest {
@@ -266,7 +304,7 @@ String adminNotificationKindLabel(String model) => switch (model) {
       _ => model,
     };
 
-/// One Quran certificate row in the admin student profile (E7).
+/// One Quran certificate row (admin lists + student profile).
 class AdminCertificateRow {
   const AdminCertificateRow({
     required this.startJuz,
@@ -274,13 +312,23 @@ class AdminCertificateRow {
     required this.mark,
     required this.byHeart,
     required this.date,
+    this.id = 0,
+    this.studentId = 0,
+    this.studentName = '',
+    this.courseId = 0,
   });
 
+  final int id;
+  final int studentId;
+  final String studentName;
+  final int courseId;
   final int startJuz;
   final int endJuz;
   final int mark;
   final bool byHeart;
   final DateTime date;
+
+  int get juzCount => endJuz - startJuz + 1;
 }
 
 /// Matn progress row in the admin student profile (E7).

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../shared/notifications_bell.dart';
 import '../../../shared/role_switch_button.dart';
 import '../data/student_local_repository.dart';
+import 'widgets/student_welcome_title.dart';
 
 /// Provides the local [StudentLocalRepository] to all student screens.
 class StudentRepositoryScope extends InheritedWidget {
@@ -47,14 +49,30 @@ class StudentShell extends StatelessWidget {
     final path = GoRouterState.of(context).uri.path;
     final index = _indexFor(path);
     final isDetail = path.startsWith('/my-progress/courses/');
+    final tokens = Theme.of(context).extension<AppTokens>()!;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_titleFor(path)),
+        // The identity (avatar + name) sits at the top; the current tab title
+        // is rendered just below it, inside the body.
+        title: const StudentWelcomeTitle(),
         actions: const [RoleSwitchButton(toAdmin: true), NotificationsBell()],
       ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(
+                _titleFor(path),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: tokens.info,
+                    ),
+              ),
+            ),
+          ),
           const _DemoBanner(),
           Expanded(child: child),
         ],
@@ -105,12 +123,16 @@ class _DemoBanner extends StatelessWidget {
         children: [
           const Icon(Icons.science_outlined, size: 16, color: _color),
           const SizedBox(width: 6),
-          Text(
-            'وضع تجريبي — بيانات محلية على جهازك',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: _color),
+          Flexible(
+            child: Text(
+              'وضع تجريبي — بيانات محلية على جهازك',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: _color),
+            ),
           ),
         ],
       ),

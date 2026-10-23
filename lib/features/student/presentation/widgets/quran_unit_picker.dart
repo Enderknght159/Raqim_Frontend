@@ -94,8 +94,8 @@ class _QuranUnitPickerSheet extends StatefulWidget {
 }
 
 class _QuranUnitPickerSheetState extends State<_QuranUnitPickerSheet> {
-  /// 30 juz views (20 pages each) + a final view for pages 601..604.
-  static const int _viewCount = 31;
+  /// One view per juz (30), using the official Madinah page ranges.
+  static const int _viewCount = 30;
 
   late Set<String> _keys = {
     for (final u in widget.initial) '${u.page}:${u.partIndex}',
@@ -110,12 +110,10 @@ class _QuranUnitPickerSheetState extends State<_QuranUnitPickerSheet> {
     return _viewOfPage(page);
   }
 
-  static int _viewOfPage(int page) =>
-      page <= 600 ? ((page - 1) ~/ 20) : 30;
+  static int _viewOfPage(int page) => juzOfPage(page) - 1;
 
-  static (int first, int last) _viewRange(int view) => view >= 30
-      ? (601, 604)
-      : (view * 20 + 1, view * 20 + 20);
+  static (int first, int last) _viewRange(int view) =>
+      juzPageRange(view + 1);
 
   @override
   void dispose() {
@@ -218,14 +216,11 @@ class _QuranUnitPickerSheetState extends State<_QuranUnitPickerSheet> {
               separatorBuilder: (_, _) => const SizedBox(width: 6),
               itemBuilder: (context, i) {
                 final isSelected = i == _currentView;
-                final isLast = i >= 30;
                 return GestureDetector(
                   onTap: () => _jumpToView(i),
                   child: Container(
-                    width: isLast ? null : 44,
+                    width: 44,
                     alignment: Alignment.center,
-                    padding:
-                        isLast ? const EdgeInsets.symmetric(horizontal: 12) : null,
                     decoration: BoxDecoration(
                       color: isSelected ? tokens.brand : tokens.surfaceCard,
                       borderRadius: BorderRadius.circular(tokens.radiusSmall),
@@ -236,10 +231,9 @@ class _QuranUnitPickerSheetState extends State<_QuranUnitPickerSheet> {
                       ),
                     ),
                     child: Text(
-                      isLast ? '601–604' : '${i + 1}',
+                      '${i + 1}',
                       style: TextStyle(
                         fontWeight: FontWeight.w800,
-                        fontSize: isLast ? 13 : null,
                         color: isSelected ? Colors.white : tokens.textMuted,
                       ),
                     ),
@@ -257,9 +251,7 @@ class _QuranUnitPickerSheetState extends State<_QuranUnitPickerSheet> {
               itemBuilder: (context, view) => _ViewGrid(
                 first: _viewRange(view).$1,
                 last: _viewRange(view).$2,
-                title: view >= 30
-                    ? 'الصفحات الأخيرة (601–604)'
-                    : 'الجزء ${view + 1}',
+                title: 'الجزء ${view + 1}',
                 cellBuilder: _cell,
               ),
             ),

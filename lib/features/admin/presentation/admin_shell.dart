@@ -102,12 +102,16 @@ class _AdminDemoBanner extends StatelessWidget {
           const Icon(Icons.admin_panel_settings_outlined,
               size: 16, color: _color),
           const SizedBox(width: 6),
-          Text(
-            'وضع الإشراف (تجريبي) — بيانات محلية',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: _color),
+          Flexible(
+            child: Text(
+              'وضع الإشراف (تجريبي) — بيانات محلية',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: _color),
+            ),
           ),
         ],
       ),

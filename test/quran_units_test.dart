@@ -15,8 +15,8 @@ void main() {
     expect(quranUnitsOfPage(555).length, 1);
   });
 
-  test('3-unit pages are 596, 599, 601, 602, 603, 604', () {
-    const threeUnit = [596, 599, 601, 602, 603, 604];
+  test('3-unit pages are 596, 599, 600, 601, 602, 603, 604', () {
+    const threeUnit = [596, 599, 600, 601, 602, 603, 604];
     for (final page in threeUnit) {
       expect(quranPageParts(page), 3, reason: 'page $page');
       expect(quranUnitsOfPage(page).length, 3, reason: 'page $page');
@@ -26,9 +26,12 @@ void main() {
   test('split pages have 2 units with real surah names', () {
     expect(quranPageParts(106), 2);
     expect(quranUnitsOfPage(106).map((u) => u.surah),
-        ['المائدة', 'الأنعام']);
+        ['النساء', 'المائدة']);
     expect(quranUnitsOfPage(596).map((u) => u.surah),
         ['الليل', 'الضحى', 'الشرح']);
+    // A single page always exposes its real surah (no '—' stubs).
+    expect(quranUnitsOfPage(1).single.surah, 'الفاتحة');
+    expect(quranUnitsOfPage(255).map((u) => u.surah), ['الرعد', 'ابراهيم']);
   });
 
   test('partIndex is 1-based per page', () {
@@ -41,9 +44,29 @@ void main() {
   });
 
   test('total unit count = pages + extra units', () {
-    // 45 two-split pages (+1 extra unit each) + 6 three-split pages (+2 each).
+    // 44 two-split pages (+1 extra unit each) + 7 three-split pages (+2 each).
     final extra = quranUnits.length - 604;
-    expect(extra, 45 + 12);
-    expect(quranUnits.length, 661);
+    expect(extra, 44 + 14);
+    expect(quranUnits.length, 662);
+  });
+
+  test('juz ranges follow the 604-page Madinah mushaf', () {
+    expect(juzPageRange(1), (1, 21));
+    expect(juzPageRange(2), (22, 41));
+    expect(juzPageRange(3), (42, 61));
+    expect(juzPageRange(29), (562, 581));
+    expect(juzPageRange(30), (582, 604));
+    for (var juz = 1; juz <= 30; juz++) {
+      final (first, last) = juzPageRange(juz);
+      expect(juzOfPage(first), juz, reason: 'first page of juz $juz');
+      expect(juzOfPage(last), juz, reason: 'last page of juz $juz');
+    }
+    // Every page belongs to exactly one juz and the ranges are contiguous.
+    expect(juzOfPage(1), 1);
+    expect(juzOfPage(21), 1);
+    expect(juzOfPage(22), 2);
+    expect(juzOfPage(581), 29);
+    expect(juzOfPage(582), 30);
+    expect(juzOfPage(604), 30);
   });
 }

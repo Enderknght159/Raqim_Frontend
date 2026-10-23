@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 
 import '../../../core/utils/date_time_utils.dart';
 import '../domain/models/student_models.dart';
+import '../domain/quran_units.dart';
 import '../domain/student_stats.dart';
 import 'local/student_database.dart' as db;
 
@@ -36,6 +37,16 @@ class StudentLocalRepository {
   Future<List<Course>> courses() async {
     final rows = await _database.select(_database.courses).get();
     return rows.map(_mapCourse).toList();
+  }
+
+  /// Mosque display name (student profile header). Falls back to the demo
+  /// mosque for databases seeded before the key existed.
+  Future<String> mosqueName() async {
+    final row = await (_database.select(_database.appMeta)
+          ..where((t) => t.key.equals('mosque_name')))
+        .getSingleOrNull();
+    final value = row?.value.trim() ?? '';
+    return value.isEmpty ? 'جامع الفرقان' : value;
   }
 
   Future<List<Team>> teams() async {
@@ -75,8 +86,9 @@ class StudentLocalRepository {
         .toList();
   }
 
-  /// Course leaderboard: all students in the course (self + teammates), sorted
-  /// by their points in this course (attendance + memorization + transactions).
+  /// Course leaderboard: every student with a record in the course (plus the
+  /// current student), sorted by their points in this course (attendance +
+  /// memorization + transactions).
   Future<List<StudentLeaderboardEntry>> leaderboard(int courseId) async {
     final course = await (_database.select(_database.courses)
           ..where((t) => t.id.equals(courseId)))
@@ -85,15 +97,25 @@ class StudentLocalRepository {
           ..where((t) => t.courseId.equals(courseId)))
         .get();
     final sessionIds = sessions.map((s) => s.id).toList();
+    if (sessionIds.isEmpty) return const [];
 
-    // Candidate students: self + everyone in my teams.
-    final ids = <int>{1};
-    final teams = await this.teams();
-    for (final team in teams) {
-      for (final peer in await peersOfTeam(team.id)) {
-        ids.add(peer.id);
-      }
-    }
+    final attendance = await (_database.select(_database.attendances)
+          ..where((t) => t.sessionId.isIn(sessionIds)))
+        .get();
+    final mems = await (_database.select(_database.memorizations)
+          ..where((t) => t.sessionId.isIn(sessionIds)))
+        .get();
+    final txs = await (_database.select(_database.transactions)
+          ..where((t) => t.sessionId.isIn(sessionIds)))
+        .get();
+
+    // Candidates: current student + everyone with any record in the course.
+    final ids = <int>{
+      1,
+      ...attendance.map((a) => a.studentId),
+      ...mems.map((m) => m.studentId),
+      ...txs.map((t) => t.studentId),
+    };
 
     final entries = <StudentLeaderboardEntry>[];
     for (final id in ids) {
@@ -201,11 +223,17 @@ class StudentLocalRepository {
       // inferred from records; upcoming/empty courses are skipped).
       if (_hasNoRecords(bundle)) continue;
       final lastUpdated = _lastUpdated(bundle);
+      // Real rank inside the course (self included) — never a fixed 1.
+      final standings = await leaderboard(course.id);
+      final selfRank = standings
+          .where((e) => e.student.id == 1)
+          .map((e) => e.rank)
+          .firstOrNull;
       overviews.add(CourseOverview(
         course: course,
         points: bundle.breakdown,
         attendance: bundle.attendanceSummary,
-        rank: 1,
+        rank: selfRank,
         lastUpdated: lastUpdated,
       ));
     }
@@ -405,6 +433,20 @@ class StudentLocalRepository {
       teamByName[t.id] = t.name;
     }
 
+    // Administration notices (e.g. absence notices for a session).
+    final notices = await (_database.select(_database.studentNotices)
+          ..where((t) => t.studentId.equals(1) | t.studentId.equals(0)))
+        .get();
+    for (final n in notices) {
+      items.add(StudentNotification(
+        id: 'notice-${n.id}',
+        when: n.date,
+        kind: NotificationKind.notice,
+        title: n.title,
+        body: n.body,
+      ));
+    }
+
     // Team joins.
     final teamLinks = await (_database.select(_database.studentTeams)
           ..where((t) => t.studentId.equals(1)))
@@ -454,7 +496,7 @@ class StudentLocalRepository {
         when: m.date,
         kind: NotificationKind.memorization,
         title: 'تسجيل حفظ',
-        body: 'صفحة ${m.page} ${m.surah.isEmpty ? '' : '· ${m.surah}'}'
+        body: 'صفحة ${m.page} · ${quranDisplaySurah(m.page, m.partIndex, m.surah)}'
             ' — تقييم ${m.rating} · المسمِّع: ${m.reciterName}',
       ));
     }

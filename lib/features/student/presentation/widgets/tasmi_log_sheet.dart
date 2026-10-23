@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../domain/models/student_models.dart';
+import '../../domain/quran_units.dart';
 import 'rating_stars.dart';
 
 /// Full tasmi' (memorization) log sheet — shared by the student Quran tab (B2)
@@ -43,7 +44,8 @@ void showTasmiLogSheet(BuildContext context, List<Memorization> mems) {
             contentPadding: EdgeInsets.zero,
             leading: Icon(Icons.menu_book,
                 color: RatingStars.colorFor(m.rating, tokens)),
-            title: Text('صفحة ${m.page} — ${m.surah}'),
+            title: Text(
+                'صفحة ${m.page} — ${quranDisplaySurah(m.page, m.partIndex, m.surah)}'),
             subtitle: Text(
                 'المسمِّع: ${m.reciterName} · ${m.date.day}/${m.date.month}/${m.date.year}'),
             trailing: RatingStars(rating: m.rating),

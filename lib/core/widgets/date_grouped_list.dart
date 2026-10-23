@@ -11,12 +11,17 @@ class DateGroupedList<T> extends StatelessWidget {
     required this.dateOf,
     required this.itemBuilder,
     this.dayLabelBuilder,
+    this.horizontalPadding = 16,
   });
 
   final List<T> items;
   final DateTime Function(T item) dateOf;
   final Widget Function(BuildContext context, T item) itemBuilder;
   final String Function(DateTime day)? dayLabelBuilder;
+
+  /// Page margin applied to the whole list (rows no longer stick to the
+  /// screen edges).
+  final double horizontalPadding;
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +35,8 @@ class DateGroupedList<T> extends StatelessWidget {
       groups.last.items.add(item);
     }
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(
+          horizontal: horizontalPadding, vertical: 8),
       itemCount: groups.length,
       itemBuilder: (context, i) => _DayGroup<T>(
         day: groups[i].day,
@@ -76,7 +82,7 @@ class _DayGroup<T> extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+          padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
           child: Row(
             children: [
               Container(

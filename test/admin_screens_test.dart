@@ -5,7 +5,9 @@ import 'package:drift/native.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:raqim/core/theme/app_theme.dart';
+import 'package:raqim/core/widgets/search_picker_field.dart';
 import 'package:raqim/features/admin/data/admin_local_repository.dart';
+import 'package:raqim/features/admin/domain/admin_models.dart';
 import 'package:raqim/features/admin/presentation/admin_shell.dart';
 import 'package:raqim/features/admin/presentation/screens/admin_account_screen.dart';
 import 'package:raqim/features/admin/presentation/screens/admin_assets_screen.dart';
@@ -14,6 +16,7 @@ import 'package:raqim/features/admin/presentation/screens/admin_change_requests_
 import 'package:raqim/features/admin/presentation/screens/admin_content_screen.dart';
 import 'package:raqim/features/admin/presentation/screens/admin_course_detail_screen.dart';
 import 'package:raqim/features/admin/presentation/screens/admin_courses_screen.dart';
+import 'package:raqim/features/admin/presentation/screens/admin_exam_screen.dart';
 import 'package:raqim/features/admin/presentation/screens/admin_import_screen.dart';
 import 'package:raqim/features/admin/presentation/screens/admin_notifications_screen.dart';
 import 'package:raqim/features/admin/presentation/screens/admin_session_screen.dart';
@@ -27,6 +30,7 @@ import 'package:raqim/features/admin/presentation/screens/admin_teacher_screen.d
 import 'package:raqim/features/admin/presentation/screens/admin_teams_screen.dart';
 import 'package:raqim/features/admin/presentation/screens/admin_tools_screen.dart';
 import 'package:raqim/features/admin/presentation/screens/admin_users_screen.dart';
+import 'package:raqim/features/admin/presentation/widgets/absence_notice_sheet.dart';
 import 'package:raqim/features/attendance/presentation/screens/session_attendance_screen.dart';
 import 'package:raqim/features/student/data/local/demo_seed.dart';
 import 'package:raqim/features/student/data/local/student_database.dart';
@@ -306,6 +310,13 @@ GoRouter _flowRouter(String initialLocation) {
         ),
       ),
       GoRoute(
+        path: '/admin/courses/:courseId/exams/:examId',
+        builder: (context, state) => AdminExamScreen(
+          courseId: int.parse(state.pathParameters['courseId']!),
+          examId: int.parse(state.pathParameters['examId']!),
+        ),
+      ),
+      GoRoute(
         path: '/admin/sessions/:sessionId/attendance',
         builder: (context, state) => SessionAttendanceScreen(
           sessionId: int.parse(state.pathParameters['sessionId']!),
@@ -388,6 +399,12 @@ void mainFlow() {
 
     // Thresholds sheet appears prefilled from the last session (BR-402).
     expect(find.text('إعداد الجلسة الجديدة'), findsOneWidget);
+    // New UX: time pickers + steppers (no hyper-sensitive sliders).
+    expect(find.byType(Slider), findsNothing);
+    expect(find.text('وقت الحضور'), findsOneWidget);
+    expect(find.text('نقاط الحضور'), findsOneWidget);
+    expect(find.text('الحضور المبكر حتى'), findsOneWidget);
+    expect(find.text('التأخير من الساعة'), findsOneWidget);
     await tester.ensureVisible(find.text('حفظ'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('حفظ'));
@@ -451,7 +468,8 @@ void mainFlow() {
     expect(find.textContaining('تسجيل حضور'), findsWidgets);
   });
 
-  testWidgets('E2: exam detail opens submissions entry', (tester) async {
+  testWidgets('E2: exam opens the full exam page with stats + submissions',
+      (tester) async {
     final repos = await _flowRepos();
     await tester.pumpWidget(_flowWrap(repos, '/admin/courses/1'));
     await tester.pumpAndSettle();
@@ -461,8 +479,10 @@ void mainFlow() {
     await tester.tap(find.text('القرآن الكريم'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('التقديمات'), findsOneWidget);
+    expect(find.text('إحصاءات الامتحان'), findsOneWidget);
+    expect(find.text('عدد التقديمات'), findsOneWidget);
     expect(find.text('إضافة تقديم'), findsOneWidget);
+    expect(find.textContaining('التقديمات'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
@@ -602,5 +622,296 @@ void mainFlow() {
     expect(tester.takeException(), isNull);
     await tester.pumpAndSettle();
     expect(find.text('تسجيل (حفظ · متون · معاملة)'), findsOneWidget);
+  });
+
+  testWidgets('E2: sessions can be multi-selected, deleted and undone',
+      (tester) async {
+    tester.view.physicalSize = const Size(1200, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final repos = await _flowRepos();
+    await tester.pumpWidget(_flowWrap(repos, '/admin/courses/1'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('جلسة #14'), findsOneWidget);
+    await tester.tap(find.text('تحديد'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('جلسة #14'));
+    await tester.pumpAndSettle();
+    expect(find.text('حذف المحدد (1)'), findsOneWidget);
+
+    await tester.tap(find.text('حذف المحدد (1)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'حذف'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('جلسة #14'), findsNothing);
+    expect(find.textContaining('حُذفت 1 جلسة'), findsOneWidget);
+
+    // Undo restores the session (and its records).
+    await tester.tap(find.text('تراجع'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('جلسة #14'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('E2: adding a certificate uses a juz range from the grid',
+      (tester) async {
+    tester.view.physicalSize = const Size(1200, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final repos = await _flowRepos();
+    await tester.pumpWidget(_flowWrap(repos, '/admin/courses/1'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('الشهادات'));
+    await tester.pumpAndSettle();
+
+    // Seeded certificates (students 1 and 2) for juz 30.
+    expect(find.textContaining('الجزء 30 – 30'), findsWidgets);
+
+    await tester.tap(find.text('إضافة شهادة قرآن'));
+    await tester.pumpAndSettle();
+    expect(find.text('شهادة قرآن جديدة'), findsOneWidget);
+
+    // Pick the student.
+    await tester.tap(find.text('اختر الطالب'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'عبد الرحمن');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('عبد الرحمن محمود').last);
+    await tester.pumpAndSettle();
+
+    // Pick a contiguous juz range (5 → 7) from the grid.
+    final grid = find.byType(GridView);
+    await tester.tap(find.descendant(of: grid, matching: find.text('5')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(of: grid, matching: find.text('7')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('الجزء 5 – 7'), findsOneWidget);
+
+    // Mark + save.
+    await tester.enterText(find.byType(TextField).last, '90');
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('إضافة الشهادة'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('إضافة الشهادة'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('الجزء 5 – 7'), findsOneWidget);
+    final certs = await repos.admin.courseCertificates(1);
+    expect(certs.where((c) => c.startJuz == 5 && c.endJuz == 7).length, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('E3: session records preview + show all', (tester) async {
+    final repos = await _flowRepos();
+    await tester.pumpWidget(_flowWrap(repos, '/admin/sessions/100'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('سجلات الجلسة'), 300,
+        scrollable: find.byType(Scrollable).first);
+    expect(find.text('سجلات الجلسة'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('سجلات الجلسة'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('عرض الكل').last);
+    await tester.pumpAndSettle();
+    expect(find.text('سجلات الجلسة'), findsWidgets);
+    expect(find.text('الحفظ'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('E3: quick attendance actions from the day list',
+      (tester) async {
+    final repos = await _flowRepos();
+    await tester.pumpWidget(_flowWrap(repos, '/admin/sessions/100'));
+    await tester.pumpAndSettle();
+
+    // Open the full day list and find a seeded absentee (student 7).
+    await tester.tap(find.text('عرض الكل').first);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('session-member-7')), 200,
+        scrollable: find.byType(Scrollable).last);
+    await tester.tap(find.byKey(const ValueKey('session-member-7')));
+    await tester.pumpAndSettle();
+    expect(find.text('تسجيل الحضور الآن'), findsOneWidget);
+
+    await tester.tap(find.text('تسجيل الحضور الآن'));
+    await tester.pumpAndSettle();
+
+    final attendance = await repos.admin.sessionAttendance(100);
+    expect(attendance.map((a) => a.studentId), contains(7));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('E3: absence notices reach the student feed', (tester) async {
+    final repos = await _repos();
+    await tester.pumpWidget(_wrap(
+      repos,
+      Scaffold(
+        body: Builder(
+          builder: (context) => Center(
+            child: ElevatedButton(
+              onPressed: () => showAbsenceNoticeSheet(
+                context,
+                sessionId: 100,
+                absentees: const [
+                  AdminSessionMember(studentId: 1, name: 'عبد الرحمن محمود'),
+                ],
+                repository: repos.admin,
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text('إشعارات الغياب'), findsOneWidget);
+
+    await tester.tap(find.textContaining('إرسال الإشعارات'));
+    await tester.pumpAndSettle();
+
+    final items = await repos.student.notifications();
+    expect(items.where((n) => n.title == 'غياب عن الجلسة').length, 1);
+  });
+
+  testWidgets('E2: exam page offers the add-submission form', (tester) async {
+    final repos = await _flowRepos();
+    await tester.pumpWidget(_flowWrap(repos, '/admin/courses/1'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('الامتحانات'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('القرآن الكريم'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('المتوسط'), findsOneWidget);
+    expect(find.text('44/50'), findsWidgets);
+
+    await tester.tap(find.text('إضافة تقديم'));
+    await tester.pumpAndSettle();
+    expect(find.text('حفظ التقديم'), findsOneWidget);
+    expect(find.text('اختر الطالب'), findsOneWidget);
+    Navigator.of(tester.element(find.text('حفظ التقديم'))).pop();
+    await tester.pumpAndSettle();
+
+    // Subject is picked from the subjects list (not free text).
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+    final subjectPicker = find.byType(SearchPickerField<String>);
+    expect(subjectPicker, findsOneWidget);
+    await tester.tap(subjectPicker);
+    await tester.pumpAndSettle();
+    expect(find.text('بحث في اختر المادة'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('E2: course name + criteria can be edited from the course page',
+      (tester) async {
+    final repos = await _flowRepos();
+    await tester.pumpWidget(_flowWrap(repos, '/admin'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('دورة الحفظ الصيفية'));
+    await tester.pumpAndSettle();
+    expect(find.text('تعديل الدورة'), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.edit_outlined));
+    await tester.pumpAndSettle();
+    expect(find.text('تعديل الدورة'), findsOneWidget);
+    expect(find.text('معايير النقاط'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, 'دورة الحفظ المعدلة');
+    await tester.ensureVisible(find.text('حفظ التعديلات'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('حفظ التعديلات'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('دورة الحفظ المعدلة'), findsWidgets);
+    final courses = await repos.admin.courses();
+    expect(courses.any((c) => c.name == 'دورة الحفظ المعدلة'), isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('E2: deleting a course removes it from the landing page',
+      (tester) async {
+    final repos = await _flowRepos();
+    await tester.pumpWidget(_flowWrap(repos, '/admin'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('دورة الحفظ الصيفية'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.edit_outlined));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('حذف الدورة'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('حذف الدورة'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'حذف'));
+    await tester.pumpAndSettle();
+
+    // Back on the landing page, refreshed.
+    expect(find.text('دورة الحفظ الصيفية'), findsNothing);
+    expect(find.text('دورة رمضانية'), findsOneWidget);
+    final courses = await repos.admin.courses();
+    expect(courses.any((c) => c.name == 'دورة الحفظ الصيفية'), isFalse);
+    expect(await repos.admin.courseSessions(1), isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('E7: teams card opens the team manager', (tester) async {
+    final repos = await _flowRepos();
+    await tester.pumpWidget(_flowWrap(repos, '/admin/students/1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('الحلقات'), findsOneWidget);
+    await tester.tap(find.text('حلقة القرآن - أ').first);
+    await tester.pumpAndSettle();
+    expect(find.text('إضافة طلاب'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Student shell: welcome identity on top, page title below',
+      (tester) async {
+    final repos = await _flowRepos();
+    final router = GoRouter(
+      initialLocation: '/my-progress',
+      routes: [
+        ShellRoute(
+          builder: (context, state, child) => StudentShell(child: child),
+          routes: [
+            GoRoute(
+              path: '/my-progress',
+              builder: (context, state) => const SizedBox.expand(),
+            ),
+            GoRoute(
+              path: '/my-progress/profile',
+              builder: (context, state) => const SizedBox.expand(),
+            ),
+          ],
+        ),
+      ],
+    );
+    await tester.pumpWidget(AdminRepositoryScope(
+      repository: repos.admin,
+      child: StudentRepositoryScope(
+        repository: repos.student,
+        child: MaterialApp.router(
+          theme: AppTheme.light(),
+          routerConfig: router,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('عبد الرحمن'), findsWidgets);
+    expect(find.text('أهلاً بك'), findsNothing);
+    // The current tab title is rendered below the AppBar (plus the nav label).
+    expect(find.text('دوراتي'), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
   });
 }

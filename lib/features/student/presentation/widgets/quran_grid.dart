@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../domain/quran_units.dart';
 
 /// Horizontal juz selector (B2 quran map).
 class JuzSlider extends StatelessWidget {
@@ -153,15 +154,19 @@ class QuranGrid extends StatelessWidget {
     required this.juz,
     required this.pageStatus,
     this.columns = 7,
+    this.onPageTap,
   });
 
   final int juz;
   final Map<int, ({int? rating, double progress})> pageStatus;
   final int columns;
 
-  static int startPageOf(int juz) => (juz - 1) * 20 + 1;
+  /// Called when a page cell is tapped (e.g. show its tasmi' details).
+  final ValueChanged<int>? onPageTap;
 
-  static int pageCountOf(int juz) => juz == 30 ? 22 : 20;
+  static int startPageOf(int juz) => juzStartPage(juz);
+
+  static int pageCountOf(int juz) => juzPageCount(juz);
 
   @override
   Widget build(BuildContext context) {
@@ -184,7 +189,7 @@ class QuranGrid extends StatelessWidget {
           page: page,
           rating: status?.rating,
           progress: status?.progress ?? 0,
-          onTap: () {},
+          onTap: onPageTap == null ? null : () => onPageTap!(page),
         );
       },
     );

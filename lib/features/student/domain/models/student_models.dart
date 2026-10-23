@@ -188,6 +188,7 @@ enum NotificationKind {
   certificate,
   matn,
   team,
+  notice,
 }
 
 class StudentNotification {

@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../../../core/utils/date_time_utils.dart';
 import '../../student/data/local/student_database.dart' as db;
 import '../../student/data/student_local_repository.dart';
 import '../../student/domain/models/student_models.dart';
@@ -58,14 +59,20 @@ class AdminLocalRepository {
               .get();
       final studentIds =
           attendance.map((a) => a.studentId).toSet();
-      final today = _dateOnly(DateTime.now());
-      final todaySessionIds = sessions
-          .where((s) => _dateOnly(s.date) == today)
-          .map((s) => s.id)
-          .toSet();
-      final todayPresent = attendance
-          .where((a) => todaySessionIds.contains(a.sessionId) && a.arrivalTime != null)
-          .length;
+      // Attendance of the last session (the product shows the most recent
+      // session, not today specifically).
+      db.Session? lastSession;
+      for (final s in sessions) {
+        if (lastSession == null || s.date.isAfter(lastSession.date)) {
+          lastSession = s;
+        }
+      }
+      final lastPresent = lastSession == null
+          ? 0
+          : attendance
+              .where((a) =>
+                  a.sessionId == lastSession!.id && a.arrivalTime != null)
+              .length;
 
       final series = <double>[];
       for (final s in sessions) {
@@ -86,11 +93,15 @@ class AdminLocalRepository {
         isActive: !DateTime.now().isAfter(c.endDate),
         sessionsCount: sessions.length,
         studentsCount: studentIds.length,
-        todayPresent: todayPresent,
-        todayTotal: studentIds.length,
+        lastSessionPresent: lastPresent,
+        lastSessionTotal: studentIds.length,
         attendancePercent:
             expected == 0 ? 0 : ((attended / expected) * 100).round(),
         series: series,
+        goodPoints: c.goodPoints,
+        veryGoodPoints: c.veryGoodPoints,
+        excellentPoints: c.excellentPoints,
+        certificatePoints: c.certificatePoints,
       ));
     }
     result.sort((a, b) {
@@ -320,10 +331,13 @@ class AdminLocalRepository {
       final exam = examById[sub.examId];
       if (exam == null) continue;
       if (exam.type == 'final') {
-        final mark = sub.mark.round();
+        // Subject final mark = the best **final exam** as a percentage.
+        final percent = exam.maxMark <= 0
+            ? 0
+            : ((sub.mark / exam.maxMark) * 100).round();
         final current = subjectBest[exam.subjectName];
-        if (current == null || mark > current) {
-          subjectBest[exam.subjectName] = mark;
+        if (current == null || percent > current) {
+          subjectBest[exam.subjectName] = percent;
         }
       }
     }
@@ -332,6 +346,10 @@ class AdminLocalRepository {
       [
         for (final c in certs)
           AdminCertificateRow(
+            id: c.id,
+            studentId: c.studentId,
+            studentName: s.name,
+            courseId: c.courseId,
             startJuz: c.startJuz,
             endJuz: c.endJuz,
             mark: c.mark,
@@ -493,6 +511,31 @@ class AdminLocalRepository {
       for (final e in counts.entries)
         AdminTeacherRow(name: e.key, teamsCount: e.value),
     ]..sort((a, b) => b.teamsCount.compareTo(a.teamsCount));
+  }
+
+  /// Every account that can be picked as a team teacher («أي حساب يصلح أن
+  /// يكون معلمًا»): administration + teacher accounts + student accounts.
+  /// Names are the local identity key (the trial has no separate account ids).
+  Future<List<({String name, String role})>> teacherCandidates() async {
+    final out = <({String name, String role})>[];
+    final seen = <String>{};
+    void add(String name, String role) {
+      final n = name.trim();
+      if (n.isEmpty || !seen.add(n)) return;
+      out.add((name: n, role: role));
+    }
+
+    add('مدير المسجد', 'إدارة');
+    final teamRows = await _database.select(_database.teams).get();
+    for (final t in teamRows) {
+      add(t.teacherName, 'معلم');
+    }
+    final students = await _database.select(_database.students).get();
+    students.sort((a, b) => a.name.compareTo(b.name));
+    for (final s in students) {
+      add(s.name, 'طالب');
+    }
+    return out;
   }
 
   Future<List<AdminContentItem>> teamTypes() async {
@@ -793,15 +836,16 @@ class AdminLocalRepository {
     return student.name;
   }
 
-  Future<void> addManualAttendance(int sessionId, int studentId) async {
+  Future<void> addManualAttendance(int sessionId, int studentId,
+      {DateTime? time}) async {
     await _database.into(_database.attendances).insert(
           db.AttendancesCompanion.insert(
             id: Value(await _nextAttendanceId()),
             studentId: studentId,
             sessionId: sessionId,
-            arrivalTime: Value(DateTime.now()),
+            arrivalTime: Value(time ?? DateTime.now()),
           ),
-    );
+        );
   }
 
   /// Removes a student's attendance from a session (BR-701 undo path).
@@ -823,6 +867,180 @@ class AdminLocalRepository {
     await (_database.update(_database.attendances)
           ..where((t) => t.id.equals(existing.id)))
         .write(db.AttendancesCompanion(arrivalTime: Value(time)));
+  }
+
+  /// Every record attached to one session (memorization · matn · transaction)
+  /// for the E3 «سجلات الجلسة» section, newest first.
+  Future<List<AdminSessionRecord>> sessionRecords(int sessionId) async {
+    final session = await (_database.select(_database.sessions)
+          ..where((t) => t.id.equals(sessionId)))
+        .getSingle();
+    final students = await _database.select(_database.students).get();
+    final nameById = {for (final s in students) s.id: s.name};
+
+    final rows = <AdminSessionRecord>[];
+
+    final mems = await (_database.select(_database.memorizations)
+          ..where((t) => t.sessionId.equals(sessionId)))
+        .get();
+    for (final m in mems) {
+      rows.add(AdminSessionRecord(
+        id: m.id,
+        kind: 'memorization',
+        studentName: nameById[m.studentId] ?? '#${m.studentId}',
+        title:
+            'حفظ صفحة ${m.page} — ${quranSurahOf(m.page, m.partIndex)}',
+        subtitle: 'تقييم ${m.rating} · المسمِّع: ${m.reciterName}',
+        when: m.date,
+      ));
+    }
+
+    final matnRecs = await (_database.select(_database.matnRecitations)
+          ..where((t) => t.sessionId.equals(sessionId)))
+        .get();
+    final matns = await _database.select(_database.matns).get();
+    final matnById = {for (final m in matns) m.id: m.name};
+    for (final r in matnRecs) {
+      rows.add(AdminSessionRecord(
+        id: r.id,
+        kind: 'matn',
+        studentName: nameById[r.studentId] ?? '#${r.studentId}',
+        title: '${matnById[r.matnId] ?? 'متن'} — البيت الأخير ${r.lastVerse}',
+        subtitle: 'المعلم: ${r.teacherName}',
+        when: session.date,
+      ));
+    }
+
+    final txs = await (_database.select(_database.transactions)
+          ..where((t) => t.sessionId.equals(sessionId)))
+        .get();
+    for (final t in txs) {
+      final type = TransactionType.fromValue(t.type);
+      rows.add(AdminSessionRecord(
+        id: t.id,
+        kind: 'transaction',
+        studentName: nameById[t.studentId] ?? '#${t.studentId}',
+        title: '${type.arabic} · ${t.pointsValue.abs()} نقطة',
+        subtitle:
+            (t.description == null || t.description!.isEmpty)
+                ? 'بدون وصف'
+                : t.description!,
+        when: t.date,
+      ));
+    }
+
+    rows.sort((a, b) => b.when.compareTo(a.when));
+    return rows;
+  }
+
+  /// Sends an in-app absence notice to each selected student (E3).
+  /// Returns the number of notices inserted.
+  Future<int> sendAbsenceNotices({
+    required int sessionId,
+    required List<int> studentIds,
+  }) async {
+    if (studentIds.isEmpty) return 0;
+    final session = await (_database.select(_database.sessions)
+          ..where((t) => t.id.equals(sessionId)))
+        .getSingle();
+    final course = await (_database.select(_database.courses)
+          ..where((t) => t.id.equals(session.courseId)))
+        .getSingle();
+    final existing = await _database.select(_database.studentNotices).get();
+    var id = existing.isEmpty
+        ? 1
+        : existing.map((r) => r.id).reduce((a, b) => a > b ? a : b) + 1;
+    final now = DateTime.now();
+    final dateLabel = '${now.day}/${now.month}/${now.year}';
+    await _database.batch((b) {
+      for (final studentId in studentIds) {
+        b.insert(
+          _database.studentNotices,
+          db.StudentNoticesCompanion.insert(
+            id: Value(id++),
+            studentId: studentId,
+            kind: 'absence',
+            title: 'غياب عن الجلسة',
+            body: 'لم يُسجَّل حضورك في جلسة #${session.orderInCourse} '
+                '— ${course.name} ($dateLabel)',
+            date: now,
+          ),
+        );
+      }
+    });
+    return studentIds.length;
+  }
+
+  /// Deletes sessions together with every record attached to them and keeps
+  /// an opaque snapshot so the UI can offer a full undo (E2/E3).
+  Future<Object> deleteSessionsWithRecords(List<int> sessionIds) async {
+    if (sessionIds.isEmpty) return const _DeletedSessions.empty();
+    final sessions = await (_database.select(_database.sessions)
+          ..where((t) => t.id.isIn(sessionIds)))
+        .get();
+    final attendances = await (_database.select(_database.attendances)
+          ..where((t) => t.sessionId.isIn(sessionIds)))
+        .get();
+    final memorizations = await (_database.select(_database.memorizations)
+          ..where((t) => t.sessionId.isIn(sessionIds)))
+        .get();
+    final transactions = await (_database.select(_database.transactions)
+          ..where((t) => t.sessionId.isIn(sessionIds)))
+        .get();
+    final matnRecitations = await (_database.select(_database.matnRecitations)
+          ..where((t) => t.sessionId.isIn(sessionIds)))
+        .get();
+
+    await (_database.delete(_database.attendances)
+          ..where((t) => t.sessionId.isIn(sessionIds)))
+        .go();
+    await (_database.delete(_database.memorizations)
+          ..where((t) => t.sessionId.isIn(sessionIds)))
+        .go();
+    await (_database.delete(_database.transactions)
+          ..where((t) => t.sessionId.isIn(sessionIds)))
+        .go();
+    await (_database.delete(_database.matnRecitations)
+          ..where((t) => t.sessionId.isIn(sessionIds)))
+        .go();
+    await (_database.delete(_database.sessions)
+          ..where((t) => t.id.isIn(sessionIds)))
+        .go();
+
+    return _DeletedSessions(
+      sessions: sessions,
+      attendances: attendances,
+      memorizations: memorizations,
+      transactions: transactions,
+      matnRecitations: matnRecitations,
+    );
+  }
+
+  /// Restores everything captured by [deleteSessionsWithRecords].
+  Future<void> restoreSessions(Object snapshot) async {
+    if (snapshot is! _DeletedSessions) return;
+    await _database.batch((b) {
+      for (final s in snapshot.sessions) {
+        b.insert(_database.sessions, s.toCompanion(true),
+            mode: InsertMode.insertOrReplace);
+      }
+      for (final r in snapshot.attendances) {
+        b.insert(_database.attendances, r.toCompanion(true),
+            mode: InsertMode.insertOrReplace);
+      }
+      for (final r in snapshot.memorizations) {
+        b.insert(_database.memorizations, r.toCompanion(true),
+            mode: InsertMode.insertOrReplace);
+      }
+      for (final r in snapshot.transactions) {
+        b.insert(_database.transactions, r.toCompanion(true),
+            mode: InsertMode.insertOrReplace);
+      }
+      for (final r in snapshot.matnRecitations) {
+        b.insert(_database.matnRecitations, r.toCompanion(true),
+            mode: InsertMode.insertOrReplace);
+      }
+    });
   }
 
   Future<void> addMemorization({
@@ -897,9 +1115,12 @@ class AdminLocalRepository {
         ? 1
         : existing.map((s) => s.orderInCourse).reduce((a, b) => a > b ? a : b) + 1;
     // Id must be unique across the whole table (a new course may share the
-    // same session count as another one → count-based ids would collide).
+    // same session count as another one, and deleted sessions leave gaps →
+    // always use max(id) + 1).
     final all = await _database.select(_database.sessions).get();
-    final id = await _nextId(all.length, base: 100);
+    final id = all.isEmpty
+        ? 100
+        : all.map((r) => r.id).reduce((a, b) => a > b ? a : b) + 1;
     await _database.into(_database.sessions).insert(
           db.SessionsCompanion.insert(
             id: Value(id),
@@ -945,6 +1166,74 @@ class AdminLocalRepository {
           ),
         );
     return id;
+  }
+
+  /// Updates a course's identity, dates and criteria (E2 edit).
+  Future<void> updateCourse(
+    int id, {
+    required String name,
+    required DateTime startDate,
+    required DateTime endDate,
+    required int goodPoints,
+    required int veryGoodPoints,
+    required int excellentPoints,
+    required int certificatePoints,
+  }) async {
+    await (_database.update(_database.courses)
+          ..where((t) => t.id.equals(id)))
+        .write(db.CoursesCompanion(
+      name: Value(name),
+      startDate: Value(startDate),
+      endDate: Value(endDate),
+      goodPoints: Value(goodPoints),
+      veryGoodPoints: Value(veryGoodPoints),
+      excellentPoints: Value(excellentPoints),
+      certificatePoints: Value(certificatePoints),
+    ));
+  }
+
+  /// Deletes a course with everything attached to it (sessions + their
+  /// records, exams + submissions, certificates). Teams are not course-bound.
+  Future<void> deleteCourse(int courseId) async {
+    final sessions = await (_database.select(_database.sessions)
+          ..where((t) => t.courseId.equals(courseId)))
+        .get();
+    final sessionIds = sessions.map((s) => s.id).toList();
+    if (sessionIds.isNotEmpty) {
+      await (_database.delete(_database.attendances)
+            ..where((t) => t.sessionId.isIn(sessionIds)))
+          .go();
+      await (_database.delete(_database.memorizations)
+            ..where((t) => t.sessionId.isIn(sessionIds)))
+          .go();
+      await (_database.delete(_database.transactions)
+            ..where((t) => t.sessionId.isIn(sessionIds)))
+          .go();
+      await (_database.delete(_database.matnRecitations)
+            ..where((t) => t.sessionId.isIn(sessionIds)))
+          .go();
+      await (_database.delete(_database.sessions)
+            ..where((t) => t.id.isIn(sessionIds)))
+          .go();
+    }
+    final exams = await (_database.select(_database.exams)
+          ..where((t) => t.courseId.equals(courseId)))
+        .get();
+    final examIds = exams.map((e) => e.id).toList();
+    if (examIds.isNotEmpty) {
+      await (_database.delete(_database.examSubmissions)
+            ..where((t) => t.examId.isIn(examIds)))
+          .go();
+      await (_database.delete(_database.exams)
+            ..where((t) => t.id.isIn(examIds)))
+          .go();
+    }
+    await (_database.delete(_database.certificates)
+          ..where((t) => t.courseId.equals(courseId)))
+        .go();
+    await (_database.delete(_database.courses)
+          ..where((t) => t.id.equals(courseId)))
+        .go();
   }
 
   Future<int> addStudent({
@@ -1261,9 +1550,91 @@ class AdminLocalRepository {
           id: e.id,
           name: e.subjectName,
           subtitle:
-              '${_examTypeLabel(e.type)} · ${e.maxMark} درجة · ${e.points} نقطة',
+              '${formatDate(e.date)} · ${_examTypeLabel(e.type)} · ${e.maxMark} درجة · ${e.points} نقطة',
         ),
     ];
+  }
+
+  // ── Quran certificates (course page / E7) ───────────────────────────────
+
+  /// Certificates granted within one course, newest first.
+  Future<List<AdminCertificateRow>> courseCertificates(int courseId) async {
+    final rows = await (_database.select(_database.certificates)
+          ..where((t) => t.courseId.equals(courseId)))
+        .get();
+    if (rows.isEmpty) return const [];
+    final students = await _database.select(_database.students).get();
+    final nameById = {for (final s in students) s.id: s.name};
+    return [
+      for (final c in rows)
+        AdminCertificateRow(
+          id: c.id,
+          studentId: c.studentId,
+          studentName: nameById[c.studentId] ?? '#${c.studentId}',
+          courseId: c.courseId,
+          startJuz: c.startJuz,
+          endJuz: c.endJuz,
+          mark: c.mark,
+          byHeart: c.byHeart,
+          date: c.date,
+        ),
+    ]..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  Future<void> addCertificate({
+    required int studentId,
+    required int courseId,
+    required int startJuz,
+    required int endJuz,
+    required int mark,
+    required bool byHeart,
+    required DateTime date,
+  }) async {
+    final rows = await _database.select(_database.certificates).get();
+    final id = rows.isEmpty
+        ? 1
+        : rows.map((r) => r.id).reduce((a, b) => a > b ? a : b) + 1;
+    await _database.into(_database.certificates).insert(
+          db.CertificatesCompanion.insert(
+            id: Value(id),
+            studentId: studentId,
+            courseId: courseId,
+            startJuz: startJuz,
+            endJuz: endJuz,
+            mark: mark,
+            byHeart: Value(byHeart),
+            date: date,
+          ),
+        );
+  }
+
+  Future<void> updateCertificate(
+    int id, {
+    required int studentId,
+    required int courseId,
+    required int startJuz,
+    required int endJuz,
+    required int mark,
+    required bool byHeart,
+    required DateTime date,
+  }) async {
+    await (_database.update(_database.certificates)
+          ..where((t) => t.id.equals(id)))
+        .write(db.CertificatesCompanion(
+      studentId: Value(studentId),
+      courseId: Value(courseId),
+      startJuz: Value(startJuz),
+      endJuz: Value(endJuz),
+      mark: Value(mark),
+      byHeart: Value(byHeart),
+      date: Value(date),
+    ));
+  }
+
+  Future<void> deleteCertificate(int id) async {
+    await (_database.delete(_database.certificates)
+          ..where((t) => t.id.equals(id)))
+        .go();
   }
 
   Course _mapCourse(db.Course r) => Course(
@@ -1285,11 +1656,15 @@ class AdminLocalRepository {
     required int minSuccessMark,
     required int points,
   }) async {
-    // Count across all courses to keep ids unique between new courses.
+    // Count across all courses; use max(id) + 1 so deletions leave no
+    // collisions.
     final all = await _database.select(_database.exams).get();
+    final id = all.isEmpty
+        ? 500
+        : all.map((r) => r.id).reduce((a, b) => a > b ? a : b) + 1;
     await _database.into(_database.exams).insert(
           db.ExamsCompanion.insert(
-            id: Value(await _nextId(all.length, base: 500)),
+            id: Value(id),
             courseId: courseId,
             subjectName: subjectName,
             date: DateTime.now(),
@@ -1315,6 +1690,7 @@ class AdminLocalRepository {
       maxMark: e.maxMark,
       minSuccessMark: e.minSuccessMark,
       points: e.points,
+      date: e.date,
     );
   }
 
@@ -1338,12 +1714,16 @@ class AdminLocalRepository {
   }
 
   Future<void> deleteExam(int examId) async {
+    // Remove the exam with its submissions (no orphans).
+    await (_database.delete(_database.examSubmissions)
+          ..where((t) => t.examId.equals(examId)))
+        .go();
     await (_database.delete(_database.exams)
           ..where((t) => t.id.equals(examId)))
         .go();
   }
 
-  /// Marks of an exam (E2 submissions entry, BR-803/804).
+  /// Marks of an exam (E2 submissions entry, BR-803/804), highest first.
   Future<List<AdminSubmissionRow>> examSubmissions(int examId) async {
     final subs = await (_database.select(_database.examSubmissions)
           ..where((t) => t.examId.equals(examId)))
@@ -1357,11 +1737,25 @@ class AdminLocalRepository {
     return [
       for (final s in subs)
         AdminSubmissionRow(
+          id: s.id,
           studentId: s.studentId,
           studentName: nameById[s.studentId] ?? '#${s.studentId}',
           mark: s.mark,
+          date: s.date,
         ),
-    ]..sort((a, b) => a.studentName.compareTo(b.studentName));
+    ]..sort((a, b) => b.mark.compareTo(a.mark));
+  }
+
+  Future<void> updateExamSubmission(int id, double mark) async {
+    await (_database.update(_database.examSubmissions)
+          ..where((t) => t.id.equals(id)))
+        .write(db.ExamSubmissionsCompanion(mark: Value(mark)));
+  }
+
+  Future<void> deleteExamSubmission(int id) async {
+    await (_database.delete(_database.examSubmissions)
+          ..where((t) => t.id.equals(id)))
+        .go();
   }
 
   /// Adds or replaces a student's mark for an exam (one per student, BR-804).
@@ -1380,9 +1774,12 @@ class AdminLocalRepository {
       return;
     }
     final all = await _database.select(_database.examSubmissions).get();
+    final id = all.isEmpty
+        ? 60
+        : all.map((r) => r.id).reduce((a, b) => a > b ? a : b) + 1;
     await _database.into(_database.examSubmissions).insert(
           db.ExamSubmissionsCompanion.insert(
-            id: Value(await _nextId(all.length, base: 60)),
+            id: Value(id),
             studentId: studentId,
             examId: examId,
             mark: mark,
@@ -1488,6 +1885,31 @@ class AdminLocalRepository {
         'phoneNumber' => 'رقم الهاتف',
         _ => field,
       };
+}
+
+/// Snapshot of everything deleted with sessions — handed back to
+/// [AdminLocalRepository.restoreSessions] for a full undo (E2/E3).
+class _DeletedSessions {
+  const _DeletedSessions({
+    required this.sessions,
+    required this.attendances,
+    required this.memorizations,
+    required this.transactions,
+    required this.matnRecitations,
+  });
+
+  const _DeletedSessions.empty()
+      : sessions = const [],
+        attendances = const [],
+        memorizations = const [],
+        transactions = const [],
+        matnRecitations = const [];
+
+  final List<db.Session> sessions;
+  final List<db.Attendance> attendances;
+  final List<db.Memorization> memorizations;
+  final List<db.Transaction> transactions;
+  final List<db.MatnRecitation> matnRecitations;
 }
 
 /// Wrapper so screens can pass the leaderboard list around.

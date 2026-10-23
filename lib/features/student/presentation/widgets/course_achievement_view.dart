@@ -8,9 +8,9 @@ import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/widgets/sparkline.dart';
 import '../../domain/models/student_models.dart';
+import '../../domain/quran_units.dart';
 import '../../domain/student_stats.dart';
 import 'attendance_day_cell.dart';
-import 'points_meter_row.dart';
 import 'rating_stars.dart';
 
 /// The student's full achievement inside one course (B1x content): points,
@@ -21,11 +21,15 @@ class CourseAchievementView extends StatelessWidget {
     super.key,
     required this.bundle,
     required this.leaderboard,
+    required this.onPointsTap,
     this.padding = const EdgeInsets.all(16),
   });
 
   final StudentCourseBundle bundle;
   final List<StudentLeaderboardEntry> leaderboard;
+
+  /// Opens the full-page points breakdown (student route or admin route).
+  final VoidCallback onPointsTap;
   final EdgeInsetsGeometry padding;
 
   @override
@@ -64,7 +68,7 @@ class CourseAchievementView extends StatelessWidget {
         const SizedBox(height: 16),
 
         // Points hero
-        _PointsCard(bundle: bundle),
+        _PointsCard(bundle: bundle, onTap: onPointsTap),
         const SizedBox(height: 12),
 
         // Attendance
@@ -87,9 +91,10 @@ class CourseAchievementView extends StatelessWidget {
 }
 
 class _PointsCard extends StatelessWidget {
-  const _PointsCard({required this.bundle});
+  const _PointsCard({required this.bundle, required this.onTap});
 
   final StudentCourseBundle bundle;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -97,7 +102,7 @@ class _PointsCard extends StatelessWidget {
     final b = bundle.breakdown;
     final series = bundle.cumulativeSeries();
     return AppCard(
-      onTap: () => _showBreakdown(context),
+      onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -154,67 +159,6 @@ class _PointsCard extends StatelessWidget {
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  void _showBreakdown(BuildContext context) {
-    final tokens = Theme.of(context).extension<AppTokens>()!;
-    final b = bundle.breakdown;
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (context) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.6,
-        builder: (context, controller) => ListView(
-          controller: controller,
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-          children: [
-            Text('تفصيل المحصلة', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            PointsMeterRow(label: 'الحضور', value: b.attendance, color: tokens.info),
-            PointsMeterRow(label: 'الحفظ', value: b.memorization, color: tokens.brand),
-            PointsMeterRow(label: 'الامتحانات', value: b.exams, color: tokens.accentMatn),
-            PointsMeterRow(label: 'الشهادات', value: b.certificates, color: tokens.reward),
-            PointsMeterRow(label: 'المتون', value: b.matn, color: tokens.infoLight),
-            PointsMeterRow(label: 'مكافأة', value: b.reward, color: tokens.brand),
-            PointsMeterRow(label: 'عقوبة', value: -b.penalty, color: tokens.danger),
-            PointsMeterRow(label: 'شراء', value: -b.purchase, color: tokens.danger),
-            PointsMeterRow(label: 'تحصيل', value: b.collection, color: tokens.brand),
-            PointsMeterRow(label: 'دخل صرف', value: b.incomeExpense, color: tokens.info),
-            const Divider(),
-            Text('المعاملات', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            if (bundle.transactions.isEmpty)
-              Text('لا توجد معاملات',
-                  style: Theme.of(context).textTheme.bodyMedium)
-            else
-              for (final t in bundle.transactions)
-                ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(_txIcon(t.type),
-                      color: _txColor(t.type, tokens), size: 20),
-                  title: Text(t.type.arabic),
-                  subtitle: t.description == null
-                      ? null
-                      : Text(
-                          t.description!,
-                          style: TextStyle(color: tokens.textMuted, fontSize: 13),
-                        ),
-                  trailing: Text(
-                    _txSigned(t.type, t.pointsValue),
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: _txColor(t.type, tokens),
-                    ),
-                  ),
-                ),
-          ],
-        ),
       ),
     );
   }
@@ -406,7 +350,8 @@ class _TasmiCard extends StatelessWidget {
                         Theme.of(context).extension<AppTokens>()!),
                   ),
                   title: Text('صفحة ${m.page}'),
-                  subtitle: Text('${m.surah} · المسمِّع: ${m.reciterName}'),
+                  subtitle: Text(
+                      '${quranDisplaySurah(m.page, m.partIndex, m.surah)} · المسمِّع: ${m.reciterName}'),
                   trailing: RatingStars(rating: m.rating),
                 ),
           ],
@@ -660,27 +605,3 @@ class _LeaderboardRow extends StatelessWidget {
   }
 }
 
-IconData _txIcon(TransactionType t) => switch (t) {
-      TransactionType.reward => Icons.add_circle_outline,
-      TransactionType.penalty => Icons.remove_circle_outline,
-      TransactionType.purchase => Icons.shopping_bag_outlined,
-      TransactionType.collection => Icons.savings_outlined,
-      TransactionType.incomeExpense => Icons.swap_horiz,
-    };
-
-Color _txColor(TransactionType t, AppTokens tokens) => switch (t) {
-      TransactionType.penalty => tokens.danger,
-      TransactionType.purchase => tokens.danger,
-      _ => tokens.brand,
-    };
-
-String _txSigned(TransactionType t, int value) {
-  final v = value.abs();
-  return switch (t) {
-    TransactionType.reward ||
-    TransactionType.collection ||
-    TransactionType.incomeExpense =>
-      '+$v',
-    _ => '-$v',
-  };
-}

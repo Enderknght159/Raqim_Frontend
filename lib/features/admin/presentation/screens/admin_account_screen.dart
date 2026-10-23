@@ -135,12 +135,38 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
             label: 'خروج',
             variant: AppButtonVariant.destructive,
             icon: Icons.logout,
-            onPressed: () => context.read<AuthCubit>().logout(),
+            onPressed: () => _confirmLogout(context),
           ),
           const SizedBox(height: 24),
         ],
       ),
     );
+  }
+
+  /// Confirms before ending the session (admin side).
+  Future<void> _confirmLogout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('تسجيل الخروج'),
+        content: const Text('هل تريد تسجيل الخروج من حسابك؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).extension<AppTokens>()!.danger,
+            ),
+            child: const Text('خروج'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    context.read<AuthCubit>().logout();
   }
 
   Widget _tile(BuildContext context, IconData icon, String label,

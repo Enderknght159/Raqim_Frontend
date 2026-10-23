@@ -5962,6 +5962,439 @@ class AppMetaCompanion extends UpdateCompanion<AppMetaData> {
   }
 }
 
+class $StudentNoticesTable extends StudentNotices
+    with TableInfo<$StudentNoticesTable, StudentNotice> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StudentNoticesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _studentIdMeta = const VerificationMeta(
+    'studentId',
+  );
+  @override
+  late final GeneratedColumn<int> studentId = GeneratedColumn<int>(
+    'student_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bodyMeta = const VerificationMeta('body');
+  @override
+  late final GeneratedColumn<String> body = GeneratedColumn<String>(
+    'body',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dateMeta = const VerificationMeta('date');
+  @override
+  late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
+    'date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _readMeta = const VerificationMeta('read');
+  @override
+  late final GeneratedColumn<bool> read = GeneratedColumn<bool>(
+    'read',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("read" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    studentId,
+    kind,
+    title,
+    body,
+    date,
+    read,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'student_notices';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StudentNotice> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('student_id')) {
+      context.handle(
+        _studentIdMeta,
+        studentId.isAcceptableOrUnknown(data['student_id']!, _studentIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_studentIdMeta);
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('body')) {
+      context.handle(
+        _bodyMeta,
+        body.isAcceptableOrUnknown(data['body']!, _bodyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bodyMeta);
+    }
+    if (data.containsKey('date')) {
+      context.handle(
+        _dateMeta,
+        date.isAcceptableOrUnknown(data['date']!, _dateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dateMeta);
+    }
+    if (data.containsKey('read')) {
+      context.handle(
+        _readMeta,
+        read.isAcceptableOrUnknown(data['read']!, _readMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StudentNotice map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StudentNotice(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      studentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}student_id'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      body: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}body'],
+      )!,
+      date: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}date'],
+      )!,
+      read: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}read'],
+      )!,
+    );
+  }
+
+  @override
+  $StudentNoticesTable createAlias(String alias) {
+    return $StudentNoticesTable(attachedDatabase, alias);
+  }
+}
+
+class StudentNotice extends DataClass implements Insertable<StudentNotice> {
+  final int id;
+  final int studentId;
+  final String kind;
+  final String title;
+  final String body;
+  final DateTime date;
+  final bool read;
+  const StudentNotice({
+    required this.id,
+    required this.studentId,
+    required this.kind,
+    required this.title,
+    required this.body,
+    required this.date,
+    required this.read,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['student_id'] = Variable<int>(studentId);
+    map['kind'] = Variable<String>(kind);
+    map['title'] = Variable<String>(title);
+    map['body'] = Variable<String>(body);
+    map['date'] = Variable<DateTime>(date);
+    map['read'] = Variable<bool>(read);
+    return map;
+  }
+
+  StudentNoticesCompanion toCompanion(bool nullToAbsent) {
+    return StudentNoticesCompanion(
+      id: Value(id),
+      studentId: Value(studentId),
+      kind: Value(kind),
+      title: Value(title),
+      body: Value(body),
+      date: Value(date),
+      read: Value(read),
+    );
+  }
+
+  factory StudentNotice.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StudentNotice(
+      id: serializer.fromJson<int>(json['id']),
+      studentId: serializer.fromJson<int>(json['studentId']),
+      kind: serializer.fromJson<String>(json['kind']),
+      title: serializer.fromJson<String>(json['title']),
+      body: serializer.fromJson<String>(json['body']),
+      date: serializer.fromJson<DateTime>(json['date']),
+      read: serializer.fromJson<bool>(json['read']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'studentId': serializer.toJson<int>(studentId),
+      'kind': serializer.toJson<String>(kind),
+      'title': serializer.toJson<String>(title),
+      'body': serializer.toJson<String>(body),
+      'date': serializer.toJson<DateTime>(date),
+      'read': serializer.toJson<bool>(read),
+    };
+  }
+
+  StudentNotice copyWith({
+    int? id,
+    int? studentId,
+    String? kind,
+    String? title,
+    String? body,
+    DateTime? date,
+    bool? read,
+  }) => StudentNotice(
+    id: id ?? this.id,
+    studentId: studentId ?? this.studentId,
+    kind: kind ?? this.kind,
+    title: title ?? this.title,
+    body: body ?? this.body,
+    date: date ?? this.date,
+    read: read ?? this.read,
+  );
+  StudentNotice copyWithCompanion(StudentNoticesCompanion data) {
+    return StudentNotice(
+      id: data.id.present ? data.id.value : this.id,
+      studentId: data.studentId.present ? data.studentId.value : this.studentId,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      title: data.title.present ? data.title.value : this.title,
+      body: data.body.present ? data.body.value : this.body,
+      date: data.date.present ? data.date.value : this.date,
+      read: data.read.present ? data.read.value : this.read,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StudentNotice(')
+          ..write('id: $id, ')
+          ..write('studentId: $studentId, ')
+          ..write('kind: $kind, ')
+          ..write('title: $title, ')
+          ..write('body: $body, ')
+          ..write('date: $date, ')
+          ..write('read: $read')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, studentId, kind, title, body, date, read);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StudentNotice &&
+          other.id == this.id &&
+          other.studentId == this.studentId &&
+          other.kind == this.kind &&
+          other.title == this.title &&
+          other.body == this.body &&
+          other.date == this.date &&
+          other.read == this.read);
+}
+
+class StudentNoticesCompanion extends UpdateCompanion<StudentNotice> {
+  final Value<int> id;
+  final Value<int> studentId;
+  final Value<String> kind;
+  final Value<String> title;
+  final Value<String> body;
+  final Value<DateTime> date;
+  final Value<bool> read;
+  const StudentNoticesCompanion({
+    this.id = const Value.absent(),
+    this.studentId = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.title = const Value.absent(),
+    this.body = const Value.absent(),
+    this.date = const Value.absent(),
+    this.read = const Value.absent(),
+  });
+  StudentNoticesCompanion.insert({
+    this.id = const Value.absent(),
+    required int studentId,
+    required String kind,
+    required String title,
+    required String body,
+    required DateTime date,
+    this.read = const Value.absent(),
+  }) : studentId = Value(studentId),
+       kind = Value(kind),
+       title = Value(title),
+       body = Value(body),
+       date = Value(date);
+  static Insertable<StudentNotice> custom({
+    Expression<int>? id,
+    Expression<int>? studentId,
+    Expression<String>? kind,
+    Expression<String>? title,
+    Expression<String>? body,
+    Expression<DateTime>? date,
+    Expression<bool>? read,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (studentId != null) 'student_id': studentId,
+      if (kind != null) 'kind': kind,
+      if (title != null) 'title': title,
+      if (body != null) 'body': body,
+      if (date != null) 'date': date,
+      if (read != null) 'read': read,
+    });
+  }
+
+  StudentNoticesCompanion copyWith({
+    Value<int>? id,
+    Value<int>? studentId,
+    Value<String>? kind,
+    Value<String>? title,
+    Value<String>? body,
+    Value<DateTime>? date,
+    Value<bool>? read,
+  }) {
+    return StudentNoticesCompanion(
+      id: id ?? this.id,
+      studentId: studentId ?? this.studentId,
+      kind: kind ?? this.kind,
+      title: title ?? this.title,
+      body: body ?? this.body,
+      date: date ?? this.date,
+      read: read ?? this.read,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (studentId.present) {
+      map['student_id'] = Variable<int>(studentId.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (body.present) {
+      map['body'] = Variable<String>(body.value);
+    }
+    if (date.present) {
+      map['date'] = Variable<DateTime>(date.value);
+    }
+    if (read.present) {
+      map['read'] = Variable<bool>(read.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StudentNoticesCompanion(')
+          ..write('id: $id, ')
+          ..write('studentId: $studentId, ')
+          ..write('kind: $kind, ')
+          ..write('title: $title, ')
+          ..write('body: $body, ')
+          ..write('date: $date, ')
+          ..write('read: $read')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $TeamTypesTable extends TeamTypes
     with TableInfo<$TeamTypesTable, TeamType> {
   @override
@@ -7651,6 +8084,7 @@ abstract class _$StudentDatabase extends GeneratedDatabase {
     this,
   );
   late final $AppMetaTable appMeta = $AppMetaTable(this);
+  late final $StudentNoticesTable studentNotices = $StudentNoticesTable(this);
   late final $TeamTypesTable teamTypes = $TeamTypesTable(this);
   late final $SubjectsTable subjects = $SubjectsTable(this);
   late final $DistributablesTable distributables = $DistributablesTable(this);
@@ -7676,6 +8110,7 @@ abstract class _$StudentDatabase extends GeneratedDatabase {
     matns,
     matnRecitations,
     appMeta,
+    studentNotices,
     teamTypes,
     subjects,
     distributables,
@@ -10910,6 +11345,244 @@ typedef $$AppMetaTableProcessedTableManager =
       AppMetaData,
       PrefetchHooks Function()
     >;
+typedef $$StudentNoticesTableCreateCompanionBuilder =
+    StudentNoticesCompanion Function({
+      Value<int> id,
+      required int studentId,
+      required String kind,
+      required String title,
+      required String body,
+      required DateTime date,
+      Value<bool> read,
+    });
+typedef $$StudentNoticesTableUpdateCompanionBuilder =
+    StudentNoticesCompanion Function({
+      Value<int> id,
+      Value<int> studentId,
+      Value<String> kind,
+      Value<String> title,
+      Value<String> body,
+      Value<DateTime> date,
+      Value<bool> read,
+    });
+
+class $$StudentNoticesTableFilterComposer
+    extends Composer<_$StudentDatabase, $StudentNoticesTable> {
+  $$StudentNoticesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get studentId => $composableBuilder(
+    column: $table.studentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get read => $composableBuilder(
+    column: $table.read,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StudentNoticesTableOrderingComposer
+    extends Composer<_$StudentDatabase, $StudentNoticesTable> {
+  $$StudentNoticesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get studentId => $composableBuilder(
+    column: $table.studentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get read => $composableBuilder(
+    column: $table.read,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StudentNoticesTableAnnotationComposer
+    extends Composer<_$StudentDatabase, $StudentNoticesTable> {
+  $$StudentNoticesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get studentId =>
+      $composableBuilder(column: $table.studentId, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get body =>
+      $composableBuilder(column: $table.body, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get date =>
+      $composableBuilder(column: $table.date, builder: (column) => column);
+
+  GeneratedColumn<bool> get read =>
+      $composableBuilder(column: $table.read, builder: (column) => column);
+}
+
+class $$StudentNoticesTableTableManager
+    extends
+        RootTableManager<
+          _$StudentDatabase,
+          $StudentNoticesTable,
+          StudentNotice,
+          $$StudentNoticesTableFilterComposer,
+          $$StudentNoticesTableOrderingComposer,
+          $$StudentNoticesTableAnnotationComposer,
+          $$StudentNoticesTableCreateCompanionBuilder,
+          $$StudentNoticesTableUpdateCompanionBuilder,
+          (
+            StudentNotice,
+            BaseReferences<
+              _$StudentDatabase,
+              $StudentNoticesTable,
+              StudentNotice
+            >,
+          ),
+          StudentNotice,
+          PrefetchHooks Function()
+        > {
+  $$StudentNoticesTableTableManager(
+    _$StudentDatabase db,
+    $StudentNoticesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$StudentNoticesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$StudentNoticesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$StudentNoticesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> studentId = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String> body = const Value.absent(),
+                Value<DateTime> date = const Value.absent(),
+                Value<bool> read = const Value.absent(),
+              }) => StudentNoticesCompanion(
+                id: id,
+                studentId: studentId,
+                kind: kind,
+                title: title,
+                body: body,
+                date: date,
+                read: read,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int studentId,
+                required String kind,
+                required String title,
+                required String body,
+                required DateTime date,
+                Value<bool> read = const Value.absent(),
+              }) => StudentNoticesCompanion.insert(
+                id: id,
+                studentId: studentId,
+                kind: kind,
+                title: title,
+                body: body,
+                date: date,
+                read: read,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StudentNoticesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$StudentDatabase,
+      $StudentNoticesTable,
+      StudentNotice,
+      $$StudentNoticesTableFilterComposer,
+      $$StudentNoticesTableOrderingComposer,
+      $$StudentNoticesTableAnnotationComposer,
+      $$StudentNoticesTableCreateCompanionBuilder,
+      $$StudentNoticesTableUpdateCompanionBuilder,
+      (
+        StudentNotice,
+        BaseReferences<_$StudentDatabase, $StudentNoticesTable, StudentNotice>,
+      ),
+      StudentNotice,
+      PrefetchHooks Function()
+    >;
 typedef $$TeamTypesTableCreateCompanionBuilder =
     TeamTypesCompanion Function({
       Value<int> id,
@@ -11896,6 +12569,8 @@ class $StudentDatabaseManager {
       $$MatnRecitationsTableTableManager(_db, _db.matnRecitations);
   $$AppMetaTableTableManager get appMeta =>
       $$AppMetaTableTableManager(_db, _db.appMeta);
+  $$StudentNoticesTableTableManager get studentNotices =>
+      $$StudentNoticesTableTableManager(_db, _db.studentNotices);
   $$TeamTypesTableTableManager get teamTypes =>
       $$TeamTypesTableTableManager(_db, _db.teamTypes);
   $$SubjectsTableTableManager get subjects =>

@@ -65,6 +65,7 @@ class _NotificationRow extends StatelessWidget {
         NotificationKind.certificate => (Icons.school_outlined, tokens.reward),
         NotificationKind.matn => (Icons.menu_book, tokens.accentMatn),
         NotificationKind.team => (Icons.groups_outlined, tokens.infoLight),
+        NotificationKind.notice => (Icons.campaign_outlined, tokens.info),
       };
 
   @override

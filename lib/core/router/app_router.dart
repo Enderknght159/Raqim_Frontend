@@ -9,11 +9,13 @@ import '../../features/admin/presentation/screens/admin_change_requests_screen.d
 import '../../features/admin/presentation/screens/admin_content_screen.dart';
 import '../../features/admin/presentation/screens/admin_course_detail_screen.dart';
 import '../../features/admin/presentation/screens/admin_courses_screen.dart';
+import '../../features/admin/presentation/screens/admin_exam_screen.dart';
 import '../../features/admin/presentation/screens/admin_import_screen.dart';
 import '../../features/admin/presentation/screens/admin_notifications_screen.dart';
 import '../../features/admin/presentation/screens/admin_session_screen.dart';
 import '../../features/admin/presentation/screens/admin_settings_screen.dart';
 import '../../features/admin/presentation/screens/admin_student_course_screen.dart';
+import '../../features/admin/presentation/screens/admin_student_points_screen.dart';
 import '../../features/admin/presentation/screens/admin_student_profile_screen.dart';
 import '../../features/admin/presentation/screens/admin_students_screen.dart';
 import '../../features/admin/presentation/screens/admin_sync_kiosk_screen.dart';
@@ -31,6 +33,7 @@ import '../../features/student/presentation/screens/course_detail_screen.dart';
 import '../../features/student/presentation/screens/my_courses_screen.dart';
 import '../../features/student/presentation/screens/my_teams_screen.dart';
 import '../../features/student/presentation/screens/notifications_screen.dart';
+import '../../features/student/presentation/screens/points_screen.dart';
 import '../../features/student/presentation/screens/profile_screen.dart';
 import '../../features/student/presentation/screens/quran_screen.dart';
 import '../../features/student/presentation/student_shell.dart';
@@ -81,6 +84,13 @@ class AppRouter {
         ),
       ),
       GoRoute(
+        path: '/my-progress/courses/:id/points',
+        name: 'studentPoints',
+        builder: (context, state) => StudentPointsScreen(
+          courseId: int.parse(state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
         path: '/my-progress/notifications',
         name: 'notifications',
         builder: (context, state) => const NotificationsScreen(),
@@ -103,6 +113,14 @@ class AppRouter {
         name: 'adminSession',
         builder: (context, state) => AdminSessionScreen(
           sessionId: int.parse(state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: '/admin/courses/:courseId/exams/:examId',
+        name: 'adminExam',
+        builder: (context, state) => AdminExamScreen(
+          courseId: int.parse(state.pathParameters['courseId']!),
+          examId: int.parse(state.pathParameters['examId']!),
         ),
       ),
       GoRoute(
@@ -147,6 +165,14 @@ class AppRouter {
         path: '/admin/students/:id/courses/:courseId',
         name: 'adminStudentCourse',
         builder: (context, state) => AdminStudentCourseScreen(
+          studentId: int.parse(state.pathParameters['id']!),
+          courseId: int.parse(state.pathParameters['courseId']!),
+        ),
+      ),
+      GoRoute(
+        path: '/admin/students/:id/courses/:courseId/points',
+        name: 'adminStudentPoints',
+        builder: (context, state) => AdminStudentPointsScreen(
           studentId: int.parse(state.pathParameters['id']!),
           courseId: int.parse(state.pathParameters['courseId']!),
         ),

@@ -8,8 +8,10 @@ import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../data/student_local_repository.dart';
 import '../../domain/models/student_models.dart';
+import '../../domain/quran_units.dart';
 import '../../domain/student_stats.dart';
 import '../student_shell.dart';
+import '../widgets/certificates_sheet.dart';
 import '../widgets/quran_map.dart';
 import '../widgets/rating_stars.dart';
 import '../widgets/tasmi_log_sheet.dart';
@@ -152,12 +154,16 @@ class _QuranBody extends StatelessWidget {
                 children: [
                   Icon(Icons.hourglass_top, size: 16, color: tokens.info),
                   const SizedBox(width: 6),
-                  Text(
-                    'نسبة إتمام الحفظ للقرآن كاملًا',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                  Flexible(
+                    child: Text(
+                      'نسبة إتمام الحفظ للقرآن كاملًا',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
                   ),
                   const Spacer(),
                   Text(
@@ -247,13 +253,17 @@ class _QuranBody extends StatelessWidget {
                     ),
               ),
               const SizedBox(width: 4),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 3),
-                child: Text(
-                  'صفحة/شهر',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 3),
+                  child: Text(
+                    'صفحة/شهر',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: tokens.textMuted,
+                        ),
+                  ),
                 ),
               ),
             ],
@@ -267,6 +277,16 @@ class _QuranBody extends StatelessWidget {
 
   Widget _certificatesCard(BuildContext context, AppTokens tokens) {
     final certs = data.certificates;
+    final entries = <CertificateEntry>[
+      for (final c in certs)
+        (
+          startJuz: c.startJuz,
+          endJuz: c.endJuz,
+          mark: c.mark,
+          byHeart: c.byHeart,
+          date: c.date,
+        ),
+    ];
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,7 +298,8 @@ class _QuranBody extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodyMedium),
             )
           else
-            for (final c in certs)
+            // Preview: the 3 latest — «عرض الكل» opens the full list.
+            for (final c in certs.take(3))
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
@@ -309,6 +330,14 @@ class _QuranBody extends StatelessWidget {
                   ],
                 ),
               ),
+          if (certs.isNotEmpty)
+            Center(
+              child: TextButton(
+                onPressed: () => showCertificatesSheet(context, entries),
+                child: Text('عرض الكل (${certs.length})',
+                    style: TextStyle(color: tokens.brandText)),
+              ),
+            ),
           const SizedBox(height: 4),
           Text(
             'الأجزاء المختبرة: ${data.testedJuz.length} من 30',
@@ -338,7 +367,7 @@ class _QuranBody extends StatelessWidget {
                           ?.copyWith(fontWeight: FontWeight.w700)),
                   const Spacer(),
                   Text(
-                    m.surah,
+                    quranDisplaySurah(m.page, m.partIndex, m.surah),
                     style: Theme.of(context)
                         .textTheme
                         .bodySmall

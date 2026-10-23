@@ -190,6 +190,21 @@ class AppMeta extends Table {
   Set<Column> get primaryKey => {key};
 }
 
+/// In-app notices sent by the administration (e.g. absence notices for a
+/// session). `studentId = 0` broadcasts to all students.
+class StudentNotices extends Table {
+  IntColumn get id => integer()();
+  IntColumn get studentId => integer()();
+  TextColumn get kind => text()(); // absence|general
+  TextColumn get title => text()();
+  TextColumn get body => text()();
+  DateTimeColumn get date => dateTime()();
+  BoolColumn get read => boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 // ── Admin-centric tables (E6–E14) ───────────────────────────────────────────
 
 class TeamTypes extends Table {
@@ -262,6 +277,7 @@ class ChangeRequests extends Table {
   Matns,
   MatnRecitations,
   AppMeta,
+  StudentNotices,
   TeamTypes,
   Subjects,
   Distributables,
@@ -274,7 +290,7 @@ class StudentDatabase extends _$StudentDatabase {
   StudentDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -293,6 +309,9 @@ class StudentDatabase extends _$StudentDatabase {
             await m.createTable(distributables);
             await m.createTable(distributions);
             await m.createTable(changeRequests);
+          }
+          if (from < 4) {
+            await m.createTable(studentNotices);
           }
         },
       );

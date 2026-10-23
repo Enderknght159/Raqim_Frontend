@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/widgets/async_view.dart';
 import '../../domain/models/student_models.dart';
@@ -28,6 +29,8 @@ class CourseDetailScreen extends StatelessWidget {
               return CourseAchievementView(
                 bundle: bundle,
                 leaderboard: lbSnap.data ?? const [],
+                onPointsTap: () =>
+                    context.push('/my-progress/courses/$courseId/points'),
               );
             },
           );

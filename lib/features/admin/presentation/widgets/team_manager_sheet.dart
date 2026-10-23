@@ -38,9 +38,11 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
   final _search = TextEditingController();
   List<AdminStudentRow> _members = const [];
   List<AdminStudentRow> _all = const [];
+  List<({String name, String role})> _teacherCandidates = const [];
   Set<int> _selected = {};
   bool _adding = false;
   bool _loading = true;
+  late String _teacherName = widget.team.teacherName;
 
   @override
   void initState() {
@@ -57,10 +59,12 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
   Future<void> _load() async {
     final members = await widget.repo.teamStudents(widget.team.id);
     final all = await widget.repo.students();
+    final candidates = await widget.repo.teacherCandidates();
     if (!mounted) return;
     setState(() {
       _members = members;
       _all = all;
+      _teacherCandidates = candidates;
       _loading = false;
     });
   }
@@ -94,6 +98,27 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
     });
   }
 
+  /// Change the team teacher at any time (any existing account).
+  Future<void> _editTeacher() async {
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => _TeacherPickerSheet(
+        candidates: _teacherCandidates,
+        selected: _teacherName,
+      ),
+    );
+    if (result == null || !mounted) return;
+    if (result.isEmpty) {
+      await widget.repo.removeTeamTeacher(widget.team.id);
+    } else {
+      await widget.repo.setTeamTeacher(widget.team.id, result);
+    }
+    if (!mounted) return;
+    setState(() => _teacherName = result);
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
@@ -118,7 +143,7 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
                           style: Theme.of(context).textTheme.titleLarge),
                       Text(
                         '${widget.team.typeName} · '
-                        '${widget.team.teacherName.isEmpty ? 'بلا معلم' : widget.team.teacherName}',
+                        '${_teacherName.isEmpty ? 'بلا معلم' : _teacherName}',
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
@@ -133,6 +158,46 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
               ],
             ),
           ),
+          // Teacher can be changed at any time (any existing account).
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(tokens.radiusSmall),
+              onTap: _editTeacher,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: tokens.surfaceSubtle,
+                  borderRadius: BorderRadius.circular(tokens.radiusSmall),
+                  border: Border.all(color: tokens.borderStructural),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.school_outlined,
+                        size: 18, color: tokens.accentMatn),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _teacherName.isEmpty
+                            ? 'تعيين معلم للحلقة'
+                            : 'المعلم: $_teacherName',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: _teacherName.isEmpty
+                              ? tokens.textMuted
+                              : tokens.textPrimary,
+                        ),
+                      ),
+                    ),
+                    Icon(Icons.edit_outlined,
+                        size: 18, color: tokens.textMuted),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
@@ -242,6 +307,112 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+
+/// Searchable teacher picker: every account can be a team teacher.
+class _TeacherPickerSheet extends StatefulWidget {
+  const _TeacherPickerSheet({required this.candidates, required this.selected});
+
+  final List<({String name, String role})> candidates;
+  final String selected;
+
+  @override
+  State<_TeacherPickerSheet> createState() => _TeacherPickerSheetState();
+}
+
+class _TeacherPickerSheetState extends State<_TeacherPickerSheet> {
+  final _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
+    final q = _search.text.trim().toLowerCase();
+    final results = q.isEmpty
+        ? widget.candidates
+        : widget.candidates
+            .where((c) =>
+                c.name.toLowerCase().contains(q) ||
+                c.role.toLowerCase().contains(q))
+            .toList();
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.75,
+      builder: (context, controller) => Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Row(
+              children: [
+                Text('معلم الحلقة',
+                    style: Theme.of(context).textTheme.titleMedium),
+                const Spacer(),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: TextField(
+              controller: _search,
+              autofocus: true,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                hintText: 'بحث عن حساب',
+                prefixIcon: Icon(Icons.search),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ListView.builder(
+              controller: controller,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: results.length + 1,
+              itemBuilder: (context, i) {
+                if (i == 0) {
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.person_off_outlined,
+                        color: tokens.textMuted),
+                    title: const Text('بلا معلم'),
+                    trailing: widget.selected.isEmpty
+                        ? Icon(Icons.check_circle, color: tokens.brand)
+                        : null,
+                    onTap: () => Navigator.of(context).pop(''),
+                  );
+                }
+                final c = results[i - 1];
+                final isSelected = c.name == widget.selected;
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    radius: 16,
+                    backgroundColor: tokens.accentMatn.withValues(alpha: 0.15),
+                    child: Text(c.name.characters.first,
+                        style: TextStyle(
+                            color: tokens.accentMatn,
+                            fontWeight: FontWeight.w800)),
+                  ),
+                  title: Text(c.name),
+                  subtitle: Text(c.role),
+                  trailing: isSelected
+                      ? Icon(Icons.check_circle, color: tokens.brand)
+                      : null,
+                  onTap: () => Navigator.of(context).pop(c.name),
+                );
+              },
+            ),
+          ),
         ],
       ),
     );

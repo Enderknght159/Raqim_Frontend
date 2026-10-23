@@ -248,7 +248,8 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
     final repo = AdminRepositoryScope.of(context);
     final name = TextEditingController();
     final types = await repo.teamTypes();
-    final teacherNames = (await repo.teachers()).map((t) => t.name).toList();
+    final candidates = await repo.teacherCandidates();
+    final roles = {for (final c in candidates) c.name: c.role};
     var type = types.isEmpty ? 'عام' : types.first.name;
     var teacherName = '';
     if (!mounted) return;
@@ -286,12 +287,12 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
                   onChanged: (v) => setState(() => type = v ?? type),
                 ),
                 const SizedBox(height: 12),
-                // Teacher: pick from the mosque teachers (never a free field).
+                // Teacher: any existing account can be picked (searchable).
                 SearchPickerField<String>(
                   label: 'اختر المعلم',
-                  items: ['', ...teacherNames],
+                  items: ['', ...candidates.map((c) => c.name)],
                   titleBuilder: (n) => n.isEmpty ? 'بلا معلم' : n,
-                  subtitleBuilder: null,
+                  subtitleBuilder: (n) => n.isEmpty ? null : roles[n],
                   value: teacherName.isEmpty ? null : teacherName,
                   onChanged: (n) => setState(() => teacherName = n),
                 ),

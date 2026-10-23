@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/widgets/async_view.dart';
 import '../../../student/domain/models/student_models.dart';
@@ -50,6 +51,8 @@ class _AdminStudentCourseScreenState extends State<AdminStudentCourseScreen> {
         body: CourseAchievementView(
           bundle: data.bundle,
           leaderboard: data.leaderboard,
+          onPointsTap: () => context.push(
+              '/admin/students/${widget.studentId}/courses/${widget.courseId}/points'),
         ),
       ),
     );
