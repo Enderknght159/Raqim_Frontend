@@ -11,11 +11,9 @@ import 'app_logger.dart';
 /// Redaction: values under keys like `password`, `token`, `access`, `refresh`,
 /// `authorization` are replaced with `[REDACTED]`.
 class ApiLogInterceptor extends Interceptor {
-  ApiLogInterceptor({
-    bool? logBodies,
-    AppLogger? logger,
-  })  : _logBodies = logBodies ?? AppConfig.logApiBodies,
-        _logger = logger ?? AppLogger.forTag('API');
+  ApiLogInterceptor({bool? logBodies, AppLogger? logger})
+    : _logBodies = logBodies ?? AppConfig.logApiBodies,
+      _logger = logger ?? AppLogger.forTag('API');
 
   static const _startTimeKey = 'log_started_at';
 
@@ -36,9 +34,7 @@ class ApiLogInterceptor extends Interceptor {
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     options.extra[_startTimeKey] = DateTime.now();
     final headerPart = _headersLine(options.headers);
-    _logger.debug(
-      '→ ${options.method} ${options.uri}$headerPart',
-    );
+    _logger.debug('→ ${options.method} ${options.uri}$headerPart');
     if (_logBodies && options.data != null) {
       _logger.debug('  body: ${_redactBody(options.data)}');
     }

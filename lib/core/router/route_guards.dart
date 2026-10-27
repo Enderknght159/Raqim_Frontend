@@ -35,8 +35,8 @@ FutureOr<String?> authRedirect(BuildContext context, GoRouterState state) {
 
 /// Path of the user's first section (their landing screen).
 String firstSectionPath(UserProfile profile) {
-  if (profile.isAdmin || profile.isSupervisor) return '/courses';
-  if (profile.isTeacher) return '/courses';
+  if (profile.isAdmin || profile.isSupervisor) return '/admin/courses';
+  if (profile.isTeacher) return '/teacher-soon';
   if (profile.isStudent || profile.isDemo) return '/my-progress';
   return '/my-progress';
 }

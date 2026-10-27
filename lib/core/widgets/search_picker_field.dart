@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// Generic searchable picker field (no barcode): opens a bottom sheet with a
 /// tolerant search over [items] and a lazy list (scales to large collections).
@@ -48,12 +49,9 @@ class SearchPickerField<T> extends StatelessWidget {
                 value == null ? label : titleBuilder(value as T),
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: value == null
-                          ? tokens.textMuted
-                          : tokens.textPrimary,
-                      fontWeight:
-                          value == null ? FontWeight.w400 : FontWeight.w700,
-                    ),
+                  color: value == null ? tokens.textMuted : tokens.textPrimary,
+                  fontWeight: value == null ? FontWeight.w400 : FontWeight.w700,
+                ),
               ),
             ),
             Icon(Icons.arrow_drop_down, color: tokens.textMuted),
@@ -64,7 +62,7 @@ class SearchPickerField<T> extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context) async {
-    final result = await showModalBottomSheet<T>(
+    final result = await showAppSheet<T>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -118,12 +116,14 @@ class _SearchPickerSheetState<T> extends State<_SearchPickerSheet<T>> {
     final results = q.isEmpty
         ? widget.items
         : widget.items
-            .where((i) =>
-                widget.titleBuilder(i).toLowerCase().contains(q) ||
-                (widget.subtitleBuilder?.call(i) ?? '')
-                    .toLowerCase()
-                    .contains(q))
-            .toList();
+              .where(
+                (i) =>
+                    widget.titleBuilder(i).toLowerCase().contains(q) ||
+                    (widget.subtitleBuilder?.call(i) ?? '')
+                        .toLowerCase()
+                        .contains(q),
+              )
+              .toList();
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.75,
@@ -158,10 +158,14 @@ class _SearchPickerSheetState<T> extends State<_SearchPickerSheet<T>> {
                             ? null
                             : Text(subtitle),
                         trailing: selected
-                            ? const Icon(Icons.check_circle,
-                                color: Color(0xFF00A572))
-                            : Icon(Icons.chevron_left,
-                                color: tokens.borderStructural),
+                            ? const Icon(
+                                Icons.check_circle,
+                                color: Color(0xFF00A572),
+                              )
+                            : Icon(
+                                Icons.chevron_left,
+                                color: tokens.borderStructural,
+                              ),
                         onTap: () => Navigator.of(context).pop(item),
                       );
                     },

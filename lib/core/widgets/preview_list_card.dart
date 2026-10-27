@@ -41,10 +41,7 @@ class PreviewListCard extends StatelessWidget {
                     Icon(icon, size: 18, color: tokens.brand),
                     const SizedBox(width: 8),
                   ],
-                  Text(
-                    title!,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  Text(title!, style: Theme.of(context).textTheme.titleMedium),
                 ],
               ),
             ),
@@ -52,8 +49,10 @@ class PreviewListCard extends StatelessWidget {
           if (children.length > limit)
             TextButton(
               onPressed: onShowAll,
-              child: Text('$showMoreLabel (${children.length})',
-                  style: TextStyle(color: tokens.brandText)),
+              child: Text(
+                '$showMoreLabel (${children.length})',
+                style: TextStyle(color: tokens.brandText),
+              ),
             ),
         ],
       ),

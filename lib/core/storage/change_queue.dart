@@ -11,19 +11,15 @@ class ChangeQueue {
 
   final AppDatabase _db;
 
-  Stream<List<ChangeQueueEntry>> watch() =>
-      (_db.select(_db.changeQueueEntries)
-            ..orderBy([
-              (t) => OrderingTerm.asc(t.clientTs),
-            ]))
-          .watch();
+  Stream<List<ChangeQueueEntry>> watch() => (_db.select(
+    _db.changeQueueEntries,
+  )..orderBy([(t) => OrderingTerm.asc(t.clientTs)])).watch();
 
-  Future<List<ChangeQueueEntry>> pending() => (_db.select(_db.changeQueueEntries)
-        ..where((t) => t.status.equals('pending'))
-        ..orderBy([
-          (t) => OrderingTerm.asc(t.clientTs),
-        ]))
-      .get();
+  Future<List<ChangeQueueEntry>> pending() =>
+      (_db.select(_db.changeQueueEntries)
+            ..where((t) => t.status.equals('pending'))
+            ..orderBy([(t) => OrderingTerm.asc(t.clientTs)]))
+          .get();
 
   Future<ChangeQueueEntry> enqueue({
     required String entity,
@@ -31,7 +27,9 @@ class ChangeQueue {
     required String field,
     required String value,
   }) async {
-    final id = await _db.into(_db.changeQueueEntries).insert(
+    final id = await _db
+        .into(_db.changeQueueEntries)
+        .insert(
           ChangeQueueEntriesCompanion.insert(
             entity: entity,
             objectId: objectId,
@@ -39,14 +37,20 @@ class ChangeQueue {
             value: value,
           ),
         );
-    final row = await (_db.select(_db.changeQueueEntries)
-          ..where((t) => t.changeId.equals(id)))
-        .getSingle();
+    final row = await (_db.select(
+      _db.changeQueueEntries,
+    )..where((t) => t.changeId.equals(id))).getSingle();
     return row;
   }
 
-  Future<void> markSynced(int changeId, {required bool accepted, String? message}) async {
-    await _db.into(_db.syncLogEntries).insert(
+  Future<void> markSynced(
+    int changeId, {
+    required bool accepted,
+    String? message,
+  }) async {
+    await _db
+        .into(_db.syncLogEntries)
+        .insert(
           SyncLogEntriesCompanion.insert(
             changeId: Value(changeId),
             entity: '',
@@ -55,9 +59,9 @@ class ChangeQueue {
             message: Value(message),
           ),
         );
-    await (_db.delete(_db.changeQueueEntries)
-          ..where((t) => t.changeId.equals(changeId)))
-        .go();
+    await (_db.delete(
+      _db.changeQueueEntries,
+    )..where((t) => t.changeId.equals(changeId))).go();
   }
 
   Future<void> markPending(int changeId) async {

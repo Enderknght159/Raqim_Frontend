@@ -27,8 +27,9 @@ class AttendanceRing extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final attended = early + onTime + late;
-    final percentage =
-        totalSessions == 0 ? 0 : ((attended / totalSessions) * 100).round();
+    final percentage = totalSessions == 0
+        ? 0
+        : ((attended / totalSessions) * 100).round();
 
     return SizedBox(
       width: radius * 2 + 12,
@@ -47,16 +48,16 @@ class AttendanceRing extends StatelessWidget {
               Text(
                 '$percentage%',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: tokens.textPrimary,
-                    ),
+                  fontWeight: FontWeight.w800,
+                  color: tokens.textPrimary,
+                ),
               ),
               Text(
                 'حضور',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: tokens.textMuted, fontSize: 11),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: tokens.textMuted,
+                  fontSize: 11,
+                ),
               ),
             ],
           ),

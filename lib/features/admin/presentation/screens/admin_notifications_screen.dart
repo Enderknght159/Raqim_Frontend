@@ -7,6 +7,7 @@ import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/date_grouped_list.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/icon_tile.dart';
+import '../../../../core/widgets/responsive_page.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
 
@@ -68,7 +69,10 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
                 child: ListView(
                   scrollDirection: Axis.horizontal,
                   reverse: true,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   children: [
                     ChoiceChip(
                       label: const Text('الكل'),
@@ -88,10 +92,13 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
                 ),
               ),
               Expanded(
-                child: DateGroupedList<AdminNotification>(
-                  items: visible,
-                  dateOf: (n) => n.when,
-                  itemBuilder: (context, n) => _row(context, n),
+                child: ResponsivePage(
+                  maxWidth: 800,
+                  child: DateGroupedList<AdminNotification>(
+                    items: visible,
+                    dateOf: (n) => n.when,
+                    itemBuilder: (context, n) => _row(context, n),
+                  ),
                 ),
               ),
             ],
@@ -117,17 +124,17 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyLarge
-                          ?.copyWith(fontWeight: FontWeight.w700)),
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   Text(
                     '${adminNotificationKindLabel(n.kind)} · ${formatTime(n.when)}',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: tokens.textMuted),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   ),
                 ],
               ),
@@ -151,13 +158,12 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
     return '$kind لـ ${n.firstName} و${n.extraCount} آخرين';
   }
 
-  (IconData, Color) _style(String kind, AppTokens tokens) =>
-      switch (kind) {
-        'Attendance' => (Icons.schedule, tokens.infoLight),
-        'Memorization' => (Icons.menu_book, tokens.brand),
-        'Transaction' => (Icons.payments_outlined, tokens.reward),
-        _ => (Icons.edit_note, tokens.info),
-      };
+  (IconData, Color) _style(String kind, AppTokens tokens) => switch (kind) {
+    'Attendance' => (Icons.schedule, tokens.infoLight),
+    'Memorization' => (Icons.menu_book, tokens.brand),
+    'Transaction' => (Icons.payments_outlined, tokens.reward),
+    _ => (Icons.edit_note, tokens.info),
+  };
 
   /// Reverts the underlying record (not the notification text).
   Future<void> _revert(AdminNotification n) async {
@@ -166,15 +172,16 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('تراجع عن $kind'),
-        content: Text(
-            'سيُحذف السجل «${n.firstName}» نهائيًا. متابعة؟'),
+        content: Text('سيُحذف السجل «${n.firstName}» نهائيًا. متابعة؟'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('إلغاء')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('تراجع')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('تراجع'),
+          ),
         ],
       ),
     );
@@ -184,9 +191,11 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text(ok ? 'تم التراجع وحُذف السجل' : 'تعذّر التراجع'),
-      ));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(ok ? 'تم التراجع وحُذف السجل' : 'تعذّر التراجع'),
+        ),
+      );
     _reload();
   }
 }

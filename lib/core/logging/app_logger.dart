@@ -63,7 +63,8 @@ class AppLogger {
     if (!enabled || level.rank < minLevel.rank) return;
     final timestamp = _time();
     final errorPart = error == null ? '' : '\n$error';
-    final line = '${level.ansi}[$timestamp][${level.label}][$_tag]'
+    final line =
+        '${level.ansi}[$timestamp][${level.label}][$_tag]'
         '$_ansiReset $message$errorPart';
     outputSink(line);
   }

@@ -7,12 +7,14 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/icon_toggle_group.dart';
 import '../../../../core/widgets/progress_bar.dart';
+import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/search_picker_field.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
 import '../widgets/student_picker_field.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// E2x — Full exam page replacing the old bottom sheet: general stats,
 /// submissions (add · edit · delete · sorted highest first) and exam editing.
@@ -42,9 +44,12 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
 
   Future<_ExamData> _load() async {
     final repo = AdminRepositoryScope.of(context);
-    final detail = await repo.examDetail(widget.examId);
-    final submissions = await repo.examSubmissions(widget.examId);
-    final subjects = await repo.subjects();
+    final detailF = repo.examDetail(widget.examId);
+    final submissionsF = repo.examSubmissions(widget.examId);
+    final subjectsF = repo.subjects();
+    final detail = await detailF;
+    final submissions = await submissionsF;
+    final subjects = await subjectsF;
     return _ExamData(
       detail: detail,
       submissions: submissions,
@@ -80,36 +85,36 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
                 Text(detail.subjectName),
                 Text(
                   '${formatDate(detail.date)} · ${_typeLabel(detail.type)}',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: Theme.of(context)
-                          .extension<AppTokens>()!
-                          .textMuted),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).extension<AppTokens>()!.textMuted,
+                  ),
                 ),
               ],
             ),
           ),
-          body: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _statsCard(context, detail, data.submissions),
-              const SizedBox(height: 12),
-              _submissionsCard(context, detail, data.submissions),
-              const SizedBox(height: 12),
-              _ExamEditorCard(
-                key: ValueKey(detail.id),
-                detail: detail,
-                subjects: data.subjects,
-                onSaved: () {
-                  _reload();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('تم حفظ تعديلات الامتحان')),
-                  );
-                },
-                onDeleted: () => Navigator.of(context).pop(true),
-              ),
-            ],
+          body: ResponsivePage(
+            maxWidth: 1100,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _statsCard(context, detail, data.submissions),
+                const SizedBox(height: 12),
+                _submissionsCard(context, detail, data.submissions),
+                const SizedBox(height: 12),
+                _ExamEditorCard(
+                  key: ValueKey(detail.id),
+                  detail: detail,
+                  subjects: data.subjects,
+                  onSaved: () {
+                    _reload();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('تم حفظ تعديلات الامتحان')),
+                    );
+                  },
+                  onDeleted: () => Navigator.of(context).pop(true),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -118,8 +123,11 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
 
   // ── Stats ───────────────────────────────────────────────────────────────
 
-  Widget _statsCard(BuildContext context, AdminExamDetail detail,
-      List<AdminSubmissionRow> submissions) {
+  Widget _statsCard(
+    BuildContext context,
+    AdminExamDetail detail,
+    List<AdminSubmissionRow> submissions,
+  ) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final count = submissions.length;
     final average = count == 0
@@ -129,8 +137,7 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
         .where((s) => s.mark >= detail.minSuccessMark)
         .length;
     final passPercent = count == 0 ? 0 : ((passed / count) * 100).round();
-    final highest =
-        count == 0 ? 0.0 : submissions.first.mark; // sorted desc
+    final highest = count == 0 ? 0.0 : submissions.first.mark; // sorted desc
     final lowest = count == 0
         ? 0.0
         : submissions.map((s) => s.mark).reduce((a, b) => a < b ? a : b);
@@ -140,56 +147,85 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SectionHeader(
-              icon: Icons.insights_outlined, title: 'إحصاءات الامتحان'),
+            icon: Icons.insights_outlined,
+            title: 'إحصاءات الامتحان',
+          ),
           const SizedBox(height: 10),
           Row(
             children: [
               _stat(context, 'عدد التقديمات', '$count', tokens.info),
-              _stat(context, 'المتوسط',
-                  _fmtMark(double.parse(average.toStringAsFixed(1))),
-                  tokens.accentMatn),
-              _stat(context, 'النجاح', '$passPercent%',
-                  passed == count && count > 0 ? tokens.brand : tokens.info),
+              _stat(
+                context,
+                'المتوسط',
+                _fmtMark(double.parse(average.toStringAsFixed(1))),
+                tokens.accentMatn,
+              ),
+              _stat(
+                context,
+                'النجاح',
+                '$passPercent%',
+                passed == count && count > 0 ? tokens.brand : tokens.info,
+              ),
             ],
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              _stat(context, 'أعلى علامة', '${_fmtMark(highest)}/${detail.maxMark}',
-                  tokens.brand),
-              _stat(context, 'أدنى علامة', '${_fmtMark(lowest)}/${detail.maxMark}',
-                  tokens.danger),
-              _stat(context, 'درجة النجاح', '${detail.minSuccessMark}',
-                  tokens.textSecondary),
+              _stat(
+                context,
+                'أعلى علامة',
+                '${_fmtMark(highest)}/${detail.maxMark}',
+                tokens.brand,
+              ),
+              _stat(
+                context,
+                'أدنى علامة',
+                '${_fmtMark(lowest)}/${detail.maxMark}',
+                tokens.danger,
+              ),
+              _stat(
+                context,
+                'درجة النجاح',
+                '${detail.minSuccessMark}',
+                tokens.textSecondary,
+              ),
             ],
           ),
           if (count > 0) ...[
             const SizedBox(height: 12),
-            ProgressBar(value: passPercent / 100, color: tokens.brand, height: 8),
+            ProgressBar(
+              value: passPercent / 100,
+              color: tokens.brand,
+              height: 8,
+            ),
           ],
         ],
       ),
     );
   }
 
-  Widget _stat(
-      BuildContext context, String label, String value, Color color) {
+  Widget _stat(BuildContext context, String label, String value, Color color) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     return Expanded(
       child: Column(
         children: [
-          Text(value,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900, color: color),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           const SizedBox(height: 2),
-          Text(label,
-              textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted)),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+          ),
         ],
       ),
     );
@@ -197,8 +233,11 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
 
   // ── Submissions ─────────────────────────────────────────────────────────
 
-  Widget _submissionsCard(BuildContext context, AdminExamDetail detail,
-      List<AdminSubmissionRow> submissions) {
+  Widget _submissionsCard(
+    BuildContext context,
+    AdminExamDetail detail,
+    List<AdminSubmissionRow> submissions,
+  ) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final visible = _showAllSubmissions
         ? submissions
@@ -211,11 +250,14 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
             children: [
               const Expanded(
                 child: SectionHeader(
-                    icon: Icons.fact_check_outlined, title: 'التقديمات'),
+                  icon: Icons.fact_check_outlined,
+                  title: 'التقديمات',
+                ),
               ),
               StatusBadge(
-                  label: '${submissions.length}',
-                  color: tokens.accentMatn),
+                label: '${submissions.length}',
+                color: tokens.accentMatn,
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -228,16 +270,19 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
           if (submissions.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Text('لا تقديمات بعد',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium),
+              child: Text(
+                'لا تقديمات بعد',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             )
           else ...[
-            Text('مرتبة من الأعلى علامة إلى الأدنى',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: tokens.textMuted)),
+            Text(
+              'مرتبة من الأعلى علامة إلى الأدنى',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+            ),
             const SizedBox(height: 4),
             for (var i = 0; i < visible.length; i++)
               _submissionRow(context, detail, visible[i], rank: i + 1),
@@ -245,7 +290,8 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
               Center(
                 child: TextButton(
                   onPressed: () => setState(
-                      () => _showAllSubmissions = !_showAllSubmissions),
+                    () => _showAllSubmissions = !_showAllSubmissions,
+                  ),
                   child: Text(
                     _showAllSubmissions
                         ? 'عرض أقل'
@@ -259,9 +305,12 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
     );
   }
 
-  Widget _submissionRow(BuildContext context, AdminExamDetail detail,
-      AdminSubmissionRow s,
-      {required int rank}) {
+  Widget _submissionRow(
+    BuildContext context,
+    AdminExamDetail detail,
+    AdminSubmissionRow s, {
+    required int rank,
+  }) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final passed = s.mark >= detail.minSuccessMark;
     return Padding(
@@ -273,42 +322,53 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
           children: [
             SizedBox(
               width: 24,
-              child: Text('$rank',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontWeight: FontWeight.w900, color: tokens.textMuted)),
+              child: Text(
+                '$rank',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: tokens.textMuted,
+                ),
+              ),
             ),
             CircleAvatar(
               radius: 16,
               backgroundColor: tokens.brandTint,
-              child: Text(s.studentName.characters.first,
-                  style: TextStyle(
-                      color: tokens.brandText, fontWeight: FontWeight.w800)),
+              child: Text(
+                s.studentName.characters.first,
+                style: TextStyle(
+                  color: tokens.brandText,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(s.studentName,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyLarge
-                          ?.copyWith(fontWeight: FontWeight.w700)),
+                  Text(
+                    s.studentName,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   if (s.date != null)
-                    Text(formatDate(s.date!),
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: tokens.textMuted)),
+                    Text(
+                      formatDate(s.date!),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                    ),
                 ],
               ),
             ),
             Text(
               '${_fmtMark(s.mark)}/${detail.maxMark}',
               style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  color: passed ? tokens.brandText : tokens.dangerText),
+                fontWeight: FontWeight.w900,
+                color: passed ? tokens.brandText : tokens.dangerText,
+              ),
             ),
             const SizedBox(width: 6),
             Icon(Icons.edit_outlined, size: 18, color: tokens.textMuted),
@@ -323,7 +383,7 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
     AdminStudentRow? student;
     final mark = TextEditingController();
     var error = '';
-    final saved = await showModalBottomSheet<bool>(
+    final saved = await showAppSheet<bool>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -340,8 +400,10 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('إضافة تقديم',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'إضافة تقديم',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 14),
                 StudentPickerField(
                   label: 'اختر الطالب',
@@ -351,8 +413,9 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: mark,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   onChanged: (_) {
                     if (error.isNotEmpty) setSheetState(() => error = '');
                   },
@@ -373,8 +436,9 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
                       return;
                     }
                     if (m == null || m < 0 || m > detail.maxMark) {
-                      setSheetState(() =>
-                          error = 'أدخل علامة بين 0 و ${detail.maxMark}');
+                      setSheetState(
+                        () => error = 'أدخل علامة بين 0 و ${detail.maxMark}',
+                      );
                       return;
                     }
                     await repo.addExamSubmission(detail.id, s.id, m);
@@ -384,10 +448,9 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
                 const SizedBox(height: 10),
                 Text(
                   'إذا كان للطالب تقديم سابق فسيتم تحديثه.',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
               ],
             ),
@@ -399,12 +462,13 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
   }
 
   Future<void> _editSubmission(
-      AdminExamDetail detail, AdminSubmissionRow s) async {
+    AdminExamDetail detail,
+    AdminSubmissionRow s,
+  ) async {
     final repo = AdminRepositoryScope.of(context);
-    final mark = TextEditingController(
-        text: _fmtMark(s.mark));
+    final mark = TextEditingController(text: _fmtMark(s.mark));
     var error = '';
-    final result = await showModalBottomSheet<String>(
+    final result = await showAppSheet<String>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -421,20 +485,24 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(s.studentName,
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  s.studentName,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 4),
-                Text('${detail.subjectName} · الدرجة القصوى ${detail.maxMark}',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: tokens.textMuted)),
+                Text(
+                  '${detail.subjectName} · الدرجة القصوى ${detail.maxMark}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                ),
                 const SizedBox(height: 14),
                 TextField(
                   controller: mark,
                   autofocus: true,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   onChanged: (_) {
                     if (error.isNotEmpty) setSheetState(() => error = '');
                   },
@@ -449,8 +517,9 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
                   onPressed: () async {
                     final m = double.tryParse(mark.text.trim());
                     if (m == null || m < 0 || m > detail.maxMark) {
-                      setSheetState(() =>
-                          error = 'أدخل علامة بين 0 و ${detail.maxMark}');
+                      setSheetState(
+                        () => error = 'أدخل علامة بين 0 و ${detail.maxMark}',
+                      );
                       return;
                     }
                     await repo.updateExamSubmission(s.id, m);
@@ -479,11 +548,11 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
       mark == mark.roundToDouble() ? '${mark.toInt()}' : '$mark';
 
   static String _typeLabel(String type) => switch (type) {
-        'oral' => 'شفهي',
-        'writtenProbe' => 'سبر كتابي',
-        'final' => 'اختبار نهائي',
-        _ => type,
-      };
+    'oral' => 'شفهي',
+    'writtenProbe' => 'سبر كتابي',
+    'final' => 'اختبار نهائي',
+    _ => type,
+  };
 }
 
 class _ExamData {
@@ -520,8 +589,9 @@ class _ExamEditorCard extends StatefulWidget {
 class _ExamEditorCardState extends State<_ExamEditorCard> {
   late String _subject = widget.detail.subjectName;
   late final _maxMark = TextEditingController(text: '${widget.detail.maxMark}');
-  late final _minSuccess =
-      TextEditingController(text: '${widget.detail.minSuccessMark}');
+  late final _minSuccess = TextEditingController(
+    text: '${widget.detail.minSuccessMark}',
+  );
   late final _points = TextEditingController(text: '${widget.detail.points}');
   late String _type = widget.detail.type;
   String _error = '';
@@ -570,14 +640,17 @@ class _ExamEditorCardState extends State<_ExamEditorCard> {
       builder: (context) => AlertDialog(
         title: const Text('حذف الامتحان'),
         content: const Text(
-            'سيُحذف الامتحان مع كل تقديماته. هل تريد المتابعة؟'),
+          'سيُحذف الامتحان مع كل تقديماته. هل تريد المتابعة؟',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('إلغاء')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('حذف')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('حذف'),
+          ),
         ],
       ),
     );
@@ -595,7 +668,9 @@ class _ExamEditorCardState extends State<_ExamEditorCard> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SectionHeader(
-              icon: Icons.tune_outlined, title: 'بيانات الامتحان'),
+            icon: Icons.tune_outlined,
+            title: 'بيانات الامتحان',
+          ),
           const SizedBox(height: 10),
           // Subject: picked from the mosque subjects (never free text).
           SearchPickerField<String>(
@@ -610,11 +685,12 @@ class _ExamEditorCardState extends State<_ExamEditorCard> {
             onChanged: (name) => setState(() => _subject = name),
           ),
           const SizedBox(height: 10),
-          Text('النوع',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted)),
+          Text(
+            'النوع',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+          ),
           const SizedBox(height: 6),
           IconToggleGroup<String>(
             value: _type,
@@ -645,8 +721,7 @@ class _ExamEditorCardState extends State<_ExamEditorCard> {
                 child: TextField(
                   controller: _maxMark,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                      labelText: 'الدرجة القصوى'),
+                  decoration: const InputDecoration(labelText: 'الدرجة القصوى'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -667,8 +742,10 @@ class _ExamEditorCardState extends State<_ExamEditorCard> {
           ),
           if (_error.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text(_error,
-                style: TextStyle(color: tokens.dangerText, fontSize: 13)),
+            Text(
+              _error,
+              style: TextStyle(color: tokens.dangerText, fontSize: 13),
+            ),
           ],
           const SizedBox(height: 14),
           AppButton(label: 'حفظ التعديلات', onPressed: _save),

@@ -44,10 +44,9 @@ class NumberStepper extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: tokens.textMuted),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
           const SizedBox(height: 4),
         ],
@@ -64,9 +63,9 @@ class NumberStepper extends StatelessWidget {
                 suffix == null ? '$value' : '$value $suffix',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      color: valueColor,
-                    ),
+                  fontWeight: FontWeight.w900,
+                  color: valueColor,
+                ),
               ),
             ),
             _StepButton(
@@ -95,8 +94,7 @@ class _StepButton extends StatelessWidget {
       icon: Icon(icon, size: 18),
       color: enabled ? tokens.brandText : tokens.textMuted,
       style: IconButton.styleFrom(
-        backgroundColor:
-            enabled ? tokens.brandTint : tokens.surfaceSubtle,
+        backgroundColor: enabled ? tokens.brandTint : tokens.surfaceSubtle,
         minimumSize: const Size(44, 44),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),

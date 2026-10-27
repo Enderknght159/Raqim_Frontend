@@ -27,10 +27,7 @@ class ListRow extends StatelessWidget {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final content = Row(
       children: [
-        if (leading != null) ...[
-          leading!,
-          const SizedBox(width: 12),
-        ],
+        if (leading != null) ...[leading!, const SizedBox(width: 12)],
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -38,27 +35,23 @@ class ListRow extends StatelessWidget {
               Text(
                 title,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
-                    ),
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
               ),
               if (subtitle != null) ...[
                 const SizedBox(height: 2),
                 Text(
                   subtitle!,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
               ],
             ],
           ),
         ),
-        if (trailing != null) ...[
-          const SizedBox(width: 12),
-          trailing!,
-        ],
+        if (trailing != null) ...[const SizedBox(width: 12), trailing!],
       ],
     );
     return InkWell(
@@ -66,9 +59,7 @@ class ListRow extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: selected ? tokens.brandTint : null,
-          border: Border(
-            bottom: BorderSide(color: tokens.borderStructural),
-          ),
+          border: Border(bottom: BorderSide(color: tokens.borderStructural)),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
         child: content,

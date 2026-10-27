@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/config/app_breakpoints.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/character_art.dart';
 import '../../../../core/widgets/raqim_logo.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// A2 — Welcome / username step (`/welcome`).
 ///
@@ -38,7 +40,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   void _showUsernameHelp() {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (context) => Padding(
@@ -47,13 +49,21 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('من أين آتي باسم المستخدم؟',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'من أين آتي باسم المستخدم؟',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 12),
-            _helpLine(context, tokens,
-                'اسم المستخدم تصدره إدارة المسجد لجميع الأعضاء.'),
-            _helpLine(context, tokens,
-                'إن نسيت بياناتك فاطلبها من مشرف المسجد أو إدارته.'),
+            _helpLine(
+              context,
+              tokens,
+              'اسم المستخدم تصدره إدارة المسجد لجميع الأعضاء.',
+            ),
+            _helpLine(
+              context,
+              tokens,
+              'إن نسيت بياناتك فاطلبها من مشرف المسجد أو إدارته.',
+            ),
           ],
         ),
       ),
@@ -74,10 +84,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           Expanded(
             child: Text(
               text,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: tokens.textSecondary),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: tokens.textSecondary),
             ),
           ),
         ],
@@ -92,7 +101,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 900;
+            final wide = constraints.maxWidth >= AppBreakpoints.expandedMin;
             final form = _buildForm(tokens);
             final art = const CharacterArt(
               state: CharacterState.welcome,
@@ -106,7 +115,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 bottom: 24 + MediaQuery.viewInsetsOf(context).bottom,
               ),
               child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight - 24),
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight - 24,
+                ),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1000),
@@ -144,10 +155,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         Text(
           'منصة إدارة الحلقات والمدارس القرآنية',
           textAlign: TextAlign.center,
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: tokens.textMuted),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
         ),
         const SizedBox(height: 28),
         TextField(

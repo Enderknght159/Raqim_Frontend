@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/status_badge.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// Result of the permission editor for one account.
 class AdminPermissionResult {
@@ -71,8 +72,9 @@ Future<AdminPermissionResult?> showPermissionEditor(
   List<String> teacherTeams = const [],
   VoidCallback? onViewTeams,
 }) {
-  return showModalBottomSheet<AdminPermissionResult>(
+  return showAppSheet<AdminPermissionResult>(
     context: context,
+    maxWidth: 720,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (context) => AdminPermissionEditor(
@@ -111,9 +113,7 @@ class _AdminPermissionEditorState extends State<AdminPermissionEditor> {
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    final hasAny = _isAdmin ||
-        _granted.isNotEmpty ||
-        _abilities.isNotEmpty;
+    final hasAny = _isAdmin || _granted.isNotEmpty || _abilities.isNotEmpty;
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.85,
@@ -123,8 +123,7 @@ class _AdminPermissionEditorState extends State<AdminPermissionEditor> {
         children: [
           Row(
             children: [
-              Text(widget.title,
-                  style: Theme.of(context).textTheme.titleLarge),
+              Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
               const Spacer(),
               StatusBadge(
                 label: hasAny ? 'مشرف' : 'بلا صلاحيات',
@@ -150,12 +149,12 @@ class _AdminPermissionEditorState extends State<AdminPermissionEditor> {
               onChanged: _isAdmin
                   ? null
                   : (v) => setState(() {
-                        if (v) {
-                          _granted.add(m);
-                        } else {
-                          _granted.remove(m);
-                        }
-                      }),
+                      if (v) {
+                        _granted.add(m);
+                      } else {
+                        _granted.remove(m);
+                      }
+                    }),
             ),
           const Divider(),
           Text('صلاحيات خاصة', style: Theme.of(context).textTheme.titleMedium),
@@ -168,12 +167,12 @@ class _AdminPermissionEditorState extends State<AdminPermissionEditor> {
               onChanged: _isAdmin
                   ? null
                   : (v) => setState(() {
-                        if (v) {
-                          _abilities.add(key);
-                        } else {
-                          _abilities.remove(key);
-                        }
-                      }),
+                      if (v) {
+                        _abilities.add(key);
+                      } else {
+                        _abilities.remove(key);
+                      }
+                    }),
             ),
           const Divider(),
           SwitchListTile(

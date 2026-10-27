@@ -5,12 +5,15 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/responsive_grid.dart';
+import '../../../../core/widgets/responsive_scope.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/sparkline.dart';
 import '../../../../core/widgets/stat_tile.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../admin_shell.dart';
 import '../../domain/admin_models.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// E1 — Admin home: general stats + course cards + last-session shortcut.
 class AdminCoursesScreen extends StatefulWidget {
@@ -21,8 +24,14 @@ class AdminCoursesScreen extends StatefulWidget {
 }
 
 class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
-  late Future<({GeneralStats stats, List<AdminCourseSummary> courses, AdminSessionRow? last})>
-      _future;
+  late Future<
+    ({
+      GeneralStats stats,
+      List<AdminCourseSummary> courses,
+      AdminSessionRow? last,
+    })
+  >
+  _future;
 
   @override
   void initState() {
@@ -30,14 +39,19 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
     _future = _load();
   }
 
-  Future<({GeneralStats stats, List<AdminCourseSummary> courses, AdminSessionRow? last})>
-      _load() async {
+  Future<
+    ({
+      GeneralStats stats,
+      List<AdminCourseSummary> courses,
+      AdminSessionRow? last,
+    })
+  >
+  _load() async {
     final repo = AdminRepositoryScope.of(context);
-    return (
-      stats: await repo.generalStats(),
-      courses: await repo.courses(),
-      last: await repo.lastSession(),
-    );
+    final statsF = repo.generalStats();
+    final coursesF = repo.courses();
+    final lastF = repo.lastSession();
+    return (stats: await statsF, courses: await coursesF, last: await lastF);
   }
 
   Future<void> _refresh() async {
@@ -61,8 +75,10 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
         backgroundColor: tokens.brand,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
-        label: const Text('دورة',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+        label: const Text(
+          'دورة',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+        ),
       ),
       body: AsyncView(
         future: _future,
@@ -77,7 +93,10 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
                 const SizedBox(height: 16),
                 if (data.last != null) _lastSessionCard(context, data.last!),
                 const SizedBox(height: 16),
-                const SectionHeader(icon: Icons.school_outlined, title: 'الدورات'),
+                const SectionHeader(
+                  icon: Icons.school_outlined,
+                  title: 'الدورات',
+                ),
                 const SizedBox(height: 8),
                 if (data.courses.isEmpty)
                   const Padding(
@@ -85,10 +104,13 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
                     child: Center(child: Text('لا دورات — أنشئ أول دورة')),
                   )
                 else
-                  for (final c in data.courses) ...[
-                    _courseCard(context, c),
-                    const SizedBox(height: 12),
-                  ],
+                  ResponsiveGrid(
+                    minItemWidth: 280,
+                    maxColumns: 3,
+                    children: [
+                      for (final c in data.courses) _courseCard(context, c),
+                    ],
+                  ),
               ],
             ),
           );
@@ -100,13 +122,59 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
   Widget _statsStrip(BuildContext context, GeneralStats s) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final items = <({String label, int value, IconData icon, Color color})>[
-      (label: 'طلاب', value: s.students, icon: Icons.groups_outlined, color: tokens.info),
-      (label: 'حلقات', value: s.teams, icon: Icons.hub_outlined, color: tokens.brand),
-      (label: 'معلمون', value: s.teachers, icon: Icons.school_outlined, color: tokens.accentMatn),
-      (label: 'دورات', value: s.courses, icon: Icons.menu_book_outlined, color: tokens.infoLight),
-      (label: 'طلبات معلّقة', value: s.pendingRequests, icon: Icons.inbox_outlined, color: tokens.reward),
-      (label: 'صفحات مسمّعة', value: s.memorizedPages, icon: Icons.auto_stories_outlined, color: tokens.brandText),
+      (
+        label: 'طلاب',
+        value: s.students,
+        icon: Icons.groups_outlined,
+        color: tokens.info,
+      ),
+      (
+        label: 'حلقات',
+        value: s.teams,
+        icon: Icons.hub_outlined,
+        color: tokens.brand,
+      ),
+      (
+        label: 'معلمون',
+        value: s.teachers,
+        icon: Icons.school_outlined,
+        color: tokens.accentMatn,
+      ),
+      (
+        label: 'دورات',
+        value: s.courses,
+        icon: Icons.menu_book_outlined,
+        color: tokens.infoLight,
+      ),
+      (
+        label: 'طلبات معلّقة',
+        value: s.pendingRequests,
+        icon: Icons.inbox_outlined,
+        color: tokens.reward,
+      ),
+      (
+        label: 'صفحات مسمّعة',
+        value: s.memorizedPages,
+        icon: Icons.auto_stories_outlined,
+        color: tokens.brandText,
+      ),
     ];
+    if (!ResponsiveScope.of(context).isCompact) {
+      return ResponsiveGrid(
+        minItemWidth: 160,
+        maxColumns: 6,
+        spacing: 10,
+        children: [
+          for (final item in items)
+            StatTile(
+              label: item.label,
+              value: item.value,
+              icon: item.icon,
+              color: item.color,
+            ),
+        ],
+      );
+    }
     return SizedBox(
       height: 152,
       child: ListView.separated(
@@ -140,17 +208,18 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('آخر جلسة',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: tokens.info,
-                        )),
+                Text(
+                  'آخر جلسة',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: tokens.info,
+                  ),
+                ),
                 Text(
                   'جلسة #${session.index} · حاضر ${session.present}/${session.total}',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
               ],
             ),
@@ -175,12 +244,14 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
           Row(
             children: [
               Expanded(
-                child: Text(c.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: tokens.info,
-                        )),
+                child: Text(
+                  c.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: tokens.info,
+                  ),
+                ),
               ),
               StatusBadge(
                 label: c.isActive ? 'نشطة' : 'منتهية',
@@ -191,8 +262,11 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              _metric(context, 'حضور آخر جلسة',
-                  '${c.lastSessionPresent}/${c.lastSessionTotal}'),
+              _metric(
+                context,
+                'حضور آخر جلسة',
+                '${c.lastSessionPresent}/${c.lastSessionTotal}',
+              ),
               _metric(context, 'طلاب', '${c.studentsCount}'),
               _metric(context, 'جلسات', '${c.sessionsCount}'),
               _metric(context, 'نسبة الحضور', '${c.attendancePercent}%'),
@@ -202,7 +276,11 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
             const SizedBox(height: 12),
             SizedBox(
               height: 34,
-              child: Sparkline(values: c.series, color: tokens.brand, height: 34),
+              child: Sparkline(
+                values: c.series,
+                color: tokens.brand,
+                height: 34,
+              ),
             ),
           ],
         ],
@@ -215,21 +293,24 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
     return Expanded(
       child: Column(
         children: [
-          Text(value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: tokens.textPrimary,
-                  )),
-          Text(label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted)),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w900,
+              color: tokens.textPrimary,
+            ),
+          ),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+          ),
         ],
       ),
     );
@@ -238,7 +319,7 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
   Future<void> _addCourse() async {
     final repo = AdminRepositoryScope.of(context);
     final nameController = TextEditingController();
-    await showModalBottomSheet<void>(
+    await showAppSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -267,7 +348,10 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
                 if (name.isEmpty) return;
                 final now = DateTime.now();
                 await repo.addCourse(
-                    name, now, now.add(const Duration(days: 60)));
+                  name,
+                  now,
+                  now.add(const Duration(days: 60)),
+                );
                 if (context.mounted) Navigator.of(context).pop();
               },
             ),

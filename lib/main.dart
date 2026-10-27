@@ -4,12 +4,11 @@ import 'app.dart';
 import 'core/network/api_client.dart';
 import 'core/router/app_router.dart';
 import 'core/storage/secure_storage.dart';
-import 'features/admin/data/admin_local_repository.dart';
+import 'features/admin/data/admin_api_repository.dart';
 import 'features/auth/data/auth_remote_data_source.dart';
 import 'features/auth/data/auth_repository.dart';
-import 'features/student/data/local/demo_seed.dart';
-import 'features/student/data/local/student_database.dart';
-import 'features/student/data/student_local_repository.dart';
+import 'features/auth/domain/auth_session.dart';
+import 'features/student/data/student_api_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,17 +17,22 @@ Future<void> main() async {
   final secureStorage = SecureStorage();
   final apiClient = await ApiClient.init(secureStorage);
 
+  // Holds the real `/me` profile so the API repositories know the linked
+  // student/teacher ids (no hardcoded demo ids).
+  final session = ApiSession();
+
   // Auth feature.
   final authRepository = AuthRepository(
     remote: AuthRemoteDataSource(dio: apiClient.dio),
     storage: secureStorage,
+    session: session,
   );
 
-  // Local DB (drift, seeded once) — powers the trial build until the backend
-  // is ready. Both the student and admin repositories share it.
-  final database = await _openDb();
-  final studentRepository = StudentLocalRepository(database);
-  final adminRepository = AdminLocalRepository(database);
+  // Both shells are backed by the live Laravel API through the shared Dio
+  // client. The local drift repositories remain available for tests/offline
+  // fallback but are no longer the source of truth.
+  final studentRepository = StudentApiRepository(apiClient.dio, session);
+  final adminRepository = AdminApiRepository(apiClient.dio, session);
 
   // Bumped on every auth-state change so go_router re-runs its redirects.
   final sessionTick = ValueNotifier<int>(0);
@@ -47,10 +51,4 @@ Future<void> main() async {
       ),
     ),
   );
-}
-
-Future<StudentDatabase> _openDb() async {
-  final database = StudentDatabase();
-  await seedDemoDataIfNeeded(database);
-  return database;
 }

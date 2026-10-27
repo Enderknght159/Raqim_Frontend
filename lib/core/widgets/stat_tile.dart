@@ -41,18 +41,17 @@ class StatTile extends StatelessWidget {
           ],
           Text(
             formatNumber(value),
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.w900, color: accent),
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w900,
+              color: accent,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
             label,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: tokens.textMuted),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),

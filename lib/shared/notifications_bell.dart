@@ -38,9 +38,11 @@ class _NotificationsBellState extends State<NotificationsBell> {
       });
     }
   }
+
   Future<void> _open() async {
     await context.push(
-        widget.adminMode ? '/admin/notifications' : '/my-progress/notifications');
+      widget.adminMode ? '/admin/notifications' : '/my-progress/notifications',
+    );
     _loaded = false;
     if (!mounted) return;
     await _loadUnread();

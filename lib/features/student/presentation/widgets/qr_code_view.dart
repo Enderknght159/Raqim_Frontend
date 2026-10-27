@@ -6,11 +6,7 @@ import '../../../../core/theme/app_theme.dart';
 /// A scannable QR code card rendered from a code string (student id/barcode).
 /// Used in the profile (B5).
 class QrCodeCard extends StatelessWidget {
-  const QrCodeCard({
-    super.key,
-    required this.code,
-    this.size = 220,
-  });
+  const QrCodeCard({super.key, required this.code, this.size = 220});
 
   final String code;
   final double size;
@@ -41,9 +37,9 @@ class QrCodeCard extends StatelessWidget {
           code,
           textDirection: TextDirection.ltr,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                letterSpacing: 2,
-              ),
+            fontWeight: FontWeight.w700,
+            letterSpacing: 2,
+          ),
         ),
       ],
     );

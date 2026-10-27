@@ -41,9 +41,9 @@ class CourseCard extends StatelessWidget {
                     course.name,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: tokens.info,
-                        ),
+                      fontWeight: FontWeight.w800,
+                      color: tokens.info,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -57,10 +57,9 @@ class CourseCard extends StatelessWidget {
             Text(
               '${overview.attendance.totalSessions} جلسة · '
               '${formatShortDate(course.startDate)} – ${formatShortDate(course.endDate)}',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
             ),
             const SizedBox(height: 12),
             Divider(color: tokens.borderStructural, height: 1),
@@ -81,22 +80,22 @@ class CourseCard extends StatelessWidget {
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: tokens.brandTint,
-                      borderRadius:
-                          BorderRadius.circular(tokens.radiusSmall),
+                      borderRadius: BorderRadius.circular(tokens.radiusSmall),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.emoji_events,
-                                size: 14, color: tokens.rewardText),
+                            Icon(
+                              Icons.emoji_events,
+                              size: 14,
+                              color: tokens.rewardText,
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               'المحصلة',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
+                              style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(color: tokens.rewardText),
                             ),
                           ],
@@ -107,9 +106,7 @@ class CourseCard extends StatelessWidget {
                           children: [
                             Text(
                               '$points',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineLarge
+                              style: Theme.of(context).textTheme.headlineLarge
                                   ?.copyWith(
                                     color: points < 0
                                         ? tokens.danger
@@ -122,9 +119,7 @@ class CourseCard extends StatelessWidget {
                               padding: const EdgeInsets.only(bottom: 4),
                               child: Text(
                                 'نقطة',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
+                                style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(color: tokens.rewardText),
                               ),
                             ),
@@ -133,16 +128,17 @@ class CourseCard extends StatelessWidget {
                         const SizedBox(height: 6),
                         Row(
                           children: [
-                            Icon(Icons.leaderboard_outlined,
-                                size: 14, color: tokens.textMuted),
+                            Icon(
+                              Icons.leaderboard_outlined,
+                              size: 14,
+                              color: tokens.textMuted,
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               overview.rank == null
                                   ? 'بلا ترتيب'
                                   : 'الترتيب #${overview.rank}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
+                              style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(color: tokens.textMuted),
                             ),
                           ],

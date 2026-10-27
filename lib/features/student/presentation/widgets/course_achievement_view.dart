@@ -4,6 +4,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/date_time_utils.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/progress_bar.dart';
+import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/widgets/sparkline.dart';
@@ -12,6 +13,7 @@ import '../../domain/quran_units.dart';
 import '../../domain/student_stats.dart';
 import 'attendance_day_cell.dart';
 import 'rating_stars.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// The student's full achievement inside one course (B1x content): points,
 /// attendance, tasmi', matn and the leaderboard. Reused by the student course
@@ -37,55 +39,61 @@ class CourseAchievementView extends StatelessWidget {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final course = bundle.course;
 
-    return ListView(
-      padding: padding,
-      children: [
-        // Header
-        Text(
-          course.name,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: tokens.info,
+    return ResponsivePage(
+      maxWidth: 1100,
+      child: ListView(
+        padding: padding,
+        children: [
+          // Header
+          Text(
+            course.name,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w900,
+              color: tokens.info,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Flexible(
+                child: Text(
+                  '${formatDate(course.startDate)} – ${formatDate(course.endDate)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                ),
               ),
-        ),
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            Text(
-              '${formatDate(course.startDate)} – ${formatDate(course.endDate)}',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted),
-            ),
-            const SizedBox(width: 8),
-            StatusBadge(
-              label: course.isActive ? 'نشطة' : 'منتهية',
-              color: course.isActive ? tokens.brand : tokens.textMuted,
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
+              const SizedBox(width: 8),
+              StatusBadge(
+                label: course.isActive ? 'نشطة' : 'منتهية',
+                color: course.isActive ? tokens.brand : tokens.textMuted,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
-        // Points hero
-        _PointsCard(bundle: bundle, onTap: onPointsTap),
-        const SizedBox(height: 12),
+          // Points hero
+          _PointsCard(bundle: bundle, onTap: onPointsTap),
+          const SizedBox(height: 12),
 
-        // Attendance
-        _AttendanceCard(bundle: bundle),
-        const SizedBox(height: 12),
+          // Attendance
+          _AttendanceCard(bundle: bundle),
+          const SizedBox(height: 12),
 
-        // Tasmi'
-        _TasmiCard(bundle: bundle),
-        const SizedBox(height: 12),
+          // Tasmi'
+          _TasmiCard(bundle: bundle),
+          const SizedBox(height: 12),
 
-        // Matn
-        _MatnCard(bundle: bundle),
-        const SizedBox(height: 12),
+          // Matn
+          _MatnCard(bundle: bundle),
+          const SizedBox(height: 12),
 
-        // Leaderboard
-        _LeaderboardCard(entries: leaderboard),
-      ],
+          // Leaderboard
+          _LeaderboardCard(entries: leaderboard),
+        ],
+      ),
     );
   }
 }
@@ -115,37 +123,40 @@ class _PointsCard extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text(
-                          '${b.total}',
-                          style: Theme.of(context)
-                              .textTheme
-                              .displayMedium
-                              ?.copyWith(
-                                color: b.total < 0
-                                    ? tokens.danger
-                                    : tokens.rewardText,
-                                fontWeight: FontWeight.w900,
-                              ),
+                        Flexible(
+                          child: Text(
+                            '${b.total}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.displayMedium
+                                ?.copyWith(
+                                  color: b.total < 0
+                                      ? tokens.danger
+                                      : tokens.rewardText,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                          ),
                         ),
                         const SizedBox(width: 4),
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Text(
-                            'نقطة',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(color: tokens.rewardText),
+                        Flexible(
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text(
+                              'نقطة',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: tokens.rewardText),
+                            ),
                           ),
                         ),
                       ],
                     ),
                     Text(
                       'متاح للشراء: ${b.purchaseBalance}',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: tokens.textMuted),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
                     ),
                   ],
                 ),
@@ -173,9 +184,7 @@ class _AttendanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final summary = bundle.attendanceSummary;
-    final attBySession = {
-      for (final a in bundle.attendance) a.sessionId: a,
-    };
+    final attBySession = {for (final a in bundle.attendance) a.sessionId: a};
     return AppCard(
       onTap: () => _showDays(context),
       child: Column(
@@ -198,9 +207,15 @@ class _AttendanceCard extends StatelessWidget {
             runSpacing: 6,
             children: [
               StatusBadge(label: 'مبكر ${summary.early}', color: tokens.brand),
-              StatusBadge(label: 'في الوقت ${summary.onTime}', color: tokens.infoLight),
+              StatusBadge(
+                label: 'في الوقت ${summary.onTime}',
+                color: tokens.infoLight,
+              ),
               StatusBadge(label: 'متأخر ${summary.late}', color: tokens.danger),
-              StatusBadge(label: 'غياب ${summary.absent}', color: tokens.textMuted),
+              StatusBadge(
+                label: 'غياب ${summary.absent}',
+                color: tokens.textMuted,
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -226,7 +241,7 @@ class _AttendanceCard extends StatelessWidget {
   void _showDays(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final attBySession = {for (final a in bundle.attendance) a.sessionId: a};
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
@@ -237,8 +252,10 @@ class _AttendanceCard extends StatelessWidget {
           controller: controller,
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           children: [
-            Text('سجل الحضور اليومي',
-                style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'سجل الحضور اليومي',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             for (final s in bundle.sessions)
               ListTile(
                 dense: true,
@@ -309,10 +326,9 @@ class _TasmiCard extends StatelessWidget {
                 Text('التسميع', style: Theme.of(context).textTheme.titleMedium),
                 Text(
                   '${mems.length} تسجيلة حفظ',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
               ],
             ),
@@ -324,7 +340,7 @@ class _TasmiCard extends StatelessWidget {
   }
 
   void _showLog(BuildContext context) {
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
@@ -337,8 +353,10 @@ class _TasmiCard extends StatelessWidget {
           children: [
             Text('سجل التسميع', style: Theme.of(context).textTheme.titleLarge),
             if (bundle.memorizations.isEmpty)
-              Text('لا توجد تسجيلات',
-                  style: Theme.of(context).textTheme.bodyMedium)
+              Text(
+                'لا توجد تسجيلات',
+                style: Theme.of(context).textTheme.bodyMedium,
+              )
             else
               for (final m in bundle.memorizations)
                 ListTile(
@@ -346,12 +364,15 @@ class _TasmiCard extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(
                     Icons.menu_book,
-                    color: RatingStars.colorFor(m.rating,
-                        Theme.of(context).extension<AppTokens>()!),
+                    color: RatingStars.colorFor(
+                      m.rating,
+                      Theme.of(context).extension<AppTokens>()!,
+                    ),
                   ),
                   title: Text('صفحة ${m.page}'),
                   subtitle: Text(
-                      '${quranDisplaySurah(m.page, m.partIndex, m.surah)} · المسمِّع: ${m.reciterName}'),
+                    '${quranDisplaySurah(m.page, m.partIndex, m.surah)} · المسمِّع: ${m.reciterName}',
+                  ),
                   trailing: RatingStars(rating: m.rating),
                 ),
           ],
@@ -377,7 +398,10 @@ class _MatnCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SectionHeader(
-              icon: Icons.menu_book, title: 'المتون', color: Color(0xFF7C3AED)),
+            icon: Icons.menu_book,
+            title: 'المتون',
+            color: Color(0xFF7C3AED),
+          ),
           const SizedBox(height: 10),
           if (bundle.matns.isEmpty)
             Text('لا توجد متون', style: Theme.of(context).textTheme.bodyMedium)
@@ -389,12 +413,14 @@ class _MatnCard extends StatelessWidget {
     );
   }
 
-  Widget _matnRow(BuildContext context, AppTokens tokens, Matn matn,
-      MatnRecitation? latest) {
+  Widget _matnRow(
+    BuildContext context,
+    AppTokens tokens,
+    Matn matn,
+    MatnRecitation? latest,
+  ) {
     final reached = latest?.lastVerse ?? 0;
-    final percent = matn.totalVerses == 0
-        ? 0.0
-        : reached / matn.totalVerses;
+    final percent = matn.totalVerses == 0 ? 0.0 : reached / matn.totalVerses;
     return InkWell(
       onTap: () => _showMatnRecitations(context, matn),
       borderRadius: BorderRadius.circular(tokens.radiusSmall),
@@ -406,28 +432,29 @@ class _MatnCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(matn.name,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          )),
+                  child: Text(
+                    matn.name,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
                 Text(
                   '$reached / ${matn.totalVerses} بيت',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
                 const SizedBox(width: 6),
-                Icon(Icons.chevron_left, size: 16, color: tokens.borderStructural),
+                Icon(
+                  Icons.chevron_left,
+                  size: 16,
+                  color: tokens.borderStructural,
+                ),
               ],
             ),
             const SizedBox(height: 6),
-            ProgressBar(
-              value: percent,
-              color: tokens.accentMatn,
-              height: 6,
-            ),
+            ProgressBar(value: percent, color: tokens.accentMatn, height: 6),
           ],
         ),
       ),
@@ -437,13 +464,11 @@ class _MatnCard extends StatelessWidget {
   /// Latest tasmi' records of this matn within this course.
   void _showMatnRecitations(BuildContext context, Matn matn) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    final sessionById = {
-      for (final s in bundle.sessions) s.id: s,
-    };
+    final sessionById = {for (final s in bundle.sessions) s.id: s};
     final records = bundle.matnRecitations
         .where((r) => r.matnId == matn.id)
         .toList();
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
@@ -454,12 +479,16 @@ class _MatnCard extends StatelessWidget {
           controller: controller,
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           children: [
-            Text('${matn.name} — التسميعات في هذه الدورة',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              '${matn.name} — التسميعات في هذه الدورة',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             if (records.isEmpty)
-              Text('لا توجد تسميعات لهذا المتن في هذه الدورة',
-                  style: Theme.of(context).textTheme.bodyMedium)
+              Text(
+                'لا توجد تسميعات لهذا المتن في هذه الدورة',
+                style: Theme.of(context).textTheme.bodyMedium,
+              )
             else
               for (final r in records)
                 ListTile(
@@ -468,8 +497,9 @@ class _MatnCard extends StatelessWidget {
                   leading: Icon(Icons.menu_book, color: tokens.accentMatn),
                   title: Text('البيت الأخير: ${r.lastVerse}'),
                   subtitle: Text(
-                      '${r.teacherName} · '
-                      '${formatDate(sessionById[r.sessionId]?.date ?? DateTime.now())}'),
+                    '${r.teacherName} · '
+                    '${formatDate(sessionById[r.sessionId]?.date ?? DateTime.now())}',
+                  ),
                 ),
           ],
         ),
@@ -490,23 +520,22 @@ class _LeaderboardCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SectionHeader(
-              icon: Icons.leaderboard, title: 'الطلاب الأوائل'),
+          const SectionHeader(icon: Icons.leaderboard, title: 'الطلاب الأوائل'),
           const SizedBox(height: 2),
           Text(
             'ترتيب الطلاب على هذه الدورة',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: tokens.textMuted),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
           const SizedBox(height: 8),
           if (entries.isEmpty)
-            Text('لا يوجد طلاب بعد',
-                style: Theme.of(context).textTheme.bodyMedium)
+            Text(
+              'لا يوجد طلاب بعد',
+              style: Theme.of(context).textTheme.bodyMedium,
+            )
           else
-            for (final e in entries)
-              _LeaderboardRow(entry: e),
+            for (final e in entries) _LeaderboardRow(entry: e),
         ],
       ),
     );
@@ -522,11 +551,15 @@ class _LeaderboardRow extends StatelessWidget {
   (Color? color, Color? border) _highlight(AppTokens tokens) {
     switch (entry.rank) {
       case 1:
-        return (tokens.reward.withValues(alpha: 0.18),
-            tokens.reward.withValues(alpha: 0.7));
+        return (
+          tokens.reward.withValues(alpha: 0.18),
+          tokens.reward.withValues(alpha: 0.7),
+        );
       case 2:
-        return (tokens.reward.withValues(alpha: 0.10),
-            tokens.reward.withValues(alpha: 0.4));
+        return (
+          tokens.reward.withValues(alpha: 0.10),
+          tokens.reward.withValues(alpha: 0.4),
+        );
       case 3:
         return (tokens.surfaceSubtle, tokens.borderStructural);
       default:
@@ -544,9 +577,7 @@ class _LeaderboardRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: tint ?? tokens.surfaceCard,
         borderRadius: BorderRadius.circular(tokens.radiusSmall),
-        border: border == null
-            ? null
-            : Border.all(color: border, width: 1.5),
+        border: border == null ? null : Border.all(color: border, width: 1.5),
       ),
       child: Row(
         children: [
@@ -556,11 +587,9 @@ class _LeaderboardRow extends StatelessWidget {
               '${entry.rank}',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: entry.rank <= 3
-                        ? tokens.rewardText
-                        : tokens.textMuted,
-                  ),
+                fontWeight: FontWeight.w900,
+                color: entry.rank <= 3 ? tokens.rewardText : tokens.textMuted,
+              ),
             ),
           ),
           CircleAvatar(
@@ -569,8 +598,9 @@ class _LeaderboardRow extends StatelessWidget {
             child: Text(
               entry.student.name.characters.first,
               style: TextStyle(
-                  color: tokens.brandText,
-                  fontWeight: FontWeight.w800),
+                color: tokens.brandText,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -578,30 +608,27 @@ class _LeaderboardRow extends StatelessWidget {
             child: Text(
               entry.student.name,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
           Text(
             '${entry.points}',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: tokens.rewardText,
-                ),
+              fontWeight: FontWeight.w900,
+              color: tokens.rewardText,
+            ),
           ),
           const SizedBox(width: 4),
           Text(
             'نقطة',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: tokens.textMuted),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
         ],
       ),
     );
   }
 }
-

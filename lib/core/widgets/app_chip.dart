@@ -37,10 +37,10 @@ class AppChip extends StatelessWidget {
             ],
             Text(
               label,
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall
-                  ?.copyWith(color: accent, fontWeight: FontWeight.w600),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: accent,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),

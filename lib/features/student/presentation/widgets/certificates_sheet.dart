@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/status_badge.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// One immutable certificate entry for the shared full-list sheet.
 typedef CertificateEntry = ({
@@ -14,11 +15,11 @@ typedef CertificateEntry = ({
 
 /// Full Quran-certificates sheet — shared by the student Quran tab (B2) and
 /// the admin student profile (E7).
-void showCertificatesSheet(
-    BuildContext context, List<CertificateEntry> certs) {
+void showCertificatesSheet(BuildContext context, List<CertificateEntry> certs) {
   final tokens = Theme.of(context).extension<AppTokens>()!;
-  showModalBottomSheet<void>(
+  showAppSheet<void>(
     context: context,
+    maxWidth: 720,
     showDragHandle: true,
     isScrollControlled: true,
     builder: (context) => DraggableScrollableSheet(
@@ -35,11 +36,15 @@ void showCertificatesSheet(
               padding: const EdgeInsets.only(bottom: 4),
               child: Row(
                 children: [
-                  Text('شهادات القرآن',
-                      style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    'شهادات القرآن',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const Spacer(),
                   StatusBadge(
-                      label: '${certs.length} شهادة', color: tokens.reward),
+                    label: '${certs.length} شهادة',
+                    color: tokens.reward,
+                  ),
                 ],
               ),
             );
@@ -49,10 +54,13 @@ void showCertificatesSheet(
             dense: true,
             contentPadding: EdgeInsets.zero,
             leading: Icon(Icons.school_outlined, color: tokens.reward),
-            title: Text('الجزء ${c.startJuz} – ${c.endJuz}',
-                style: const TextStyle(fontWeight: FontWeight.w700)),
+            title: Text(
+              'الجزء ${c.startJuz} – ${c.endJuz}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
             subtitle: Text(
-                'الدرجة: ${c.mark} · ${c.date.day}/${c.date.month}/${c.date.year}'),
+              'الدرجة: ${c.mark} · ${c.date.day}/${c.date.month}/${c.date.year}',
+            ),
             trailing: StatusBadge(
               label: c.byHeart ? 'بالغيب' : 'عن ظهر قلب',
               color: c.byHeart ? tokens.brand : tokens.textMuted,

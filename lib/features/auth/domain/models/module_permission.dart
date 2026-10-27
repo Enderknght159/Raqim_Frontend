@@ -18,12 +18,17 @@ class ModulePermission {
   final bool canExport;
 
   factory ModulePermission.fromJson(Map<String, dynamic> json) {
+    bool flag(String camel, String snake) {
+      final value = json[camel] ?? json[snake];
+      return value is bool ? value : false;
+    }
+
     return ModulePermission(
       module: json['module'] as String? ?? '',
-      canView: json['can_view'] as bool? ?? false,
-      canEdit: json['can_edit'] as bool? ?? false,
-      canDelete: json['can_delete'] as bool? ?? false,
-      canExport: json['can_export'] as bool? ?? false,
+      canView: flag('view', 'can_view'),
+      canEdit: flag('update', 'can_edit'),
+      canDelete: flag('delete', 'can_delete'),
+      canExport: flag('export', 'can_export'),
     );
   }
 }

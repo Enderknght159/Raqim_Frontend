@@ -17,17 +17,12 @@ class ApiClient {
         connectTimeout: AppConfig.networkTimeout,
         receiveTimeout: AppConfig.networkTimeout,
         sendTimeout: AppConfig.networkTimeout,
-        headers: {
-          'Accept-Language': 'ar',
-          'Content-Type': 'application/json',
-        },
+        headers: {'Accept-Language': 'ar', 'Content-Type': 'application/json'},
       ),
     );
     _refresher = TokenRefresher(storage: _storage, dio: _dio);
     // Request/response logging (redacts passwords & tokens).
-    _dio.interceptors.add(
-      ApiLogInterceptor(logBodies: AppConfig.logApiBodies),
-    );
+    _dio.interceptors.add(ApiLogInterceptor(logBodies: AppConfig.logApiBodies));
     _dio.interceptors.add(_authInterceptor);
     _dio.interceptors.add(_errorInterceptor);
   }
@@ -57,47 +52,49 @@ class ApiClient {
   Dio get dio => _dio;
 
   Interceptor get _authInterceptor => InterceptorsWrapper(
-        onRequest: (options, handler) async {
+    onRequest: (options, handler) async {
+      final token = await _storage.readAccessToken();
+      if (token != null && token.isNotEmpty) {
+        options.headers['Authorization'] = 'Bearer $token';
+      }
+      handler.next(options);
+    },
+    onError: (error, handler) async {
+      final isAuthRequest = error.requestOptions.extra['skipAuth'] == true;
+      final is401 = error.response?.statusCode == 401;
+      if (is401 &&
+          !isAuthRequest &&
+          error.requestOptions.extra['retried'] != true) {
+        final refreshed = await _refresher.refresh();
+        if (refreshed) {
           final token = await _storage.readAccessToken();
-          if (token != null && token.isNotEmpty) {
-            options.headers['Authorization'] = 'Bearer $token';
+          final retry = error.requestOptions;
+          retry.extra['retried'] = true;
+          retry.headers['Authorization'] = 'Bearer $token';
+          try {
+            final response = await _dio.fetch(retry);
+            return handler.resolve(response);
+          } on DioException catch (e) {
+            return handler.next(e);
           }
-          handler.next(options);
-        },
-        onError: (error, handler) async {
-          final isAuthRequest = error.requestOptions.extra['skipAuth'] == true;
-          final is401 = error.response?.statusCode == 401;
-          if (is401 && !isAuthRequest && error.requestOptions.extra['retried'] != true) {
-            final refreshed = await _refresher.refresh();
-            if (refreshed) {
-              final token = await _storage.readAccessToken();
-              final retry = error.requestOptions;
-              retry.extra['retried'] = true;
-              retry.headers['Authorization'] = 'Bearer $token';
-              try {
-                final response = await _dio.fetch(retry);
-                return handler.resolve(response);
-              } on DioException catch (e) {
-                return handler.next(e);
-              }
-            }
-          }
-          handler.next(error);
-        },
-      );
+        }
+      }
+      handler.next(error);
+    },
+  );
 
   Interceptor get _errorInterceptor => InterceptorsWrapper(
-        onError: (error, handler) {
-          handler.next(
-            DioException(
-              requestOptions: error.requestOptions,
-              response: error.response,
-              type: error.type,
-              error: _mapDioError(error),
-            ),
-          );
-        },
+    onError: (error, handler) {
+      handler.next(
+        DioException(
+          requestOptions: error.requestOptions,
+          response: error.response,
+          type: error.type,
+          error: _mapDioError(error),
+        ),
       );
+    },
+  );
 
   ApiException _mapDioError(DioException error) {
     if (error.type == DioExceptionType.connectionTimeout ||

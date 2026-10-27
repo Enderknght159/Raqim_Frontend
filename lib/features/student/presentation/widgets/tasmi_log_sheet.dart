@@ -5,13 +5,15 @@ import '../../../../core/widgets/status_badge.dart';
 import '../../domain/models/student_models.dart';
 import '../../domain/quran_units.dart';
 import 'rating_stars.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// Full tasmi' (memorization) log sheet — shared by the student Quran tab (B2)
 /// and the admin student profile (E7).
 void showTasmiLogSheet(BuildContext context, List<Memorization> mems) {
   final tokens = Theme.of(context).extension<AppTokens>()!;
-  showModalBottomSheet<void>(
+  showAppSheet<void>(
     context: context,
+    maxWidth: 720,
     showDragHandle: true,
     isScrollControlled: true,
     builder: (context) => DraggableScrollableSheet(
@@ -29,11 +31,15 @@ void showTasmiLogSheet(BuildContext context, List<Memorization> mems) {
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
-                  Text('سجل التسميع',
-                      style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    'سجل التسميع',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const Spacer(),
                   StatusBadge(
-                      label: '${mems.length} تسجيلة', color: tokens.brand),
+                    label: '${mems.length} تسجيلة',
+                    color: tokens.brand,
+                  ),
                 ],
               ),
             );
@@ -42,12 +48,16 @@ void showTasmiLogSheet(BuildContext context, List<Memorization> mems) {
           return ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.menu_book,
-                color: RatingStars.colorFor(m.rating, tokens)),
+            leading: Icon(
+              Icons.menu_book,
+              color: RatingStars.colorFor(m.rating, tokens),
+            ),
             title: Text(
-                'صفحة ${m.page} — ${quranDisplaySurah(m.page, m.partIndex, m.surah)}'),
+              'صفحة ${m.page} — ${quranDisplaySurah(m.page, m.partIndex, m.surah)}',
+            ),
             subtitle: Text(
-                'المسمِّع: ${m.reciterName} · ${m.date.day}/${m.date.month}/${m.date.year}'),
+              'المسمِّع: ${m.reciterName} · ${m.date.day}/${m.date.month}/${m.date.year}',
+            ),
             trailing: RatingStars(rating: m.rating),
           );
         },

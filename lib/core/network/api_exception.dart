@@ -14,24 +14,24 @@ class ApiException implements Exception {
   });
 
   const ApiException.network()
-      : code = 'NETWORK',
-        messageAr = 'تعذر الاتصال بالخادم',
-        messageEn = 'Could not connect to the server',
-        field = null,
-        statusCode = null;
+    : code = 'NETWORK',
+      messageAr = 'تعذر الاتصال بالخادم',
+      messageEn = 'Could not connect to the server',
+      field = null,
+      statusCode = null;
 
   const ApiException.unauthorized()
-      : code = 'UNAUTHORIZED',
-        messageAr = 'انتهت صلاحية الجلسة',
-        messageEn = 'Your session has expired',
-        field = null,
-        statusCode = 401;
+    : code = 'UNAUTHORIZED',
+      messageAr = 'انتهت صلاحية الجلسة',
+      messageEn = 'Your session has expired',
+      field = null,
+      statusCode = 401;
 
   const ApiException.server({this.statusCode})
-      : code = 'SERVER',
-        messageAr = 'حدث خطأ في الخادم',
-        messageEn = 'A server error occurred',
-        field = null;
+    : code = 'SERVER',
+      messageAr = 'حدث خطأ في الخادم',
+      messageEn = 'A server error occurred',
+      field = null;
 
   /// Machine-readable error code, e.g. `INVALID_CREDENTIALS`.
   final String? code;
@@ -49,7 +49,8 @@ class ApiException implements Exception {
   final int? statusCode;
 
   /// Message for the active locale (Arabic first).
-  String message({bool arabic = true}) => arabic ? (messageAr ?? messageEn ?? '') : (messageEn ?? messageAr ?? '');
+  String message({bool arabic = true}) =>
+      arabic ? (messageAr ?? messageEn ?? '') : (messageEn ?? messageAr ?? '');
 
   bool get isNetwork => code == 'NETWORK';
   bool get isUnauthorized => code == 'UNAUTHORIZED' || statusCode == 401;

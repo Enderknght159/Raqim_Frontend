@@ -6,7 +6,8 @@ import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/date_grouped_list.dart';
 import '../../../../core/widgets/icon_tile.dart';
 import '../../../../core/widgets/list_row.dart';
-import '../../data/student_local_repository.dart';
+import '../../../../core/widgets/responsive_page.dart';
+import '../../data/student_repository.dart';
 import '../../domain/models/student_models.dart';
 import '../student_shell.dart';
 
@@ -31,10 +32,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           if (items.isEmpty) {
             return const Center(child: Text('لا إشعارات بعد'));
           }
-          return DateGroupedList<StudentNotification>(
-            items: items,
-            dateOf: (n) => n.when,
-            itemBuilder: (context, n) => _NotificationRow(notification: n),
+          return ResponsivePage(
+            maxWidth: 800,
+            child: DateGroupedList<StudentNotification>(
+              items: items,
+              dateOf: (n) => n.when,
+              itemBuilder: (context, n) => _NotificationRow(notification: n),
+            ),
           );
         },
       ),
@@ -42,7 +46,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   // Marks notifications as read after loading them.
-  Future<List<StudentNotification>> _load(StudentLocalRepository repo) async {
+  Future<List<StudentNotification>> _load(StudentRepository repo) async {
     final items = await repo.notifications();
     await repo.markNotifRead();
     return items;
@@ -55,18 +59,18 @@ class _NotificationRow extends StatelessWidget {
   final StudentNotification notification;
 
   (IconData, Color) _style(AppTokens tokens) => switch (notification.kind) {
-        NotificationKind.attendance => (Icons.schedule, tokens.infoLight),
-        NotificationKind.memorization => (Icons.menu_book, tokens.brand),
-        NotificationKind.transaction => (Icons.payments_outlined, tokens.reward),
-        NotificationKind.exam => (
-            Icons.assignment_turned_in_outlined,
-            tokens.accentMatn
-          ),
-        NotificationKind.certificate => (Icons.school_outlined, tokens.reward),
-        NotificationKind.matn => (Icons.menu_book, tokens.accentMatn),
-        NotificationKind.team => (Icons.groups_outlined, tokens.infoLight),
-        NotificationKind.notice => (Icons.campaign_outlined, tokens.info),
-      };
+    NotificationKind.attendance => (Icons.schedule, tokens.infoLight),
+    NotificationKind.memorization => (Icons.menu_book, tokens.brand),
+    NotificationKind.transaction => (Icons.payments_outlined, tokens.reward),
+    NotificationKind.exam => (
+      Icons.assignment_turned_in_outlined,
+      tokens.accentMatn,
+    ),
+    NotificationKind.certificate => (Icons.school_outlined, tokens.reward),
+    NotificationKind.matn => (Icons.menu_book, tokens.accentMatn),
+    NotificationKind.team => (Icons.groups_outlined, tokens.infoLight),
+    NotificationKind.notice => (Icons.campaign_outlined, tokens.info),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -78,10 +82,9 @@ class _NotificationRow extends StatelessWidget {
       subtitle: notification.body,
       trailing: Text(
         formatTime(notification.when),
-        style: Theme.of(context)
-            .textTheme
-            .bodySmall
-            ?.copyWith(color: tokens.textMuted),
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
       ),
     );
   }

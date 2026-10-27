@@ -44,7 +44,8 @@ class _SparklinePainter extends CustomPainter {
 
     Offset pointAt(int i) {
       final x = size.width * (i / (values.length - 1));
-      final y = size.height - ((values[i] - minV) / span) * (size.height - 8) - 4;
+      final y =
+          size.height - ((values[i] - minV) / span) * (size.height - 8) - 4;
       return Offset(x, y.clamp(-8, size.height + 8));
     }
 

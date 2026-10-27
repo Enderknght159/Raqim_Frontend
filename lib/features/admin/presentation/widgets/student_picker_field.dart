@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// Reusable student lookup field (BR-627): tolerant auto-search by
 /// name / id / barcode / team + a barcode-scan button. Emits the picked
@@ -48,14 +49,12 @@ class _StudentPickerFieldState extends State<StudentPickerField> {
   }
 
   Future<void> _open() async {
-    final picker = await showModalBottomSheet<AdminStudentRow>(
+    final picker = await showAppSheet<AdminStudentRow>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) => _StudentPickerSheet(
-        students: _students,
-        selected: widget.selected,
-      ),
+      builder: (context) =>
+          _StudentPickerSheet(students: _students, selected: widget.selected),
     );
     if (picker != null) {
       widget.onChanged(picker);
@@ -69,9 +68,9 @@ class _StudentPickerFieldState extends State<StudentPickerField> {
         .where((s) => s.barcode.toLowerCase() == code.trim().toLowerCase())
         .firstOrNull;
     if (match == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('لا يوجد طالب بالباركود $code')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('لا يوجد طالب بالباركود $code')));
       return;
     }
     widget.onChanged(match);
@@ -98,35 +97,41 @@ class _StudentPickerFieldState extends State<StudentPickerField> {
               child: Row(
                 children: [
                   if (selected == null)
-                    Icon(Icons.person_search_outlined,
-                        size: 20, color: tokens.textMuted)
+                    Icon(
+                      Icons.person_search_outlined,
+                      size: 20,
+                      color: tokens.textMuted,
+                    )
                   else ...[
                     CircleAvatar(
                       radius: 16,
                       backgroundColor: tokens.brandTint,
-                      child: Text(selected.name.characters.first,
-                          style: TextStyle(
-                              color: tokens.brandText,
-                              fontWeight: FontWeight.w800)),
+                      child: Text(
+                        selected.name.characters.first,
+                        style: TextStyle(
+                          color: tokens.brandText,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(selected.name,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyLarge
-                                  ?.copyWith(fontWeight: FontWeight.w700)),
+                          Text(
+                            selected.name,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
                           if (selected.teamNames.isNotEmpty)
-                            Text(selected.teamNames,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(color: tokens.textMuted)),
+                            Text(
+                              selected.teamNames,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: tokens.textMuted),
+                            ),
                         ],
                       ),
                     ),
@@ -135,10 +140,9 @@ class _StudentPickerFieldState extends State<StudentPickerField> {
                     const SizedBox(width: 10),
                     Text(
                       _loading ? 'جارِ التحميل…' : widget.label,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyLarge
-                          ?.copyWith(color: tokens.textMuted),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyLarge?.copyWith(color: tokens.textMuted),
                     ),
                   ],
                   const Spacer(),
@@ -220,10 +224,13 @@ class _StudentPickerSheetState extends State<_StudentPickerSheet> {
                         leading: CircleAvatar(
                           radius: 18,
                           backgroundColor: tokens.brandTint,
-                          child: Text(s.name.characters.first,
-                              style: TextStyle(
-                                  color: tokens.brandText,
-                                  fontWeight: FontWeight.w800)),
+                          child: Text(
+                            s.name.characters.first,
+                            style: TextStyle(
+                              color: tokens.brandText,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ),
                         title: Text(s.name),
                         subtitle: Text(
@@ -233,10 +240,14 @@ class _StudentPickerSheetState extends State<_StudentPickerSheet> {
                           ].join(' · '),
                         ),
                         trailing: selected
-                            ? const Icon(Icons.check_circle,
-                                color: Color(0xFF00A572))
-                            : Icon(Icons.chevron_left,
-                                color: tokens.borderStructural),
+                            ? const Icon(
+                                Icons.check_circle,
+                                color: Color(0xFF00A572),
+                              )
+                            : Icon(
+                                Icons.chevron_left,
+                                color: tokens.borderStructural,
+                              ),
                         onTap: () => Navigator.of(context).pop(s),
                       );
                     },

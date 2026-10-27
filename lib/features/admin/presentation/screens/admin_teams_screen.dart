@@ -1,16 +1,19 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/responsive_grid.dart';
+import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/search_picker_field.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
 import '../widgets/team_manager_sheet.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// E8 — Teams & teachers (unified card): teams · teachers · team types.
 /// Tapping a team opens its student preview with bulk add/remove
@@ -33,10 +36,13 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
 
   Future<_Data> _load() async {
     final repo = AdminRepositoryScope.of(context);
+    final teamsF = repo.teams();
+    final teachersF = repo.teachers();
+    final typesF = repo.teamTypes();
     return _Data(
-      teams: await repo.teams(),
-      teachers: await repo.teachers(),
-      types: await repo.teamTypes(),
+      teams: await teamsF,
+      teachers: await teachersF,
+      types: await typesF,
     );
   }
 
@@ -61,45 +67,54 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
             ),
           ],
         ),
-        body: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            const SectionHeader(icon: Icons.hub_outlined, title: 'الحلقات'),
-            const SizedBox(height: 8),
-            for (final t in data.teams) ...[
-              _teamTile(context, t),
+        body: ResponsivePage(
+          maxWidth: 1100,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              const SectionHeader(icon: Icons.hub_outlined, title: 'الحلقات'),
               const SizedBox(height: 8),
-            ],
-            const SizedBox(height: 16),
-            const SectionHeader(icon: Icons.school_outlined, title: 'المعلمون'),
-            const SizedBox(height: 8),
-            if (data.teachers.isEmpty)
-              Text('لا معلمون', style: Theme.of(context).textTheme.bodyMedium)
-            else
-              for (final t in data.teachers) ...[
-                _teacherTile(context, t),
-                const SizedBox(height: 8),
-              ],
-            const SizedBox(height: 16),
-            SectionHeader(
-              icon: Icons.category_outlined,
-              title: 'أنواع الحلقات',
-              trailing: TextButton.icon(
-                onPressed: _addType,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('إضافة'),
+              ResponsiveGrid(
+                minItemWidth: 340,
+                maxColumns: 2,
+                children: [for (final t in data.teams) _teamTile(context, t)],
               ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final ty in data.types)
-                  _typeChip(context, ty, data),
-              ],
-            ),
-          ],
+              const SizedBox(height: 16),
+              const SectionHeader(
+                icon: Icons.school_outlined,
+                title: 'المعلمون',
+              ),
+              const SizedBox(height: 8),
+              if (data.teachers.isEmpty)
+                Text('لا معلمون', style: Theme.of(context).textTheme.bodyMedium)
+              else
+                ResponsiveGrid(
+                  minItemWidth: 340,
+                  maxColumns: 2,
+                  children: [
+                    for (final t in data.teachers) _teacherTile(context, t),
+                  ],
+                ),
+              const SizedBox(height: 16),
+              SectionHeader(
+                icon: Icons.category_outlined,
+                title: 'أنواع الحلقات',
+                trailing: TextButton.icon(
+                  onPressed: _addType,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('إضافة'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final ty in data.types) _typeChip(context, ty, data),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -121,9 +136,10 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(ty.name,
-                style: TextStyle(
-                    color: tokens.info, fontWeight: FontWeight.w700)),
+            Text(
+              ty.name,
+              style: TextStyle(color: tokens.info, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(width: 6),
             Icon(Icons.close, size: 14, color: tokens.info),
           ],
@@ -135,8 +151,13 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
   Future<void> _deleteType(AdminContentItem ty, _Data data) async {
     final inUse = data.teams.where((t) => t.typeName == ty.name).length;
     if (inUse > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('النوع «${ty.name}» مستخدم في $inUse حلقة — انقله أولًا')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'النوع «${ty.name}» مستخدم في $inUse حلقة — انقله أولًا',
+          ),
+        ),
+      );
       return;
     }
     final confirm = await showDialog<bool>(
@@ -146,11 +167,13 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
         content: Text('حذف النوع «${ty.name}»؟'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('إلغاء')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('حذف')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('حذف'),
+          ),
         ],
       ),
     );
@@ -172,23 +195,29 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
           CircleAvatar(
             radius: 18,
             backgroundColor: tokens.accentMatn.withValues(alpha: 0.15),
-            child: Text(t.name.characters.first,
-                style: TextStyle(
-                    color: tokens.accentMatn, fontWeight: FontWeight.w800)),
+            child: Text(
+              t.name.characters.first,
+              style: TextStyle(
+                color: tokens.accentMatn,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(t.name,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyLarge
-                    ?.copyWith(fontWeight: FontWeight.w700)),
+            child: Text(
+              t.name,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+            ),
           ),
-          Text('${t.teamsCount} حلقة',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted)),
+          Text(
+            '${t.teamsCount} حلقة',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+          ),
           const SizedBox(width: 6),
           Icon(Icons.chevron_left, color: tokens.borderStructural),
         ],
@@ -213,22 +242,25 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(t.name,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyLarge
-                        ?.copyWith(fontWeight: FontWeight.w700)),
+                Text(
+                  t.name,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
                 Text(
                   '${t.typeName} · ${t.teacherName.isEmpty ? 'بلا معلم' : t.teacherName}',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
               ],
             ),
           ),
-          StatusBadge(label: '${t.studentsCount} طالب', color: tokens.infoLight),
+          StatusBadge(
+            label: '${t.studentsCount} طالب',
+            color: tokens.infoLight,
+          ),
           const SizedBox(width: 6),
           Icon(Icons.chevron_left, color: tokens.borderStructural),
         ],
@@ -253,7 +285,7 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
     var type = types.isEmpty ? 'عام' : types.first.name;
     var teacherName = '';
     if (!mounted) return;
-    await showModalBottomSheet<void>(
+    await showAppSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -270,12 +302,15 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('حلقة جديدة',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'حلقة جديدة',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 16),
                 TextField(
-                    controller: name,
-                    decoration: const InputDecoration(labelText: 'اسم الحلقة')),
+                  controller: name,
+                  decoration: const InputDecoration(labelText: 'اسم الحلقة'),
+                ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: type,
@@ -322,7 +357,7 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
   Future<void> _addType() async {
     final repo = AdminRepositoryScope.of(context);
     final name = TextEditingController();
-    await showModalBottomSheet<void>(
+    await showAppSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -337,12 +372,15 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('نوع حلقة جديد',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'نوع حلقة جديد',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 16),
             TextField(
-                controller: name,
-                decoration: const InputDecoration(labelText: 'الاسم')),
+              controller: name,
+              decoration: const InputDecoration(labelText: 'الاسم'),
+            ),
             const SizedBox(height: 16),
             AppButton(
               label: 'إضافة',
@@ -362,7 +400,11 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
 }
 
 class _Data {
-  const _Data({required this.teams, required this.teachers, required this.types});
+  const _Data({
+    required this.teams,
+    required this.teachers,
+    required this.types,
+  });
 
   final List<AdminTeamRow> teams;
   final List<AdminTeacherRow> teachers;

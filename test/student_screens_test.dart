@@ -8,7 +8,9 @@ import 'package:raqim/core/theme/app_theme.dart';
 import 'package:raqim/features/student/data/local/demo_seed.dart';
 import 'package:raqim/features/student/data/local/student_database.dart';
 import 'package:raqim/features/student/data/student_local_repository.dart';
+import 'package:raqim/features/student/presentation/screens/achievement_screen.dart';
 import 'package:raqim/features/student/presentation/screens/course_detail_screen.dart';
+import 'package:raqim/features/student/presentation/screens/my_courses_screen.dart';
 import 'package:raqim/features/student/presentation/screens/my_teams_screen.dart';
 import 'package:raqim/features/student/presentation/screens/notifications_screen.dart';
 import 'package:raqim/features/student/presentation/screens/points_screen.dart';
@@ -26,10 +28,7 @@ Future<StudentLocalRepository> _repo() async {
 Widget _wrap(StudentLocalRepository repo, Widget child) {
   return StudentRepositoryScope(
     repository: repo,
-    child: MaterialApp(
-      theme: AppTheme.light(),
-      home: child,
-    ),
+    child: MaterialApp(theme: AppTheme.light(), home: child),
   );
 }
 
@@ -37,19 +36,21 @@ void main() {
   // Each test builds its own in-memory StudentDatabase (expected in tests).
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
 
-  testWidgets('MyTeamsScreen renders and opens a team detail without crashing',
-      (tester) async {
-    final repo = await _repo();
-    await tester.pumpWidget(_wrap(repo, const MyTeamsScreen()));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'MyTeamsScreen renders and opens a team detail without crashing',
+    (tester) async {
+      final repo = await _repo();
+      await tester.pumpWidget(_wrap(repo, const MyTeamsScreen()));
+      await tester.pumpAndSettle();
 
-    expect(find.text('حلقة القرآن - أ'), findsOneWidget);
+      expect(find.text('حلقة القرآن - أ'), findsOneWidget);
 
-    // Open the first team card.
-    await tester.tap(find.text('حلقة القرآن - أ'));
-    await tester.pumpAndSettle();
-    expect(find.text('معلم الحلقة'), findsOneWidget);
-  });
+      // Open the first team card.
+      await tester.tap(find.text('حلقة القرآن - أ'));
+      await tester.pumpAndSettle();
+      expect(find.text('معلم الحلقة'), findsOneWidget);
+    },
+  );
 
   testWidgets('ProfileScreen renders without crashing', (tester) async {
     final repo = await _repo();
@@ -65,8 +66,9 @@ void main() {
     expect(find.text('خروج'), findsOneWidget);
   });
 
-  testWidgets('Course points card opens the full points breakdown',
-      (tester) async {
+  testWidgets('Course points card opens the full points breakdown', (
+    tester,
+  ) async {
     final repo = await _repo();
     final router = GoRouter(
       initialLocation: '/course',
@@ -83,13 +85,15 @@ void main() {
         ),
       ],
     );
-    await tester.pumpWidget(StudentRepositoryScope(
-      repository: repo,
-      child: MaterialApp.router(
-        theme: AppTheme.light(),
-        routerConfig: router,
+    await tester.pumpWidget(
+      StudentRepositoryScope(
+        repository: repo,
+        child: MaterialApp.router(
+          theme: AppTheme.light(),
+          routerConfig: router,
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.textContaining('متاح للشراء'));
@@ -104,36 +108,39 @@ void main() {
   });
 
   testWidgets('Certificates sheet lists every certificate', (tester) async {
-    await tester.pumpWidget(MaterialApp(
-      theme: AppTheme.light(),
-      home: Scaffold(
-        body: Builder(
-          builder: (context) => Center(
-            child: ElevatedButton(
-              onPressed: () => showCertificatesSheet(context, [
-                for (var juz = 1; juz <= 4; juz++)
-                  (
-                    startJuz: juz,
-                    endJuz: juz,
-                    mark: 90,
-                    byHeart: true,
-                    date: DateTime(2026, 10, juz),
-                  ),
-              ]),
-              child: const Text('open'),
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: ElevatedButton(
+                onPressed: () => showCertificatesSheet(context, [
+                  for (var juz = 1; juz <= 4; juz++)
+                    (
+                      startJuz: juz,
+                      endJuz: juz,
+                      mark: 90,
+                      byHeart: true,
+                      date: DateTime(2026, 10, juz),
+                    ),
+                ]),
+                child: const Text('open'),
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.text('4 شهادة'), findsOneWidget);
     expect(find.text('الجزء 1 – 1'), findsOneWidget);
   });
 
-  testWidgets('QuranScreen renders (guards the fixed-row layout crash)',
-      (tester) async {
+  testWidgets('QuranScreen renders (guards the fixed-row layout crash)', (
+    tester,
+  ) async {
     final repo = await _repo();
     await tester.pumpWidget(_wrap(repo, const QuranScreen()));
     await tester.pumpAndSettle();
@@ -142,8 +149,9 @@ void main() {
     expect(find.text('نسبة إتمام الحفظ للقرآن كاملًا'), findsOneWidget);
   });
 
-  testWidgets('Quran map cell opens its tasmi details (unit/reciter/date)',
-      (tester) async {
+  testWidgets('Quran map cell opens its tasmi details (unit/reciter/date)', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(800, 2000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -152,7 +160,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final cell = find.descendant(
-        of: find.byType(GridView), matching: find.text('592'));
+      of: find.byType(GridView),
+      matching: find.text('592'),
+    );
     expect(cell, findsOneWidget);
     await tester.ensureVisible(cell);
     await tester.pumpAndSettle();
@@ -165,8 +175,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('NotificationsScreen groups records and marks them read',
-      (tester) async {
+  testWidgets('NotificationsScreen groups records and marks them read', (
+    tester,
+  ) async {
     final repo = await _repo();
     expect(await repo.unreadNotifications(), greaterThan(0));
 
@@ -187,11 +198,12 @@ void main() {
     final repo = StudentLocalRepository(db);
 
     // Give student 2 a large reward in course 1 so they outrank student 1.
-    final firstSession = (await (db.select(db.sessions)
-              ..where((t) => t.courseId.equals(1)))
-            .get())
-        .first;
-    await db.into(db.transactions).insert(
+    final firstSession = (await (db.select(
+      db.sessions,
+    )..where((t) => t.courseId.equals(1))).get()).first;
+    await db
+        .into(db.transactions)
+        .insert(
           TransactionsCompanion.insert(
             id: const Value(900001),
             studentId: 2,
@@ -207,5 +219,64 @@ void main() {
     expect(course1.rank, isNotNull);
     expect(course1.rank, isNot(1));
     expect(course1.rank, greaterThan(1));
+  });
+
+  testWidgets('phone portrait keeps the bottom-sheet presentation', (
+    tester,
+  ) async {
+    final repo = await _repo();
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_wrap(repo, const MyTeamsScreen()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('حلقة القرآن - أ'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('معلم الحلقة'), findsOneWidget);
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(Dialog), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('responsive smoke: student screens have no overflow', (
+    tester,
+  ) async {
+    final repo = await _repo();
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final screens = <Widget>[
+      const MyCoursesScreen(),
+      const QuranScreen(),
+      const AchievementScreen(),
+      const MyTeamsScreen(),
+      const ProfileScreen(),
+      const NotificationsScreen(),
+      const CourseDetailScreen(courseId: 1),
+      const StudentPointsScreen(courseId: 1),
+    ];
+    const sizes = [
+      Size(390, 844),
+      Size(844, 390),
+      Size(768, 1024),
+      Size(1280, 800),
+    ];
+
+    for (final screen in screens) {
+      for (final size in sizes) {
+        tester.view.physicalSize = size;
+        await tester.pumpWidget(_wrap(repo, screen));
+        await tester.pumpAndSettle();
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: '${screen.runtimeType} @ ${size.width}x${size.height}',
+        );
+      }
+    }
   });
 }

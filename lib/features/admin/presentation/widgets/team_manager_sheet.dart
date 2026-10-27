@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/status_badge.dart';
-import '../../data/admin_local_repository.dart';
+import '../../data/admin_repository.dart';
 import '../../domain/admin_models.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// Opens the team members manager (E8): preview/remove with multi-select +
 /// add via tolerant search. Saves on close. Reused by the teams screen and
@@ -12,10 +13,11 @@ import '../../domain/admin_models.dart';
 Future<void> showTeamManagerSheet(
   BuildContext context,
   AdminTeamRow team, {
-  required AdminLocalRepository repository,
+  required AdminRepository repository,
 }) {
-  return showModalBottomSheet<void>(
+  return showAppSheet<void>(
     context: context,
+    maxWidth: 640,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (context) => TeamManagerSheet(team: team, repo: repository),
@@ -28,7 +30,7 @@ class TeamManagerSheet extends StatefulWidget {
   const TeamManagerSheet({super.key, required this.team, required this.repo});
 
   final AdminTeamRow team;
-  final AdminLocalRepository repo;
+  final AdminRepository repo;
 
   @override
   State<TeamManagerSheet> createState() => _TeamManagerSheetState();
@@ -72,14 +74,18 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
   List<AdminStudentRow> get _candidates {
     final memberIds = _members.map((m) => m.id).toSet();
     return _all
-        .where((s) =>
-            !memberIds.contains(s.id) && studentMatchesQuery(s, _search.text))
+        .where(
+          (s) =>
+              !memberIds.contains(s.id) && studentMatchesQuery(s, _search.text),
+        )
         .toList();
   }
 
   Future<void> _removeSelected() async {
-    await widget.repo
-        .removeStudentsFromTeam(widget.team.id, _selected.toList());
+    await widget.repo.removeStudentsFromTeam(
+      widget.team.id,
+      _selected.toList(),
+    );
     if (!mounted) return;
     setState(() {
       _members = _members.where((m) => !_selected.contains(m.id)).toList();
@@ -100,7 +106,7 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
 
   /// Change the team teacher at any time (any existing account).
   Future<void> _editTeacher() async {
-    final result = await showModalBottomSheet<String>(
+    final result = await showAppSheet<String>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -124,7 +130,9 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     if (_loading) {
       return const SizedBox(
-          height: 300, child: Center(child: CircularProgressIndicator()));
+        height: 300,
+        child: Center(child: CircularProgressIndicator()),
+      );
     }
     return DraggableScrollableSheet(
       expand: false,
@@ -139,22 +147,24 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(widget.team.name,
-                          style: Theme.of(context).textTheme.titleLarge),
+                      Text(
+                        widget.team.name,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                       Text(
                         '${widget.team.typeName} · '
                         '${_teacherName.isEmpty ? 'بلا معلم' : _teacherName}',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: tokens.textMuted),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: tokens.textMuted,
+                        ),
                       ),
                     ],
                   ),
                 ),
                 StatusBadge(
-                    label: '${_members.length} طالب',
-                    color: tokens.infoLight),
+                  label: '${_members.length} طالب',
+                  color: tokens.infoLight,
+                ),
               ],
             ),
           ),
@@ -165,8 +175,10 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
               borderRadius: BorderRadius.circular(tokens.radiusSmall),
               onTap: _editTeacher,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: tokens.surfaceSubtle,
                   borderRadius: BorderRadius.circular(tokens.radiusSmall),
@@ -174,8 +186,11 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.school_outlined,
-                        size: 18, color: tokens.accentMatn),
+                    Icon(
+                      Icons.school_outlined,
+                      size: 18,
+                      color: tokens.accentMatn,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -190,8 +205,11 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
                         ),
                       ),
                     ),
-                    Icon(Icons.edit_outlined,
-                        size: 18, color: tokens.textMuted),
+                    Icon(
+                      Icons.edit_outlined,
+                      size: 18,
+                      color: tokens.textMuted,
+                    ),
                   ],
                 ),
               ),
@@ -242,32 +260,32 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
           Expanded(
             child: _adding
                 ? _candidates.isEmpty
-                    ? const Center(child: Text('لا نتائج'))
-                    : ListView.builder(
-                        controller: controller,
-                        itemCount: _candidates.length,
-                        itemBuilder: (context, i) {
-                          final s = _candidates[i];
-                          return CheckboxListTile(
-                            dense: true,
-                            value: _selected.contains(s.id),
-                            title: Text(s.name),
-                            subtitle: Text(
-                              [
-                                if (s.teamNames.isNotEmpty) s.teamNames,
-                                s.barcode,
-                              ].join(' · '),
-                            ),
-                            onChanged: (v) => setState(() {
-                              if (v == true) {
-                                _selected.add(s.id);
-                              } else {
-                                _selected.remove(s.id);
-                              }
-                            }),
-                          );
-                        },
-                      )
+                      ? const Center(child: Text('لا نتائج'))
+                      : ListView.builder(
+                          controller: controller,
+                          itemCount: _candidates.length,
+                          itemBuilder: (context, i) {
+                            final s = _candidates[i];
+                            return CheckboxListTile(
+                              dense: true,
+                              value: _selected.contains(s.id),
+                              title: Text(s.name),
+                              subtitle: Text(
+                                [
+                                  if (s.teamNames.isNotEmpty) s.teamNames,
+                                  s.barcode,
+                                ].join(' · '),
+                              ),
+                              onChanged: (v) => setState(() {
+                                if (v == true) {
+                                  _selected.add(s.id);
+                                } else {
+                                  _selected.remove(s.id);
+                                }
+                              }),
+                            );
+                          },
+                        )
                 : ListView.builder(
                     controller: controller,
                     itemCount: _members.length,
@@ -313,7 +331,6 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
   }
 }
 
-
 /// Searchable teacher picker: every account can be a team teacher.
 class _TeacherPickerSheet extends StatefulWidget {
   const _TeacherPickerSheet({required this.candidates, required this.selected});
@@ -341,10 +358,12 @@ class _TeacherPickerSheetState extends State<_TeacherPickerSheet> {
     final results = q.isEmpty
         ? widget.candidates
         : widget.candidates
-            .where((c) =>
-                c.name.toLowerCase().contains(q) ||
-                c.role.toLowerCase().contains(q))
-            .toList();
+              .where(
+                (c) =>
+                    c.name.toLowerCase().contains(q) ||
+                    c.role.toLowerCase().contains(q),
+              )
+              .toList();
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.75,
@@ -354,8 +373,10 @@ class _TeacherPickerSheetState extends State<_TeacherPickerSheet> {
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
             child: Row(
               children: [
-                Text('معلم الحلقة',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'معلم الحلقة',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const Spacer(),
               ],
             ),
@@ -382,8 +403,10 @@ class _TeacherPickerSheetState extends State<_TeacherPickerSheet> {
                 if (i == 0) {
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.person_off_outlined,
-                        color: tokens.textMuted),
+                    leading: Icon(
+                      Icons.person_off_outlined,
+                      color: tokens.textMuted,
+                    ),
                     title: const Text('بلا معلم'),
                     trailing: widget.selected.isEmpty
                         ? Icon(Icons.check_circle, color: tokens.brand)
@@ -398,10 +421,13 @@ class _TeacherPickerSheetState extends State<_TeacherPickerSheet> {
                   leading: CircleAvatar(
                     radius: 16,
                     backgroundColor: tokens.accentMatn.withValues(alpha: 0.15),
-                    child: Text(c.name.characters.first,
-                        style: TextStyle(
-                            color: tokens.accentMatn,
-                            fontWeight: FontWeight.w800)),
+                    child: Text(
+                      c.name.characters.first,
+                      style: TextStyle(
+                        color: tokens.accentMatn,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                   title: Text(c.name),
                   subtitle: Text(c.role),

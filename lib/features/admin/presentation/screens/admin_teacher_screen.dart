@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../domain/admin_models.dart';
@@ -49,79 +50,96 @@ class _AdminTeacherScreenState extends State<AdminTeacherScreen> {
       future: _future,
       builder: (context, data) => Scaffold(
         appBar: AppBar(title: Text(widget.teacherName)),
-        body: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            AppCard(
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor: tokens.accentMatn.withValues(alpha: 0.15),
-                    child: Text(widget.teacherName.characters.first,
+        body: ResponsivePage(
+          maxWidth: 900,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              AppCard(
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor: tokens.accentMatn.withValues(
+                        alpha: 0.15,
+                      ),
+                      child: Text(
+                        widget.teacherName.characters.first,
                         style: TextStyle(
-                            color: tokens.accentMatn,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800)),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(widget.teacherName,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 4),
-                        StatusBadge(
-                            label: 'مدرس الحلقة (من الباك)',
-                            color: tokens.accentMatn),
-                        const SizedBox(height: 4),
-                        Text('${data.mine.length} حلقة',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: tokens.textMuted)),
-                      ],
+                          color: tokens.accentMatn,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.teacherName,
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 4),
+                          StatusBadge(
+                            label: 'مدرس الحلقة (من الباك)',
+                            color: tokens.accentMatn,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${data.mine.length} حلقة',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: tokens.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            const SectionHeader(
-                icon: Icons.hub_outlined, title: 'حلقاته (يمكن إزالته منها)'),
-            const SizedBox(height: 8),
-            if (data.mine.isEmpty)
-              Text('لا حلقات', style: Theme.of(context).textTheme.bodyMedium)
-            else
-              for (final t in data.mine) ...[
-                _teamRow(context, t, assigned: true),
-                const SizedBox(height: 8),
-              ],
-            const SizedBox(height: 16),
-            const SectionHeader(
+              const SizedBox(height: 16),
+              const SectionHeader(
+                icon: Icons.hub_outlined,
+                title: 'حلقاته (يمكن إزالته منها)',
+              ),
+              const SizedBox(height: 8),
+              if (data.mine.isEmpty)
+                Text('لا حلقات', style: Theme.of(context).textTheme.bodyMedium)
+              else
+                for (final t in data.mine) ...[
+                  _teamRow(context, t, assigned: true),
+                  const SizedBox(height: 8),
+                ],
+              const SizedBox(height: 16),
+              const SectionHeader(
                 icon: Icons.add_home_work_outlined,
-                title: 'حلقات أخرى (يمكن تعيينه عليها)'),
-            const SizedBox(height: 8),
-            if (data.others.isEmpty)
-              Text('لا حلقات أخرى',
-                  style: Theme.of(context).textTheme.bodyMedium)
-            else
-              for (final t in data.others) ...[
-                _teamRow(context, t, assigned: false),
-                const SizedBox(height: 8),
-              ],
-          ],
+                title: 'حلقات أخرى (يمكن تعيينه عليها)',
+              ),
+              const SizedBox(height: 8),
+              if (data.others.isEmpty)
+                Text(
+                  'لا حلقات أخرى',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                )
+              else
+                for (final t in data.others) ...[
+                  _teamRow(context, t, assigned: false),
+                  const SizedBox(height: 8),
+                ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _teamRow(BuildContext context, AdminTeamRow t,
-      {required bool assigned}) {
+  Widget _teamRow(
+    BuildContext context,
+    AdminTeamRow t, {
+    required bool assigned,
+  }) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -137,17 +155,17 @@ class _AdminTeacherScreenState extends State<AdminTeacherScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(t.name,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyLarge
-                        ?.copyWith(fontWeight: FontWeight.w700)),
+                Text(
+                  t.name,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
                 Text(
                   '${t.typeName} · ${t.teacherName.isEmpty ? 'بلا معلم' : t.teacherName} · ${t.studentsCount} طالب',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
               ],
             ),
@@ -159,10 +177,7 @@ class _AdminTeacherScreenState extends State<AdminTeacherScreen> {
               child: const Text('إزالة'),
             )
           else
-            TextButton(
-              onPressed: () => _assign(t),
-              child: const Text('تعيين'),
-            ),
+            TextButton(onPressed: () => _assign(t), child: const Text('تعيين')),
         ],
       ),
     );
@@ -175,21 +190,25 @@ class _AdminTeacherScreenState extends State<AdminTeacherScreen> {
         builder: (context) => AlertDialog(
           title: const Text('تعيين المعلم'),
           content: Text(
-              'الحلقة عليها معلم حاليًا (${t.teacherName}). استبداله بـ ${widget.teacherName}؟'),
+            'الحلقة عليها معلم حاليًا (${t.teacherName}). استبداله بـ ${widget.teacherName}؟',
+          ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('إلغاء')),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('إلغاء'),
+            ),
             TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('استبدال')),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('استبدال'),
+            ),
           ],
         ),
       );
       if (confirm != true || !mounted) return;
     }
-    await AdminRepositoryScope.of(context)
-        .setTeamTeacher(t.id, widget.teacherName);
+    await AdminRepositoryScope.of(
+      context,
+    ).setTeamTeacher(t.id, widget.teacherName);
     if (!mounted) return;
     _reload();
   }

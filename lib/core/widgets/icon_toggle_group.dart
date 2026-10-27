@@ -41,7 +41,14 @@ class IconToggleGroup<T> extends StatelessWidget {
       children: [
         for (var i = 0; i < options.length; i++) ...[
           if (i > 0) const SizedBox(width: 6),
-          Expanded(child: _OptionChip<T>(option: options[i], selected: options[i].value == value, dense: dense, onTap: () => onChanged(options[i].value))),
+          Expanded(
+            child: _OptionChip<T>(
+              option: options[i],
+              selected: options[i].value == value,
+              dense: dense,
+              onTap: () => onChanged(options[i].value),
+            ),
+          ),
         ],
         if (options.isEmpty) const Spacer(),
         const SizedBox(width: 10),
@@ -54,13 +61,10 @@ class IconToggleGroup<T> extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.end,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(
-                    color: tokens.info,
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: tokens.info,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),

@@ -12,10 +12,7 @@ class AppConfig {
   );
 
   /// Environment name: `dev`, `staging` or `prod`.
-  static const String env = String.fromEnvironment(
-    'ENV',
-    defaultValue: 'dev',
-  );
+  static const String env = String.fromEnvironment('ENV', defaultValue: 'dev');
 
   /// Default app locale.
   static const String defaultLocale = 'ar';

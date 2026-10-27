@@ -8,9 +8,11 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/date_time_utils.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/empty_state.dart';
+import '../../../../core/widgets/responsive_scope.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../admin/domain/admin_models.dart';
 import '../../../admin/presentation/admin_shell.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// Unified session attendance: camera scan + tolerant auto-search in the same
 /// page. Tap a name = register attendance; the undo snackbar offers «تراجع»
@@ -54,9 +56,12 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
 
   Future<void> _load() async {
     final repo = AdminRepositoryScope.of(context);
-    final students = await repo.students();
-    final attendance = await repo.sessionAttendance(widget.sessionId);
-    final session = await repo.sessionRow(widget.sessionId);
+    final studentsF = repo.students();
+    final attendanceF = repo.sessionAttendance(widget.sessionId);
+    final sessionF = repo.sessionRow(widget.sessionId);
+    final students = await studentsF;
+    final attendance = await attendanceF;
+    final session = await sessionF;
     if (!mounted) return;
     setState(() {
       _students = students;
@@ -86,10 +91,12 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
     if (!mounted) return;
     setState(() => _registered = {..._registered, student.id: time});
     HapticFeedback.lightImpact();
-    _snack('سُجّل حضور ${student.name}',
-        undoable: true,
-        student: student,
-        onAdjust: () => _adjustTime(student));
+    _snack(
+      'سُجّل حضور ${student.name}',
+      undoable: true,
+      student: student,
+      onAdjust: () => _adjustTime(student),
+    );
   }
 
   Future<void> _handleCode(String code) async {
@@ -121,16 +128,19 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
 
   Future<void> _undo(AdminStudentRow student) async {
     final prev = _registered[student.id];
-    await AdminRepositoryScope.of(context)
-        .removeAttendance(widget.sessionId, student.id);
+    await AdminRepositoryScope.of(
+      context,
+    ).removeAttendance(widget.sessionId, student.id);
     if (!mounted) return;
     setState(() {
       final next = {..._registered}..remove(student.id);
       _registered = next;
     });
     HapticFeedback.selectionClick();
-    _snack('أُلغي تسجيل ${student.name}',
-        restore: () => _register(student, at: prev));
+    _snack(
+      'أُلغي تسجيل ${student.name}',
+      restore: () => _register(student, at: prev),
+    );
   }
 
   Future<void> _adjustTime(AdminStudentRow student) async {
@@ -154,8 +164,10 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
     await repo.updateAttendanceTime(widget.sessionId, student.id, newTime);
     if (!mounted) return;
     setState(() => _registered = {..._registered, student.id: newTime});
-    _snack('حُدّث زمن ${student.name} إلى ${formatTime(newTime)}',
-        restore: () => _register(student, at: current));
+    _snack(
+      'حُدّث زمن ${student.name} إلى ${formatTime(newTime)}',
+      restore: () => _register(student, at: current),
+    );
   }
 
   Future<void> _remove(AdminStudentRow student) async {
@@ -166,31 +178,36 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
         content: Text('إزالة تسجيل حضور ${student.name} من هذه الجلسة؟'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('إلغاء')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('إزالة')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('إزالة'),
+          ),
         ],
       ),
     );
     if (confirm != true || !mounted) return;
     final prev = _registered[student.id];
-    await AdminRepositoryScope.of(context)
-        .removeAttendance(widget.sessionId, student.id);
+    await AdminRepositoryScope.of(
+      context,
+    ).removeAttendance(widget.sessionId, student.id);
     if (!mounted) return;
     setState(() {
       final next = {..._registered}..remove(student.id);
       _registered = next;
     });
-    _snack('أُزيل حضور ${student.name}',
-        restore: () => _register(student, at: prev));
+    _snack(
+      'أُزيل حضور ${student.name}',
+      restore: () => _register(student, at: prev),
+    );
   }
 
   /// Long-press actions: adjust time / remove attendance.
   Future<void> _longPress(AdminStudentRow student) async {
     final registered = _registered.containsKey(student.id);
-    await showModalBottomSheet<void>(
+    await showAppSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
@@ -199,9 +216,11 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
           children: [
             ListTile(
               title: Text(student.name),
-              subtitle: Text(registered
-                  ? 'مسجّل ${formatTime(_registered[student.id]!)}'
-                  : 'غير مسجّل'),
+              subtitle: Text(
+                registered
+                    ? 'مسجّل ${formatTime(_registered[student.id]!)}'
+                    : 'غير مسجّل',
+              ),
             ),
             const Divider(height: 1),
             if (registered) ...[
@@ -214,9 +233,10 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
                 },
               ),
               ListTile(
-                leading: Icon(Icons.delete_outline,
-                    color:
-                        Theme.of(context).extension<AppTokens>()!.dangerText),
+                leading: Icon(
+                  Icons.delete_outline,
+                  color: Theme.of(context).extension<AppTokens>()!.dangerText,
+                ),
                 title: const Text('إزالة الحضور'),
                 onTap: () {
                   Navigator.of(context).pop();
@@ -238,11 +258,13 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
     );
   }
 
-  void _snack(String message,
-      {bool undoable = false,
-      AdminStudentRow? student,
-      void Function()? restore,
-      void Function()? onAdjust}) {
+  void _snack(
+    String message, {
+    bool undoable = false,
+    AdminStudentRow? student,
+    void Function()? restore,
+    void Function()? onAdjust,
+  }) {
     final actions = <({String label, VoidCallback onTap})>[
       if (undoable || restore != null)
         (
@@ -269,8 +291,12 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
       // Plain transient feedback via the snack bar.
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-            content: Text(message), duration: const Duration(seconds: 3)));
+        ..showSnackBar(
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 3),
+          ),
+        );
       return;
     }
     _showBanner(message, actions);
@@ -283,7 +309,9 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
   Timer? _bannerTimer;
 
   void _showBanner(
-      String message, List<({String label, VoidCallback onTap})> actions) {
+    String message,
+    List<({String label, VoidCallback onTap})> actions,
+  ) {
     _bannerTimer?.cancel();
     setState(() {
       _bannerMessage = message;
@@ -334,131 +362,167 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
           Icon(Icons.check_circle_outline, size: 18, color: tokens.info),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(_bannerMessage!,
-                style: const TextStyle(fontWeight: FontWeight.w700)),
+            child: Text(
+              _bannerMessage!,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
           for (final action in _bannerActions)
-            TextButton(
-              onPressed: action.onTap,
-              child: Text(action.label),
-            ),
+            TextButton(onPressed: action.onTap, child: Text(action.label)),
         ],
       ),
     );
   }
 
   Widget _body(BuildContext context, AppTokens tokens) {
-    return Column(
+    final data = ResponsiveScope.of(context);
+    final camera = _cameraPanel(tokens);
+    final list = _listPane(context, tokens);
+
+    if (data.isCompact) {
+      return Column(
         children: [
-          // Camera (compact, scan-only area).
-          SizedBox(
-            height: 190,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                MobileScanner(
-                  controller: _controller,
-                  onDetect: (capture) {
-                    final barcode = capture.barcodes.firstOrNull;
-                    final value = barcode?.rawValue;
-                    if (value != null) _handleCode(value);
-                  },
-                  errorBuilder: (context, error) => Container(
-                    color: tokens.surfaceSubtle,
-                    alignment: Alignment.center,
-                    child: Text('الكاميرا غير متاحة — استخدم البحث أدناه',
-                        style: TextStyle(color: tokens.textMuted)),
-                  ),
-                ),
-                if (_lastScan != null)
-                  Positioned(
-                    bottom: 10,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      child: Container(
-                        key: ValueKey('$_lastScan-$_lastScanOk'),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _lastScanOk
-                              ? tokens.brand
-                              : tokens.danger,
-                          borderRadius:
-                              BorderRadius.circular(tokens.radiusSmall),
-                        ),
-                        child: Text(
-                          _lastScanOk
-                              ? 'سُجّل: $_lastScan'
-                              : 'غير موجود: $_lastScan',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+          SizedBox(height: data.dense ? 150 : 190, child: camera),
+          Expanded(child: list),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(flex: 5, child: camera),
+        VerticalDivider(width: 1, thickness: 1, color: tokens.borderStructural),
+        Expanded(flex: 6, child: list),
+      ],
+    );
+  }
+
+  Widget _cameraPanel(AppTokens tokens) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        MobileScanner(
+          controller: _controller,
+          onDetect: (capture) {
+            final barcode = capture.barcodes.firstOrNull;
+            final value = barcode?.rawValue;
+            if (value != null) _handleCode(value);
+          },
+          errorBuilder: (context, error) => Container(
+            color: tokens.surfaceSubtle,
+            alignment: Alignment.center,
+            child: Text(
+              'الكاميرا غير متاحة — استخدم البحث',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: tokens.textMuted),
             ),
           ),
-          // Search (always visible — no separate manual mode).
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-            child: TextField(
-              controller: _search,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText: 'بحث: اسم / معرّف / باركود / حلقة',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _search.text.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: 'مسح',
-                        icon: const Icon(Icons.close),
-                        onPressed: () => setState(_search.clear),
-                      ),
+        ),
+        if (_lastScan != null)
+          Positioned(
+            bottom: 10,
+            left: 10,
+            right: 10,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: Container(
+                key: ValueKey('$_lastScan-$_lastScanOk'),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: _lastScanOk ? tokens.brand : tokens.danger,
+                  borderRadius: BorderRadius.circular(tokens.radiusSmall),
+                ),
+                child: Text(
+                  _lastScanOk ? 'سُجّل: $_lastScan' : 'غير موجود: $_lastScan',
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Text(
-                  '${_results.length} طالب · سُجّل ${_registered.length}',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted),
-                ),
-                const Spacer(),
-                Text(
-                  'اضغط للتسجيل · اضغط مطولًا للزمن',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted),
-                ),
-              ],
+      ],
+    );
+  }
+
+  Widget _listPane(BuildContext context, AppTokens tokens) {
+    final compact = ResponsiveScope.of(context).isCompact;
+    return Column(
+      children: [
+        // Search (always visible — no separate manual mode).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+          child: TextField(
+            controller: _search,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: 'بحث: اسم / معرّف / باركود / حلقة',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _search.text.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'مسح',
+                      icon: const Icon(Icons.close),
+                      onPressed: () => setState(_search.clear),
+                    ),
             ),
           ),
-          const SizedBox(height: 6),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _results.isEmpty
-                    ? const EmptyState(
-                        title: 'لا نتائج',
-                        icon: Icons.person_search_outlined,
-                        message: 'جرّب الاسم أو الباركود',
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                        itemCount: _results.length,
-                        itemBuilder: (context, i) =>
-                            _row(tokens, _results[i]),
-                      ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  '${_results.length} طالب · سُجّل ${_registered.length}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                ),
+              ),
+              if (!compact) ...[
+                const Spacer(),
+                Flexible(
+                  child: Text(
+                    'اضغط للتسجيل · اضغط مطولًا للزمن',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                  ),
+                ),
+              ],
+            ],
           ),
-        ],
+        ),
+        const SizedBox(height: 6),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _results.isEmpty
+              ? const EmptyState(
+                  title: 'لا نتائج',
+                  icon: Icons.person_search_outlined,
+                  message: 'جرّب الاسم أو الباركود',
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  itemCount: _results.length,
+                  itemBuilder: (context, i) => _row(tokens, _results[i]),
+                ),
+        ),
+      ],
     );
   }
 
@@ -477,8 +541,7 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundColor:
-                  registered ? tokens.brand : tokens.brandTint,
+              backgroundColor: registered ? tokens.brand : tokens.brandTint,
               child: Icon(
                 registered ? Icons.check : Icons.person,
                 size: 18,
@@ -490,30 +553,31 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(student.name,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyLarge
-                          ?.copyWith(fontWeight: FontWeight.w700)),
+                  Text(
+                    student.name,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   Text(
                     [
                       if (student.teamNames.isNotEmpty) student.teamNames,
                       student.barcode,
                     ].join(' · '),
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: tokens.textMuted),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   ),
                 ],
               ),
             ),
             if (registered) ...[
-              Text(formatTime(time),
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted)),
+              Text(
+                formatTime(time),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+              ),
               const SizedBox(width: 8),
               const StatusBadge(label: 'حاضر', color: Color(0xFF00A572)),
             ] else

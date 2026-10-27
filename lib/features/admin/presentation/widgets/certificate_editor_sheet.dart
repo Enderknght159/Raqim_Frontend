@@ -7,6 +7,7 @@ import '../../../../core/widgets/icon_toggle_group.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
 import 'student_picker_field.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// Opens the certificate editor (E2 «الشهادات» tab). Returns `true` when a
 /// certificate was added / updated / deleted so the caller reloads.
@@ -16,8 +17,9 @@ Future<bool?> showCertificateEditorSheet(
   required int certificatePoints,
   AdminCertificateRow? existing,
 }) {
-  return showModalBottomSheet<bool>(
+  return showAppSheet<bool>(
     context: context,
+    maxWidth: 640,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (context) => CertificateEditorSheet(
@@ -86,8 +88,7 @@ class _CertificateEditorSheetState extends State<CertificateEditorSheet> {
 
   int? get _to => _rangeEnd ?? _rangeStart;
 
-  int get _juzCount =>
-      _from == null || _to == null ? 0 : (_to! - _from! + 1);
+  int get _juzCount => _from == null || _to == null ? 0 : (_to! - _from! + 1);
 
   int get _previewPoints {
     final mark = int.tryParse(_mark.text) ?? 0;
@@ -179,17 +180,20 @@ class _CertificateEditorSheetState extends State<CertificateEditorSheet> {
         content: const Text('هل تريد حذف هذه الشهادة نهائيًا؟'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('إلغاء')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('حذف')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('حذف'),
+          ),
         ],
       ),
     );
     if (confirmed != true || !mounted) return;
-    await AdminRepositoryScope.of(context)
-        .deleteCertificate(widget.existing!.id);
+    await AdminRepositoryScope.of(
+      context,
+    ).deleteCertificate(widget.existing!.id);
     if (!mounted) return;
     Navigator.of(context).pop(true);
   }
@@ -208,8 +212,10 @@ class _CertificateEditorSheetState extends State<CertificateEditorSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(_isEdit ? 'تعديل شهادة' : 'شهادة قرآن جديدة',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              _isEdit ? 'تعديل شهادة' : 'شهادة قرآن جديدة',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 14),
             StudentPickerField(
               label: 'اختر الطالب',
@@ -219,11 +225,12 @@ class _CertificateEditorSheetState extends State<CertificateEditorSheet> {
             const SizedBox(height: 14),
             Row(
               children: [
-                Text('الأجزاء',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: tokens.textMuted)),
+                Text(
+                  'الأجزاء',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                ),
                 const Spacer(),
                 if (_from != null)
                   Text(
@@ -231,18 +238,18 @@ class _CertificateEditorSheetState extends State<CertificateEditorSheet> {
                         ? 'الجزء ${_from!}'
                         : 'الجزء ${_from!} – ${_to!} ($_juzCount أجزاء)',
                     style: TextStyle(
-                        color: tokens.brandText,
-                        fontWeight: FontWeight.w800),
+                      color: tokens.brandText,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
               ],
             ),
             const SizedBox(height: 4),
             Text(
               'اضغط بداية النطاق ثم نهايته (اختيار متعدد بنطاق متصل).',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
             ),
             const SizedBox(height: 8),
             GridView.count(
@@ -263,9 +270,7 @@ class _CertificateEditorSheetState extends State<CertificateEditorSheet> {
                   child: TextField(
                     controller: _mark,
                     keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                    ],
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(
                       labelText: 'الدرجة',
@@ -278,9 +283,7 @@ class _CertificateEditorSheetState extends State<CertificateEditorSheet> {
                   child: OutlinedButton.icon(
                     onPressed: _pickDate,
                     icon: const Icon(Icons.event_outlined, size: 18),
-                    label: Text(
-                      '${_date.day}/${_date.month}/${_date.year}',
-                    ),
+                    label: Text('${_date.day}/${_date.month}/${_date.year}'),
                   ),
                 ),
               ],
@@ -308,15 +311,22 @@ class _CertificateEditorSheetState extends State<CertificateEditorSheet> {
             Text(
               'النقاط المحتسبة: $_previewPoints نقطة',
               style: TextStyle(
-                  color: tokens.rewardText, fontWeight: FontWeight.w700),
+                color: tokens.rewardText,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             if (_error.isNotEmpty) ...[
               const SizedBox(height: 6),
-              Text(_error,
-                  style: TextStyle(color: tokens.dangerText, fontSize: 13)),
+              Text(
+                _error,
+                style: TextStyle(color: tokens.dangerText, fontSize: 13),
+              ),
             ],
             const SizedBox(height: 16),
-            AppButton(label: _isEdit ? 'حفظ التعديلات' : 'إضافة الشهادة', onPressed: _save),
+            AppButton(
+              label: _isEdit ? 'حفظ التعديلات' : 'إضافة الشهادة',
+              onPressed: _save,
+            ),
             if (_isEdit) ...[
               const SizedBox(height: 8),
               AppButton(

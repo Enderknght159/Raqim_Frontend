@@ -73,8 +73,10 @@ class _StudentBarcodeScanScreenState extends State<StudentBarcodeScanScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (!compact)
-          Text('الكاميرا غير متاحة — أدخل الباركود يدويًا',
-              style: TextStyle(color: tokens.textMuted)),
+          Text(
+            'الكاميرا غير متاحة — أدخل الباركود يدويًا',
+            style: TextStyle(color: tokens.textMuted),
+          ),
         TextField(
           controller: _manual,
           autofocus: compact,

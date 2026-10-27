@@ -16,6 +16,7 @@ import '../admin_shell.dart';
 import '../widgets/certificate_editor_sheet.dart';
 import '../widgets/course_editor_sheet.dart';
 import '../widgets/session_setup_sheet.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// E2 — Admin course page: overview card + 5 sections (sessions · messages &
 /// export · exams · top students · certificates).
@@ -42,14 +43,17 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
 
   Future<_Data> _load() async {
     final repo = AdminRepositoryScope.of(context);
-    final summaries = await repo.courses();
-    final summary = summaries.where((c) => c.id == widget.courseId).firstOrNull;
+    final summaryF = repo.courseSummary(widget.courseId);
+    final sessionsF = repo.courseSessions(widget.courseId);
+    final examsF = repo.courseExams(widget.courseId);
+    final leaderboardF = repo.leaderboard(widget.courseId);
+    final certificatesF = repo.courseCertificates(widget.courseId);
     return _Data(
-      summary: summary,
-      sessions: await repo.courseSessions(widget.courseId),
-      exams: await repo.courseExams(widget.courseId),
-      leaderboard: (await repo.leaderboard(widget.courseId)).entries,
-      certificates: await repo.courseCertificates(widget.courseId),
+      summary: await summaryF,
+      sessions: await sessionsF,
+      exams: await examsF,
+      leaderboard: (await leaderboardF).entries,
+      certificates: await certificatesF,
     );
   }
 
@@ -132,8 +136,11 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
           children: [
             Row(
               children: [
-                _ov(context, 'آخر جلسة',
-                    '${c.lastSessionPresent}/${c.lastSessionTotal}'),
+                _ov(
+                  context,
+                  'آخر جلسة',
+                  '${c.lastSessionPresent}/${c.lastSessionTotal}',
+                ),
                 _ov(context, 'طلاب', '${c.studentsCount}'),
                 _ov(context, 'جلسات', '${c.sessionsCount}'),
                 _ov(context, 'حضور', '${c.attendancePercent}%'),
@@ -145,18 +152,20 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
             Row(
               children: [
                 StatusBadge(
-                    label: c.isActive ? 'نشطة' : 'منتهية',
-                    color: c.isActive ? tokens.brand : tokens.textMuted),
+                  label: c.isActive ? 'نشطة' : 'منتهية',
+                  color: c.isActive ? tokens.brand : tokens.textMuted,
+                ),
                 const Spacer(),
                 Flexible(
-                  child: Text('${formatDate(c.startDate)} – ${formatDate(c.endDate)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.end,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: tokens.textMuted)),
+                  child: Text(
+                    '${formatDate(c.startDate)} – ${formatDate(c.endDate)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                  ),
                 ),
               ],
             ),
@@ -171,19 +180,24 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
     return Expanded(
       child: Column(
         children: [
-          Text(value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900, color: tokens.info)),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w900,
+              color: tokens.info,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted)),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+          ),
         ],
       ),
     );
@@ -206,7 +220,9 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
           children: [
             const Expanded(
               child: SectionHeader(
-                  icon: Icons.event_note_outlined, title: 'الجلسات'),
+                icon: Icons.event_note_outlined,
+                title: 'الجلسات',
+              ),
             ),
             if (data.sessions.isNotEmpty)
               TextButton(
@@ -221,7 +237,9 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
         const SizedBox(height: 8),
         if (data.sessions.isEmpty)
           const Padding(
-              padding: EdgeInsets.all(16), child: Center(child: Text('لا جلسات بعد')))
+            padding: EdgeInsets.all(16),
+            child: Center(child: Text('لا جلسات بعد')),
+          )
         else
           for (final s in data.sessions.reversed) ...[
             _sessionCard(context, tokens, s),
@@ -233,8 +251,9 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
             label: 'حذف المحدد (${_selectedSessions.length})',
             icon: Icons.delete_outline,
             variant: AppButtonVariant.destructive,
-            onPressed:
-                _selectedSessions.isEmpty ? null : _deleteSelectedSessions,
+            onPressed: _selectedSessions.isEmpty
+                ? null
+                : _deleteSelectedSessions,
           ),
         ],
       ],
@@ -242,7 +261,10 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
   }
 
   Widget _sessionCard(
-      BuildContext context, AppTokens tokens, AdminSessionRow s) {
+    BuildContext context,
+    AppTokens tokens,
+    AdminSessionRow s,
+  ) {
     final selected = _selectedSessions.contains(s.id);
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -274,17 +296,19 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
           Icon(Icons.event, color: tokens.brand),
           const SizedBox(width: 12),
           Expanded(
-            child: Text('جلسة #${s.index} · ${formatDate(s.date)}',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyLarge
-                    ?.copyWith(fontWeight: FontWeight.w700)),
+            child: Text(
+              'جلسة #${s.index} · ${formatDate(s.date)}',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+            ),
           ),
-          Text('حاضر ${s.present}/${s.total}',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted)),
+          Text(
+            'حاضر ${s.present}/${s.total}',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+          ),
           const SizedBox(width: 6),
           Icon(Icons.chevron_left, color: tokens.borderStructural),
         ],
@@ -339,15 +363,18 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
       builder: (context) => AlertDialog(
         title: const Text('حذف الجلسات'),
         content: Text(
-            'سيتم حذف ${ids.length} جلسة مع كل سجلاتها (حضور، حفظ، متون، '
-            'معاملات). يمكن التراجع بعد الحذف.'),
+          'سيتم حذف ${ids.length} جلسة مع كل سجلاتها (حضور، حفظ، متون، '
+          'معاملات). يمكن التراجع بعد الحذف.',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('إلغاء')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('حذف')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('حذف'),
+          ),
         ],
       ),
     );
@@ -363,17 +390,19 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
     _reload();
     messenger
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text('حُذفت ${ids.length} جلسة وسجلاتها'),
-        duration: const Duration(seconds: 8),
-        action: SnackBarAction(
-          label: 'تراجع',
-          onPressed: () async {
-            await repo.restoreSessions(snapshot);
-            _reload();
-          },
+      ..showSnackBar(
+        SnackBar(
+          content: Text('حُذفت ${ids.length} جلسة وسجلاتها'),
+          duration: const Duration(seconds: 8),
+          action: SnackBarAction(
+            label: 'تراجع',
+            onPressed: () async {
+              await repo.restoreSessions(snapshot);
+              _reload();
+            },
+          ),
         ),
-      ));
+      );
   }
 
   // ── Messages & export ───────────────────────────────────────────────────
@@ -383,7 +412,10 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const SectionHeader(icon: Icons.chat_outlined, title: 'الرسائل والتصدير'),
+        const SectionHeader(
+          icon: Icons.chat_outlined,
+          title: 'الرسائل والتصدير',
+        ),
         const SizedBox(height: 8),
         for (final item in const [
           (icon: Icons.today_outlined, label: 'رسائل اليوم'),
@@ -399,10 +431,11 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
                 Icon(item.icon, color: tokens.brandText),
                 const SizedBox(width: 12),
                 Expanded(
-                    child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  child: Text(item.label),
-                )),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Text(item.label),
+                  ),
+                ),
                 Icon(Icons.chevron_left, color: tokens.borderStructural),
               ],
             ),
@@ -415,7 +448,9 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
 
   void _serverNotice(BuildContext context, String label) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label — يتطلب ربط الخادم (مؤجّل في النسخة التجريبية)')),
+      SnackBar(
+        content: Text('$label — يتطلب ربط الخادم (مؤجّل في النسخة التجريبية)'),
+      ),
     );
   }
 
@@ -432,11 +467,16 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
           onPressed: () => _addExam(context),
         ),
         const SizedBox(height: 16),
-        const SectionHeader(icon: Icons.assignment_outlined, title: 'الامتحانات'),
+        const SectionHeader(
+          icon: Icons.assignment_outlined,
+          title: 'الامتحانات',
+        ),
         const SizedBox(height: 8),
         if (data.exams.isEmpty)
           const Padding(
-              padding: EdgeInsets.all(16), child: Center(child: Text('لا امتحانات')))
+            padding: EdgeInsets.all(16),
+            child: Center(child: Text('لا امتحانات')),
+          )
         else
           for (final e in data.exams) ...[
             AppCard(
@@ -450,16 +490,16 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(e.name,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyLarge
-                                ?.copyWith(fontWeight: FontWeight.w700)),
-                        Text(e.subtitle ?? '',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: tokens.textMuted)),
+                        Text(
+                          e.name,
+                          style: Theme.of(context).textTheme.bodyLarge
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          e.subtitle ?? '',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: tokens.textMuted),
+                        ),
                       ],
                     ),
                   ),
@@ -474,8 +514,7 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
   }
 
   Future<void> _openExam(int examId) async {
-    await context
-        .push('/admin/courses/${widget.courseId}/exams/$examId');
+    await context.push('/admin/courses/${widget.courseId}/exams/$examId');
     _reload();
   }
 
@@ -488,7 +527,7 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
     final points = TextEditingController(text: '0');
     String subjectName = subjects.isEmpty ? '' : subjects.first.name;
     var type = 'final';
-    await showModalBottomSheet<void>(
+    await showAppSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -505,8 +544,10 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('امتحان جديد',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'امتحان جديد',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 16),
                 // Subject: pick from the mosque subjects (BR-802).
                 SearchPickerField<String>(
@@ -515,17 +556,15 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
                   titleBuilder: (name) => name,
                   subtitleBuilder: null,
                   value: subjectName.isEmpty ? null : subjectName,
-                  onChanged: (name) =>
-                      setSheetState(() => subjectName = name),
+                  onChanged: (name) => setSheetState(() => subjectName = name),
                 ),
                 const SizedBox(height: 12),
-                Text('النوع',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: Theme.of(context)
-                            .extension<AppTokens>()!
-                            .textMuted)),
+                Text(
+                  'النوع',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).extension<AppTokens>()!.textMuted,
+                  ),
+                ),
                 const SizedBox(height: 6),
                 IconToggleGroup<String>(
                   value: type,
@@ -554,26 +593,31 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
                   children: [
                     Expanded(
                       child: TextField(
-                          controller: maxMark,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                              labelText: 'الدرجة القصوى')),
+                        controller: maxMark,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'الدرجة القصوى',
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: TextField(
-                          controller: minSuccess,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                              labelText: 'درجة النجاح')),
+                        controller: minSuccess,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'درجة النجاح',
+                        ),
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                    controller: points,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'النقاط')),
+                  controller: points,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'النقاط'),
+                ),
                 const SizedBox(height: 16),
                 AppButton(
                   label: 'إنشاء',
@@ -613,7 +657,9 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
         ),
         const SizedBox(height: 16),
         const SectionHeader(
-            icon: Icons.school_outlined, title: 'شهادات القرآن'),
+          icon: Icons.school_outlined,
+          title: 'شهادات القرآن',
+        ),
         const SizedBox(height: 8),
         if (data.certificates.isEmpty)
           const Padding(
@@ -630,7 +676,10 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
   }
 
   Widget _certificateTile(
-      BuildContext context, AppTokens tokens, AdminCertificateRow c) {
+    BuildContext context,
+    AppTokens tokens,
+    AdminCertificateRow c,
+  ) {
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       onTap: () => _editCertificate(c),
@@ -646,27 +695,26 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(c.studentName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyLarge
-                        ?.copyWith(fontWeight: FontWeight.w700)),
+                Text(
+                  c.studentName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
                 Text(
                   'الجزء ${c.startJuz} – ${c.endJuz} · ${formatDate(c.date)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
               ],
             ),
           ),
-          StatusBadge(
-              label: '${c.mark}/100', color: tokens.reward),
+          StatusBadge(label: '${c.mark}/100', color: tokens.reward),
           const SizedBox(width: 6),
           StatusBadge(
             label: c.byHeart ? 'بالغيب' : 'عن ظهر قلب',
@@ -716,10 +764,9 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
               'ترتيب طلاب الدورة حسب المحصلة — اضغط أي طالب لفتح ملفه',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
             ),
           );
         }
@@ -763,28 +810,38 @@ class _LeaderboardRow extends StatelessWidget {
           children: [
             SizedBox(
               width: 26,
-              child: Text('${entry.rank}',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      color: top ? tokens.rewardText : tokens.textMuted)),
+              child: Text(
+                '${entry.rank}',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: top ? tokens.rewardText : tokens.textMuted,
+                ),
+              ),
             ),
             CircleAvatar(
               radius: 16,
-              backgroundColor: top ? tokens.reward.withValues(alpha: 0.2) : tokens.brandTint,
+              backgroundColor: top
+                  ? tokens.reward.withValues(alpha: 0.2)
+                  : tokens.brandTint,
               child: Icon(icon, size: 16, color: color),
             ),
             const SizedBox(width: 10),
             Expanded(child: Text(entry.student.name)),
-            Text('${entry.points}',
-                style: TextStyle(
-                    fontWeight: FontWeight.w900, color: tokens.rewardText)),
+            Text(
+              '${entry.points}',
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                color: tokens.rewardText,
+              ),
+            ),
             const SizedBox(width: 4),
-            Text('نقطة',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: tokens.textMuted)),
+            Text(
+              'نقطة',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+            ),
           ],
         ),
       ),

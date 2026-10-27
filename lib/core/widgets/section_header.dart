@@ -31,9 +31,9 @@ class SectionHeader extends StatelessWidget {
           child: Text(
             title,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: tokens.textPrimary,
-                  fontWeight: FontWeight.w800,
-                ),
+              color: tokens.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
         ?trailing,

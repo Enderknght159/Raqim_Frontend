@@ -26,18 +26,18 @@ class AdminCourseSummary {
     required this.name,
     required this.startDate,
     required this.endDate,
-      required this.isActive,
-      required this.sessionsCount,
-      required this.studentsCount,
-      required this.lastSessionPresent,
-      required this.lastSessionTotal,
-      required this.attendancePercent,
-      required this.series,
-      this.goodPoints = 1,
-      this.veryGoodPoints = 2,
-      this.excellentPoints = 3,
-      this.certificatePoints = 10,
-    });
+    required this.isActive,
+    required this.sessionsCount,
+    required this.studentsCount,
+    required this.lastSessionPresent,
+    required this.lastSessionTotal,
+    required this.attendancePercent,
+    required this.series,
+    this.goodPoints = 1,
+    this.veryGoodPoints = 2,
+    this.excellentPoints = 3,
+    this.certificatePoints = 10,
+  });
 
   final int id;
   final String name;
@@ -281,10 +281,7 @@ class AdminNotification {
   /// Id of the first (most recent) underlying record — used to revert it.
   final int? recordId;
 
-  AdminNotification copyWith({
-    String? firstName,
-    int? extraCount,
-  }) =>
+  AdminNotification copyWith({String? firstName, int? extraCount}) =>
       AdminNotification(
         id: id,
         kind: kind,
@@ -298,11 +295,11 @@ class AdminNotification {
 
 /// Kind label + icon for an aggregated admin notification.
 String adminNotificationKindLabel(String model) => switch (model) {
-      'Attendance' => 'تسجيل حضور',
-      'Memorization' => 'تسجيل حفظ',
-      'Transaction' => 'معاملة نقاط',
-      _ => model,
-    };
+  'Attendance' => 'تسجيل حضور',
+  'Memorization' => 'تسجيل حفظ',
+  'Transaction' => 'معاملة نقاط',
+  _ => model,
+};
 
 /// One Quran certificate row (admin lists + student profile).
 class AdminCertificateRow {
@@ -416,4 +413,48 @@ class AdminStudentProfile {
 
   /// Full matn recitation records — newest first.
   final List<AdminMatnRecitation> matnRecitationLog;
+}
+
+/// Mosque identity returned by `GET /mosque` (E17).
+class MosqueInfo {
+  const MosqueInfo({
+    required this.id,
+    required this.name,
+    required this.code,
+    this.logoUrl,
+    this.primaryColor,
+    this.status,
+    this.deletionMessage,
+    this.contactEmail,
+    this.contactPhone,
+    this.city,
+  });
+
+  final int id;
+  final String name;
+  final String code;
+  final String? logoUrl;
+  final String? primaryColor;
+  final String? status;
+  final String? deletionMessage;
+  final String? contactEmail;
+  final String? contactPhone;
+  final String? city;
+}
+
+/// `GET /mosque/deletion-state` (E17).
+class MosqueDeletionState {
+  const MosqueDeletionState({
+    required this.status,
+    this.deletionScheduledAt,
+    this.deletionMessage,
+    this.exportDownloadToken,
+  });
+
+  final String status;
+  final DateTime? deletionScheduledAt;
+  final String? deletionMessage;
+  final String? exportDownloadToken;
+
+  bool get isDeleting => status == 'pendingDeletion' || status == 'pending';
 }

@@ -8,8 +8,8 @@ import 'auth_state.dart';
 
 class AuthCubit extends Cubit<AuthState> {
   AuthCubit(this._repository, {VoidCallback? onAuthChanged})
-      : _onAuthChanged = onAuthChanged,
-        super(const AuthRestoring());
+    : _onAuthChanged = onAuthChanged,
+      super(const AuthRestoring());
 
   static final _log = AppLogger.forTag('Auth');
 
@@ -56,13 +56,43 @@ class AuthCubit extends Cubit<AuthState> {
       emit(AuthLoginFailure(e));
     } catch (e) {
       _log.error('Login failed unexpectedly', error: e);
-      emit(AuthLoginFailure(ApiException(
-        code: 'UNEXPECTED',
-        messageAr: 'حدث خطأ غير متوقع، حاول مرة أخرى',
-        messageEn: 'An unexpected error occurred, please try again',
-      )));
+      emit(
+        AuthLoginFailure(
+          ApiException(
+            code: 'UNEXPECTED',
+            messageAr: 'حدث خطأ غير متوقع، حاول مرة أخرى',
+            messageEn: 'An unexpected error occurred, please try again',
+          ),
+        ),
+      );
     }
     _notify();
+  }
+
+  Future<void> updateProfile({
+    String? name,
+    String? email,
+    String? phone,
+  }) async {
+    final profile = await _repository.updateMe(
+      name: name,
+      email: email,
+      phone: phone,
+    );
+    emit(AuthAuthenticated(profile));
+    _notify();
+  }
+
+  Future<void> changePassword({
+    required String oldPassword,
+    required String newPassword,
+    required String newPasswordConfirmation,
+  }) {
+    return _repository.changePassword(
+      oldPassword: oldPassword,
+      newPassword: newPassword,
+      newPasswordConfirmation: newPasswordConfirmation,
+    );
   }
 
   Future<void> logout() async {

@@ -4,6 +4,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../domain/quran_units.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// Reusable memorization-page picker (BR-501..513): a paged 604-page map
 /// (one view per juz — lazy PageView, only nearby views are built) where
@@ -28,15 +29,15 @@ class QuranUnitPicker extends StatefulWidget {
 class _QuranUnitPickerState extends State<QuranUnitPicker> {
   String get _summary {
     if (widget.selected.isEmpty) return 'لم تُحدد صفحات';
-    final pages = widget.selected.map((u) => u.page).toSet().toList()
-      ..sort();
+    final pages = widget.selected.map((u) => u.page).toSet().toList()..sort();
     final names = pages.take(3).map((p) => 'ص$p').join(' · ');
     return '${widget.selected.length} وحدة ($names${pages.length > 3 ? ' …' : ''})';
   }
 
   Future<void> _open() async {
-    final result = await showModalBottomSheet<List<QuranUnit>>(
+    final result = await showAppSheet<List<QuranUnit>>(
       context: context,
+      maxWidth: 720,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (context) => _QuranUnitPickerSheet(initial: widget.selected),
@@ -60,20 +61,24 @@ class _QuranUnitPickerState extends State<QuranUnitPicker> {
         ),
         child: Row(
           children: [
-            Icon(Icons.auto_stories_outlined, size: 20, color: tokens.brandText),
+            Icon(
+              Icons.auto_stories_outlined,
+              size: 20,
+              color: tokens.brandText,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 _summary,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: widget.selected.isEmpty
-                          ? tokens.textMuted
-                          : tokens.textPrimary,
-                      fontWeight: widget.selected.isEmpty
-                          ? FontWeight.w400
-                          : FontWeight.w700,
-                    ),
+                  color: widget.selected.isEmpty
+                      ? tokens.textMuted
+                      : tokens.textPrimary,
+                  fontWeight: widget.selected.isEmpty
+                      ? FontWeight.w400
+                      : FontWeight.w700,
+                ),
               ),
             ),
             Icon(Icons.grid_view_outlined, size: 18, color: tokens.textMuted),
@@ -100,20 +105,22 @@ class _QuranUnitPickerSheetState extends State<_QuranUnitPickerSheet> {
   late Set<String> _keys = {
     for (final u in widget.initial) '${u.page}:${u.partIndex}',
   };
-  late final PageController _pages =
-      PageController(initialPage: _initialView());
+  late final PageController _pages = PageController(
+    initialPage: _initialView(),
+  );
   late int _currentView = _initialView();
 
   int _initialView() {
     if (widget.initial.isEmpty) return 0;
-    final page = widget.initial.map((u) => u.page).reduce((a, b) => a < b ? a : b);
+    final page = widget.initial
+        .map((u) => u.page)
+        .reduce((a, b) => a < b ? a : b);
     return _viewOfPage(page);
   }
 
   static int _viewOfPage(int page) => juzOfPage(page) - 1;
 
-  static (int first, int last) _viewRange(int view) =>
-      juzPageRange(view + 1);
+  static (int first, int last) _viewRange(int view) => juzPageRange(view + 1);
 
   @override
   void dispose() {
@@ -131,9 +138,9 @@ class _QuranUnitPickerSheetState extends State<_QuranUnitPickerSheet> {
         units.every((u) => _keys.contains('${u.page}:${u.partIndex}'));
   }
 
-  int _pageSelectedCount(int page) => quranUnitsOfPage(page)
-      .where((u) => _keys.contains('${u.page}:${u.partIndex}'))
-      .length;
+  int _pageSelectedCount(int page) => quranUnitsOfPage(
+    page,
+  ).where((u) => _keys.contains('${u.page}:${u.partIndex}')).length;
 
   void _togglePage(int page) {
     final units = quranUnitsOfPage(page);
@@ -152,14 +159,11 @@ class _QuranUnitPickerSheetState extends State<_QuranUnitPickerSheet> {
 
   Future<void> _openUnits(int page) async {
     final units = quranUnitsOfPage(page);
-    final result = await showModalBottomSheet<Set<String>>(
+    final result = await showAppSheet<Set<String>>(
       context: context,
       showDragHandle: true,
-      builder: (context) => _UnitChecklist(
-        page: page,
-        units: units,
-        selectedKeys: _keys,
-      ),
+      builder: (context) =>
+          _UnitChecklist(page: page, units: units, selectedKeys: _keys),
     );
     if (result != null && mounted) {
       setState(() {
@@ -189,8 +193,10 @@ class _QuranUnitPickerSheetState extends State<_QuranUnitPickerSheet> {
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
             child: Row(
               children: [
-                Text('خريطة الحفظ',
-                    style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  'خريطة الحفظ',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const SizedBox(width: 8),
                 StatusBadge(
                   label: '$count وحدة',
@@ -225,8 +231,9 @@ class _QuranUnitPickerSheetState extends State<_QuranUnitPickerSheet> {
                       color: isSelected ? tokens.brand : tokens.surfaceCard,
                       borderRadius: BorderRadius.circular(tokens.radiusSmall),
                       border: Border.all(
-                        color:
-                            isSelected ? tokens.brand : tokens.borderStructural,
+                        color: isSelected
+                            ? tokens.brand
+                            : tokens.borderStructural,
                         width: isSelected ? 2 : 1,
                       ),
                     ),
@@ -380,21 +387,32 @@ class _ViewGrid extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: tokens.info,
-                  )),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: tokens.info,
+            ),
+          ),
           const SizedBox(height: 8),
           Expanded(
-            child: GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-              ),
-              itemCount: count,
-              itemBuilder: (context, i) => cellBuilder(context, first + i),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final columns = constraints.maxWidth >= 900
+                    ? 10
+                    : constraints.maxWidth >= 550
+                    ? 7
+                    : 5;
+                return GridView.builder(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: columns,
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                  ),
+                  itemCount: count,
+                  itemBuilder: (context, i) => cellBuilder(context, first + i),
+                );
+              },
             ),
           ),
         ],
@@ -439,15 +457,16 @@ class _UnitChecklistState extends State<_UnitChecklist> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('صفحة ${widget.page} — ${widget.units.length} وحدات',
-              style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'صفحة ${widget.page} — ${widget.units.length} وحدات',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 4),
           Text(
             'هذه الصفحة تضم أكثر من سورة (BR-502). اختر الوحدات المطلوبة.',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: tokens.textMuted),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
           const SizedBox(height: 8),
           CheckboxListTile(

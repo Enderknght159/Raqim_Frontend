@@ -52,9 +52,9 @@ class _StudentWelcomeTitleState extends State<StudentWelcomeTitle> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: tokens.textPrimary,
-                    ),
+                  fontWeight: FontWeight.w800,
+                  color: tokens.textPrimary,
+                ),
               ),
             ),
           ],

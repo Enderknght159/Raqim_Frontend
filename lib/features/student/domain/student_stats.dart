@@ -28,8 +28,7 @@ class PointsBreakdown {
   final int incomeExpense;
 
   /// Calculated (non-transaction) points.
-  int get calculated =>
-      memorization + attendance + exams + certificates + matn;
+  int get calculated => memorization + attendance + exams + certificates + matn;
 
   /// محصلة — ranking/evaluation balance (BR-304).
   int get total => calculated + reward - penalty + incomeExpense;
@@ -118,9 +117,7 @@ PointsBreakdown computePoints({
   }
 
   // ── Attendance ──
-  final attendanceBySession = {
-    for (final a in attendance) a.sessionId: a,
-  };
+  final attendanceBySession = {for (final a in attendance) a.sessionId: a};
   var attendancePoints = 0;
   for (final s in sessions) {
     final a = attendanceBySession[s.id];
@@ -314,17 +311,17 @@ class StudentCourseBundle {
   final List<StudentTransaction> transactions;
 
   PointsBreakdown get breakdown => computePoints(
-        course: course,
-        sessions: sessions,
-        attendance: attendance,
-        memorizations: memorizations,
-        exams: exams,
-        examSubmissions: examSubmissions,
-        certificates: certificates,
-        matns: matns,
-        matnRecitations: matnRecitations,
-        transactions: transactions,
-      );
+    course: course,
+    sessions: sessions,
+    attendance: attendance,
+    memorizations: memorizations,
+    exams: exams,
+    examSubmissions: examSubmissions,
+    certificates: certificates,
+    matns: matns,
+    matnRecitations: matnRecitations,
+    transactions: transactions,
+  );
 
   AttendanceSummary get attendanceSummary =>
       computeAttendanceSummary(sessions: sessions, attendance: attendance);
@@ -338,9 +335,8 @@ class StudentCourseBundle {
     if (ordered.isEmpty) return const [];
 
     final attBySession = {for (final a in attendance) a.sessionId: a};
-    final courseLevel = breakdown.certificates +
-        breakdown.exams +
-        breakdown.matn;
+    final courseLevel =
+        breakdown.certificates + breakdown.exams + breakdown.matn;
 
     final perSessionPoints = <int, int>{};
     for (final s in ordered) {
@@ -377,10 +373,10 @@ class StudentCourseBundle {
     var running = 0;
     for (var i = 0; i < ordered.length; i++) {
       running += perSessionPoints[ordered[i].id] ?? 0;
-      series.add((running + (i == ordered.length - 1 ? courseLevel : 0))
-          .toDouble());
+      series.add(
+        (running + (i == ordered.length - 1 ? courseLevel : 0)).toDouble(),
+      );
     }
     return series;
   }
 }
-

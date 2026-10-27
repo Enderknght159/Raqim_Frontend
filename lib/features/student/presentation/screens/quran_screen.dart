@@ -6,7 +6,7 @@ import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/progress_bar.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
-import '../../data/student_local_repository.dart';
+import '../../data/student_repository.dart';
 import '../../domain/models/student_models.dart';
 import '../../domain/quran_units.dart';
 import '../../domain/student_stats.dart';
@@ -34,10 +34,13 @@ class _QuranScreenState extends State<QuranScreen> {
     _future ??= _load(StudentRepositoryScope.of(context));
   }
 
-  Future<_QuranData> _load(StudentLocalRepository repo) async {
-    final mems = await repo.allMemorizations();
-    final stats = await repo.quranStats();
-    final certs = await repo.certificates();
+  Future<_QuranData> _load(StudentRepository repo) async {
+    final memsF = repo.allMemorizations();
+    final statsF = repo.quranStats();
+    final certsF = repo.certificates();
+    final mems = await memsF;
+    final stats = await statsF;
+    final certs = await certsF;
     return _QuranData(
       stats: stats,
       memorizations: mems,
@@ -112,13 +115,12 @@ class _QuranBody extends StatelessWidget {
         const SizedBox(height: 14),
         const SectionHeader(icon: Icons.map_outlined, title: 'خريطة الحفظ'),
         const SizedBox(height: 8),
-        QuranMap(
-          memorizations: data.memorizations,
-          testedJuz: data.testedJuz,
-        ),
+        QuranMap(memorizations: data.memorizations, testedJuz: data.testedJuz),
         const SizedBox(height: 16),
         const SectionHeader(
-            icon: Icons.emoji_events_outlined, title: 'شهادات القرآن'),
+          icon: Icons.emoji_events_outlined,
+          title: 'شهادات القرآن',
+        ),
         const SizedBox(height: 10),
         _certificatesCard(context, tokens),
         const SizedBox(height: 16),
@@ -159,19 +161,18 @@ class _QuranBody extends StatelessWidget {
                       'نسبة إتمام الحفظ للقرآن كاملًا',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   const Spacer(),
                   Text(
                     '${stats.percent}%',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          color: tokens.brandText,
-                        ),
+                      fontWeight: FontWeight.w900,
+                      color: tokens.brandText,
+                    ),
                   ),
                 ],
               ),
@@ -184,10 +185,9 @@ class _QuranBody extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 '${stats.pagesMemorized} من 604 صفحة',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: tokens.textMuted),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
               ),
             ],
           ),
@@ -207,10 +207,9 @@ class _QuranBody extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             'الختم المتوقع',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: tokens.textMuted),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
           const SizedBox(height: 2),
           Text(
@@ -218,9 +217,9 @@ class _QuranBody extends StatelessWidget {
                 ? '—'
                 : _fmt(stats.expectedCompletion!),
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: tokens.info,
-                  fontWeight: FontWeight.w900,
-                ),
+              color: tokens.info,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ],
       ),
@@ -236,10 +235,9 @@ class _QuranBody extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             'معدل الحفظ',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: tokens.textMuted),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
           const SizedBox(height: 2),
           Row(
@@ -248,9 +246,9 @@ class _QuranBody extends StatelessWidget {
               Text(
                 '${stats.monthlyRate}',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: tokens.textPrimary,
-                      fontWeight: FontWeight.w900,
-                    ),
+                  color: tokens.textPrimary,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
               const SizedBox(width: 4),
               Flexible(
@@ -260,9 +258,9 @@ class _QuranBody extends StatelessWidget {
                     'صفحة/شهر',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: tokens.textMuted,
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   ),
                 ),
               ),
@@ -294,8 +292,10 @@ class _QuranBody extends StatelessWidget {
           if (certs.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text('لا شهادات بعد — ركز على الاختبار القادم',
-                  style: Theme.of(context).textTheme.bodyMedium),
+              child: Text(
+                'لا شهادات بعد — ركز على الاختبار القادم',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             )
           else
             // Preview: the 3 latest — «عرض الكل» opens the full list.
@@ -310,16 +310,16 @@ class _QuranBody extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('الجزء ${c.startJuz} – ${c.endJuz}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyLarge
-                                  ?.copyWith(fontWeight: FontWeight.w700)),
-                          Text('الدرجة: ${c.mark}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(color: tokens.textMuted)),
+                          Text(
+                            'الجزء ${c.startJuz} – ${c.endJuz}',
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          Text(
+                            'الدرجة: ${c.mark}',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: tokens.textMuted),
+                          ),
                         ],
                       ),
                     ),
@@ -334,17 +334,18 @@ class _QuranBody extends StatelessWidget {
             Center(
               child: TextButton(
                 onPressed: () => showCertificatesSheet(context, entries),
-                child: Text('عرض الكل (${certs.length})',
-                    style: TextStyle(color: tokens.brandText)),
+                child: Text(
+                  'عرض الكل (${certs.length})',
+                  style: TextStyle(color: tokens.brandText),
+                ),
               ),
             ),
           const SizedBox(height: 4),
           Text(
             'الأجزاء المختبرة: ${data.testedJuz.length} من 30',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: tokens.textMuted),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
         ],
       ),
@@ -356,28 +357,30 @@ class _QuranBody extends StatelessWidget {
   Widget _tasmiPreview(BuildContext context, AppTokens tokens) {
     final mems = data.memorizations;
     final rows = mems
-        .map((m) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              child: Row(
-                children: [
-                  Text('صفحة ${m.page}',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w700)),
-                  const Spacer(),
-                  Text(
-                    quranDisplaySurah(m.page, m.partIndex, m.surah),
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: tokens.textMuted),
-                  ),
-                  const SizedBox(width: 8),
-                  RatingStars(rating: m.rating),
-                ],
-              ),
-            ))
+        .map(
+          (m) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(
+              children: [
+                Text(
+                  'صفحة ${m.page}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const Spacer(),
+                Text(
+                  quranDisplaySurah(m.page, m.partIndex, m.surah),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                ),
+                const SizedBox(width: 8),
+                RatingStars(rating: m.rating),
+              ],
+            ),
+          ),
+        )
         .toList();
     return AppCard(
       child: Column(
@@ -386,8 +389,10 @@ class _QuranBody extends StatelessWidget {
           if (rows.length > 3)
             TextButton(
               onPressed: () => showTasmiLogSheet(context, mems),
-              child: Text('عرض المزيد (${rows.length})',
-                  style: TextStyle(color: tokens.brandText)),
+              child: Text(
+                'عرض المزيد (${rows.length})',
+                style: TextStyle(color: tokens.brandText),
+              ),
             ),
         ],
       ),

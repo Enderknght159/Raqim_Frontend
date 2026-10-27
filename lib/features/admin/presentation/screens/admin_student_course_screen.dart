@@ -36,8 +36,10 @@ class _AdminStudentCourseScreenState extends State<AdminStudentCourseScreen> {
 
   Future<_Data> _load() async {
     final repo = AdminRepositoryScope.of(context);
-    final bundle =
-        await repo.studentCourseBundle(widget.courseId, widget.studentId);
+    final bundle = await repo.studentCourseBundle(
+      widget.courseId,
+      widget.studentId,
+    );
     final leaderboard = (await repo.leaderboard(widget.courseId)).entries;
     return _Data(bundle: bundle, leaderboard: leaderboard);
   }
@@ -52,7 +54,8 @@ class _AdminStudentCourseScreenState extends State<AdminStudentCourseScreen> {
           bundle: data.bundle,
           leaderboard: data.leaderboard,
           onPointsTap: () => context.push(
-              '/admin/students/${widget.studentId}/courses/${widget.courseId}/points'),
+            '/admin/students/${widget.studentId}/courses/${widget.courseId}/points',
+          ),
         ),
       ),
     );

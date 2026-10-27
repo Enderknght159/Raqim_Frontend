@@ -186,10 +186,16 @@ class AppTokens extends ThemeExtension<AppTokens> {
       textPrimary: Color.lerp(textPrimary, other.textPrimary, t)!,
       textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
       textMuted: Color.lerp(textMuted, other.textMuted, t)!,
-      borderStructural:
-          Color.lerp(borderStructural, other.borderStructural, t)!,
-      borderInteractive:
-          Color.lerp(borderInteractive, other.borderInteractive, t)!,
+      borderStructural: Color.lerp(
+        borderStructural,
+        other.borderStructural,
+        t,
+      )!,
+      borderInteractive: Color.lerp(
+        borderInteractive,
+        other.borderInteractive,
+        t,
+      )!,
       radiusSmall: lerpDouble(radiusSmall, other.radiusSmall, t)!,
       radiusMedium: lerpDouble(radiusMedium, other.radiusMedium, t)!,
       radiusLarge: lerpDouble(radiusLarge, other.radiusLarge, t)!,
@@ -208,17 +214,18 @@ class AppTheme {
   static ThemeData dark() => light();
 
   static ThemeData _build(Brightness brightness, AppTokens tokens) {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: tokens.brand,
-      brightness: brightness,
-    ).copyWith(
-      primary: tokens.brand,
-      onPrimary: Colors.white,
-      secondary: tokens.info,
-      surface: tokens.surfacePage,
-      onSurface: tokens.textPrimary,
-      error: tokens.danger,
-    );
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: tokens.brand,
+          brightness: brightness,
+        ).copyWith(
+          primary: tokens.brand,
+          onPrimary: Colors.white,
+          secondary: tokens.info,
+          surface: tokens.surfacePage,
+          onSurface: tokens.textPrimary,
+          error: tokens.danger,
+        );
 
     final base = ThemeData(
       brightness: brightness,
@@ -297,15 +304,42 @@ class AppTheme {
       bodySmall: base.bodySmall?.copyWith(fontSize: 13, height: 1.5),
       bodyMedium: base.bodyMedium?.copyWith(fontSize: 15, height: 1.6),
       bodyLarge: base.bodyLarge?.copyWith(fontSize: 15, height: 1.6),
-      labelLarge: base.labelLarge?.copyWith(fontSize: 15, fontWeight: FontWeight.w700),
-      titleSmall: base.titleSmall?.copyWith(fontSize: 15, fontWeight: FontWeight.w700),
-      titleMedium: base.titleMedium?.copyWith(fontSize: 19, fontWeight: FontWeight.w700),
-      titleLarge: base.titleLarge?.copyWith(fontSize: 19, fontWeight: FontWeight.w800),
-      headlineSmall: base.headlineSmall?.copyWith(fontSize: 24, fontWeight: FontWeight.w800),
-      headlineMedium: base.headlineMedium?.copyWith(fontSize: 32, fontWeight: FontWeight.w800),
-      headlineLarge: base.headlineLarge?.copyWith(fontSize: 32, fontWeight: FontWeight.w900),
-      displayMedium: base.displayMedium?.copyWith(fontSize: 48, fontWeight: FontWeight.w900),
-      displayLarge: base.displayLarge?.copyWith(fontSize: 64, fontWeight: FontWeight.w900),
+      labelLarge: base.labelLarge?.copyWith(
+        fontSize: 15,
+        fontWeight: FontWeight.w700,
+      ),
+      titleSmall: base.titleSmall?.copyWith(
+        fontSize: 15,
+        fontWeight: FontWeight.w700,
+      ),
+      titleMedium: base.titleMedium?.copyWith(
+        fontSize: 19,
+        fontWeight: FontWeight.w700,
+      ),
+      titleLarge: base.titleLarge?.copyWith(
+        fontSize: 19,
+        fontWeight: FontWeight.w800,
+      ),
+      headlineSmall: base.headlineSmall?.copyWith(
+        fontSize: 24,
+        fontWeight: FontWeight.w800,
+      ),
+      headlineMedium: base.headlineMedium?.copyWith(
+        fontSize: 32,
+        fontWeight: FontWeight.w800,
+      ),
+      headlineLarge: base.headlineLarge?.copyWith(
+        fontSize: 32,
+        fontWeight: FontWeight.w900,
+      ),
+      displayMedium: base.displayMedium?.copyWith(
+        fontSize: 48,
+        fontWeight: FontWeight.w900,
+      ),
+      displayLarge: base.displayLarge?.copyWith(
+        fontSize: 64,
+        fontWeight: FontWeight.w900,
+      ),
     );
   }
 }

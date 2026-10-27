@@ -15,8 +15,11 @@ enum TransactionType {
   final String value;
   final String arabic;
 
-  static TransactionType fromValue(String? value) => TransactionType.values
-      .firstWhere((t) => t.value == value, orElse: () => TransactionType.reward);
+  static TransactionType fromValue(String? value) =>
+      TransactionType.values.firstWhere(
+        (t) => t.value == value,
+        orElse: () => TransactionType.reward,
+      );
 }
 
 enum ExamType {
@@ -29,8 +32,10 @@ enum ExamType {
   final String value;
   final String arabic;
 
-  static ExamType fromValue(String? value) => ExamType.values
-      .firstWhere((e) => e.value == value, orElse: () => ExamType.oral);
+  static ExamType fromValue(String? value) => ExamType.values.firstWhere(
+    (e) => e.value == value,
+    orElse: () => ExamType.oral,
+  );
 }
 
 class Course {
@@ -57,10 +62,10 @@ class Course {
   bool get isActive => !DateTime.now().isAfter(endDate);
 
   int memorizationPointsForRating(int rating) => switch (rating) {
-        3 => excellentPoints,
-        2 => veryGoodPoints,
-        _ => goodPoints,
-      };
+    3 => excellentPoints,
+    2 => veryGoodPoints,
+    _ => goodPoints,
+  };
 }
 
 class Session {
@@ -97,11 +102,11 @@ class Session {
   }
 
   int pointsFor(AttendanceCategory category) => switch (category) {
-        AttendanceCategory.early => earlyPoints,
-        AttendanceCategory.onTime => midPoints,
-        AttendanceCategory.late => latePoints,
-        AttendanceCategory.absent => 0,
-      };
+    AttendanceCategory.early => earlyPoints,
+    AttendanceCategory.onTime => midPoints,
+    AttendanceCategory.late => latePoints,
+    AttendanceCategory.absent => 0,
+  };
 
   static int _minutes(DateTime d) => d.hour * 60 + d.minute;
 
@@ -116,10 +121,7 @@ class Session {
 }
 
 class AttendanceRecord {
-  const AttendanceRecord({
-    required this.sessionId,
-    required this.arrivalTime,
-  });
+  const AttendanceRecord({required this.sessionId, required this.arrivalTime});
 
   final int sessionId;
   final DateTime? arrivalTime;
@@ -133,11 +135,11 @@ class Phone {
   final String type; // parent | student | landline
 
   String get typeLabel => switch (type) {
-        'parent' => 'ولي الأمر',
-        'student' => 'الطالب',
-        'landline' => 'هاتف أرضي',
-        _ => type,
-      };
+    'parent' => 'ولي الأمر',
+    'student' => 'الطالب',
+    'landline' => 'هاتف أرضي',
+    _ => type,
+  };
 }
 
 class Team {
@@ -155,11 +157,7 @@ class Team {
 }
 
 class StudentBrief {
-  const StudentBrief({
-    required this.id,
-    required this.name,
-    this.yearOfBirth,
-  });
+  const StudentBrief({required this.id, required this.name, this.yearOfBirth});
 
   final int id;
   final String name;

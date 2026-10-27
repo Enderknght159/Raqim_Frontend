@@ -28,6 +28,12 @@ enum AppSection {
   teams('teams'),
   profile('profile'),
 
+  // Backend section names (`/me.sections`).
+  student('student'),
+  teacher('teacher'),
+  supervisor('supervisor'),
+  parent('parent'),
+
   // Supervisor / teacher sections.
   myProgress('my_progress'),
   courses('courses'),

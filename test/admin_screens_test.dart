@@ -77,8 +77,9 @@ void main() {
     expect(find.text('الحلقات والمعلمون'), findsOneWidget);
   });
 
-  testWidgets('Admin students list search finds a student by name',
-      (tester) async {
+  testWidgets('Admin students list search finds a student by name', (
+    tester,
+  ) async {
     final repos = await _repos();
     await tester.pumpWidget(_wrap(repos, const AdminStudentsScreen()));
     await tester.pumpAndSettle();
@@ -87,8 +88,9 @@ void main() {
     expect(find.textContaining('عبد الرحمن'), findsWidgets);
   });
 
-  testWidgets('Admin students list search finds a student by barcode',
-      (tester) async {
+  testWidgets('Admin students list search finds a student by barcode', (
+    tester,
+  ) async {
     final repos = await _repos();
     await tester.pumpWidget(_wrap(repos, const AdminStudentsScreen()));
     await tester.pumpAndSettle();
@@ -99,29 +101,36 @@ void main() {
 
   testWidgets('Admin student profile (E7) renders overview', (tester) async {
     final repos = await _repos();
-    await tester
-        .pumpWidget(_wrap(repos, const AdminStudentProfileScreen(studentId: 1)));
+    await tester.pumpWidget(
+      _wrap(repos, const AdminStudentProfileScreen(studentId: 1)),
+    );
     await tester.pumpAndSettle();
     expect(find.text('نظرة عامة'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('سجلات الدورات'), 300,
-        scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.text('سجلات الدورات'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('سجلات الدورات'), findsOneWidget);
   });
 
   testWidgets('Admin course detail (E2) renders tabs', (tester) async {
     final repos = await _repos();
-    await tester
-        .pumpWidget(_wrap(repos, const AdminCourseDetailScreen(courseId: 1)));
+    await tester.pumpWidget(
+      _wrap(repos, const AdminCourseDetailScreen(courseId: 1)),
+    );
     await tester.pumpAndSettle();
     expect(find.text('الجلسات'), findsWidgets);
     expect(find.text('الطلاب الأوائل'), findsOneWidget);
   });
 
-  testWidgets('Admin session (E3) renders attendance + scan button',
-      (tester) async {
+  testWidgets('Admin session (E3) renders attendance + scan button', (
+    tester,
+  ) async {
     final repos = await _repos();
-    await tester
-        .pumpWidget(_wrap(repos, const AdminSessionScreen(sessionId: 100)));
+    await tester.pumpWidget(
+      _wrap(repos, const AdminSessionScreen(sessionId: 100)),
+    );
     await tester.pumpAndSettle();
     expect(find.text('الحضور اللحظي'), findsOneWidget);
     expect(find.text('تسجيل الحضور (مسح + يدوي)'), findsOneWidget);
@@ -134,8 +143,9 @@ void main() {
     expect(find.text('الحلقات والمعلمون'), findsOneWidget);
   });
 
-  testWidgets('E8: add-team picks the teacher from the mosque teachers',
-      (tester) async {
+  testWidgets('E8: add-team picks the teacher from the mosque teachers', (
+    tester,
+  ) async {
     final repos = await _repos();
     await tester.pumpWidget(_wrap(repos, const AdminTeamsScreen()));
     await tester.pumpAndSettle();
@@ -151,10 +161,12 @@ void main() {
     expect(find.text('بلا معلم'), findsOneWidget);
     expect(find.text('أ. محمود عبد الله'), findsWidgets);
 
-    await tester.tap(find.descendant(
-      of: find.byType(DraggableScrollableSheet),
-      matching: find.text('أ. محمود عبد الله'),
-    ));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(DraggableScrollableSheet),
+        matching: find.text('أ. محمود عبد الله'),
+      ),
+    );
     await tester.pumpAndSettle();
     // The picked teacher is shown on the field (2: field + teacher tile).
     expect(find.text('أ. محمود عبد الله'), findsWidgets);
@@ -162,15 +174,18 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('E5: quran unit picker sheet mirrors the student map',
-      (tester) async {
+  testWidgets('E5: quran unit picker sheet mirrors the student map', (
+    tester,
+  ) async {
     final repos = await _flowRepos();
     await tester.pumpWidget(_flowWrap(repos, '/admin/sessions/100'));
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-        find.text('تسجيل (حفظ · متون · معاملة)'), 300,
-        scrollable: find.byType(Scrollable).first);
+      find.text('تسجيل (حفظ · متون · معاملة)'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.ensureVisible(find.text('تسجيل (حفظ · متون · معاملة)'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('تسجيل (حفظ · متون · معاملة)'));
@@ -183,14 +198,14 @@ void main() {
     expect(find.text('خريطة الحفظ'), findsOneWidget);
     expect(find.text('الجزء 1'), findsOneWidget);
     expect(
-      find.descendant(
-          of: find.byType(GridView), matching: find.text('1')),
+      find.descendant(of: find.byType(GridView), matching: find.text('1')),
       findsOneWidget,
     );
 
     // Single-unit page toggles on tap; summary updates.
-    await tester.tap(find.descendant(
-        of: find.byType(GridView), matching: find.text('1')));
+    await tester.tap(
+      find.descendant(of: find.byType(GridView), matching: find.text('1')),
+    );
     await tester.pumpAndSettle();
     expect(find.text('1 وحدة'), findsOneWidget);
 
@@ -343,13 +358,60 @@ GoRouter _flowRouter(String initialLocation) {
       // path parameter — no second Uri.decodeComponent (regression).
       GoRoute(
         path: '/admin/teachers/:name',
-        builder: (context, state) => AdminTeacherScreen(
-          teacherName: state.pathParameters['name']!,
-        ),
+        builder: (context, state) =>
+            AdminTeacherScreen(teacherName: state.pathParameters['name']!),
       ),
       GoRoute(
         path: '/admin/notifications',
         builder: (context, state) => const AdminNotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/admin/content',
+        builder: (context, state) => const AdminContentScreen(),
+      ),
+      GoRoute(
+        path: '/admin/system',
+        builder: (context, state) => const AdminSystemScreen(),
+      ),
+      GoRoute(
+        path: '/admin/account',
+        builder: (context, state) => const AdminAccountScreen(),
+      ),
+      GoRoute(
+        path: '/admin/students',
+        builder: (context, state) => const AdminStudentsScreen(),
+      ),
+      GoRoute(
+        path: '/admin/assets',
+        builder: (context, state) => const AdminAssetsScreen(),
+      ),
+      GoRoute(
+        path: '/admin/users',
+        builder: (context, state) => const AdminUsersScreen(),
+      ),
+      GoRoute(
+        path: '/admin/import',
+        builder: (context, state) => const AdminImportScreen(),
+      ),
+      GoRoute(
+        path: '/admin/audit',
+        builder: (context, state) => const AdminAuditScreen(),
+      ),
+      GoRoute(
+        path: '/admin/change-requests',
+        builder: (context, state) => const AdminChangeRequestsScreen(),
+      ),
+      GoRoute(
+        path: '/admin/tools',
+        builder: (context, state) => const AdminToolsScreen(),
+      ),
+      GoRoute(
+        path: '/admin/sync-kiosk',
+        builder: (context, state) => const AdminSyncKioskScreen(),
+      ),
+      GoRoute(
+        path: '/admin/settings',
+        builder: (context, state) => const AdminSettingsScreen(),
       ),
     ],
   );
@@ -371,8 +433,9 @@ Widget _flowWrap(_FlowRepos repos, String initialLocation) {
 void mainFlow() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
 
-  testWidgets('E1: creating a course adds it to the list (no setState crash)',
-      (tester) async {
+  testWidgets('E1: creating a course adds it to the list (no setState crash)', (
+    tester,
+  ) async {
     final repos = await _flowRepos();
     await tester.pumpWidget(_flowWrap(repos, '/admin'));
     await tester.pumpAndSettle();
@@ -388,8 +451,9 @@ void mainFlow() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('E2: creating today session opens setup then the session page',
-      (tester) async {
+  testWidgets('E2: creating today session opens setup then the session page', (
+    tester,
+  ) async {
     final repos = await _flowRepos();
     await tester.pumpWidget(_flowWrap(repos, '/admin/courses/1'));
     await tester.pumpAndSettle();
@@ -414,9 +478,9 @@ void mainFlow() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-      'Unified attendance: search + tap registers, undo removes',
-      (tester) async {
+  testWidgets('Unified attendance: search + tap registers, undo removes', (
+    tester,
+  ) async {
     final repos = await _flowRepos();
     await tester.pumpWidget(_flowWrap(repos, '/admin/sessions/100/attendance'));
     await tester.pumpAndSettle();
@@ -445,14 +509,19 @@ void mainFlow() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-        find.text('تسجيل (حفظ · متون · معاملة)'), 300,
-        scrollable: find.byType(Scrollable).first);
+      find.text('تسجيل (حفظ · متون · معاملة)'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('تسجيل (حفظ · متون · معاملة)'));
     await tester.pumpAndSettle();
     expect(find.text('اختر الطالب'), findsOneWidget);
 
-    await tester.scrollUntilVisible(find.text('إضافة تسجيل'), 200,
-        scrollable: find.byType(Scrollable).last);
+    await tester.scrollUntilVisible(
+      find.text('إضافة تسجيل'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
     await tester.tap(find.text('إضافة تسجيل'));
     await tester.pump();
     expect(find.text('اختر طالبًا'), findsOneWidget);
@@ -468,8 +537,9 @@ void mainFlow() {
     expect(find.textContaining('تسجيل حضور'), findsWidgets);
   });
 
-  testWidgets('E2: exam opens the full exam page with stats + submissions',
-      (tester) async {
+  testWidgets('E2: exam opens the full exam page with stats + submissions', (
+    tester,
+  ) async {
     final repos = await _flowRepos();
     await tester.pumpWidget(_flowWrap(repos, '/admin/courses/1'));
     await tester.pumpAndSettle();
@@ -486,13 +556,14 @@ void mainFlow() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-      'Teacher profile opens from the encoded name without exception '
+  testWidgets('Teacher profile opens from the encoded name without exception '
       '(regression: double percent-decoding)', (tester) async {
     final repos = await _flowRepos();
     await tester.pumpWidget(_flowWrap(repos, '/admin/teams'));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('أ. محمود عبد الله').first);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('أ. محمود عبد الله').first);
     await tester.pumpAndSettle();
 
@@ -501,14 +572,18 @@ void mainFlow() {
     expect(find.text('حلقاته (يمكن إزالته منها)'), findsOneWidget);
   });
 
-  testWidgets('E7: tasmi\' row opens the full memorization log',
-      (tester) async {
+  testWidgets('E7: tasmi\' row opens the full memorization log', (
+    tester,
+  ) async {
     final repos = await _flowRepos();
     await tester.pumpWidget(_flowWrap(repos, '/admin/students/1'));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(find.text('سجل التسميع'), 300,
-        scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.text('سجل التسميع'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.ensureVisible(find.text('سجل التسميع'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('سجل التسميع'));
@@ -520,14 +595,18 @@ void mainFlow() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('E7: certificates row opens the full certificates sheet',
-      (tester) async {
+  testWidgets('E7: certificates row opens the full certificates sheet', (
+    tester,
+  ) async {
     final repos = await _flowRepos();
     await tester.pumpWidget(_flowWrap(repos, '/admin/students/1'));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(find.text('شهادات القرآن'), 300,
-        scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.text('شهادات القرآن'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.ensureVisible(find.text('شهادات القرآن'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('شهادات القرآن'));
@@ -538,14 +617,18 @@ void mainFlow() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('E7: output show-more opens full exams + matn records',
-      (tester) async {
+  testWidgets('E7: output show-more opens full exams + matn records', (
+    tester,
+  ) async {
     final repos = await _flowRepos();
     await tester.pumpWidget(_flowWrap(repos, '/admin/students/1'));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(find.text('عرض المزيد'), 300,
-        scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.text('عرض المزيد'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.ensureVisible(find.text('عرض المزيد'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('عرض المزيد'));
@@ -564,8 +647,11 @@ void mainFlow() {
     await tester.pumpWidget(_flowWrap(repos, '/admin/students/1'));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(find.text('سجلات الدورات'), 300,
-        scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.text('سجلات الدورات'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.ensureVisible(find.text('دورة الحفظ الصيفية'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('دورة الحفظ الصيفية'));
@@ -574,14 +660,18 @@ void mainFlow() {
     // Same content as the student's own course detail (B1x).
     expect(find.textContaining('متاح للشراء'), findsOneWidget);
     expect(find.textContaining('الحضور %'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('الطلاب الأوائل'), 300,
-        scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.text('الطلاب الأوائل'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('الطلاب الأوائل'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('E7: tapping a team chip opens the team members manager',
-      (tester) async {
+  testWidgets('E7: tapping a team chip opens the team members manager', (
+    tester,
+  ) async {
     final repos = await _flowRepos();
     await tester.pumpWidget(_flowWrap(repos, '/admin/students/1'));
     await tester.pumpAndSettle();
@@ -604,8 +694,10 @@ void mainFlow() {
     expect(find.text('الحضور اللحظي'), findsOneWidget);
 
     await tester.scrollUntilVisible(
-        find.text('تسجيل (حفظ · متون · معاملة)'), 300,
-        scrollable: find.byType(Scrollable).first);
+      find.text('تسجيل (حفظ · متون · معاملة)'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.ensureVisible(find.text('تسجيل (حفظ · متون · معاملة)'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('تسجيل (حفظ · متون · معاملة)'));
@@ -624,8 +716,9 @@ void mainFlow() {
     expect(find.text('تسجيل (حفظ · متون · معاملة)'), findsOneWidget);
   });
 
-  testWidgets('E2: sessions can be multi-selected, deleted and undone',
-      (tester) async {
+  testWidgets('E2: sessions can be multi-selected, deleted and undone', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -655,8 +748,9 @@ void mainFlow() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('E2: adding a certificate uses a juz range from the grid',
-      (tester) async {
+  testWidgets('E2: adding a certificate uses a juz range from the grid', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -709,8 +803,11 @@ void mainFlow() {
     await tester.pumpWidget(_flowWrap(repos, '/admin/sessions/100'));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(find.text('سجلات الجلسة'), 300,
-        scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.text('سجلات الجلسة'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('سجلات الجلسة'), findsOneWidget);
 
     await tester.ensureVisible(find.text('سجلات الجلسة'));
@@ -722,8 +819,7 @@ void mainFlow() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('E3: quick attendance actions from the day list',
-      (tester) async {
+  testWidgets('E3: quick attendance actions from the day list', (tester) async {
     final repos = await _flowRepos();
     await tester.pumpWidget(_flowWrap(repos, '/admin/sessions/100'));
     await tester.pumpAndSettle();
@@ -732,8 +828,10 @@ void mainFlow() {
     await tester.tap(find.text('عرض الكل').first);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('session-member-7')), 200,
-        scrollable: find.byType(Scrollable).last);
+      find.byKey(const ValueKey('session-member-7')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
     await tester.tap(find.byKey(const ValueKey('session-member-7')));
     await tester.pumpAndSettle();
     expect(find.text('تسجيل الحضور الآن'), findsOneWidget);
@@ -748,26 +846,28 @@ void mainFlow() {
 
   testWidgets('E3: absence notices reach the student feed', (tester) async {
     final repos = await _repos();
-    await tester.pumpWidget(_wrap(
-      repos,
-      Scaffold(
-        body: Builder(
-          builder: (context) => Center(
-            child: ElevatedButton(
-              onPressed: () => showAbsenceNoticeSheet(
-                context,
-                sessionId: 100,
-                absentees: const [
-                  AdminSessionMember(studentId: 1, name: 'عبد الرحمن محمود'),
-                ],
-                repository: repos.admin,
+    await tester.pumpWidget(
+      _wrap(
+        repos,
+        Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: ElevatedButton(
+                onPressed: () => showAbsenceNoticeSheet(
+                  context,
+                  sessionId: 100,
+                  absentees: const [
+                    AdminSessionMember(studentId: 1, name: 'عبد الرحمن محمود'),
+                  ],
+                  repository: repos.admin,
+                ),
+                child: const Text('open'),
               ),
-              child: const Text('open'),
             ),
           ),
         ),
       ),
-    ));
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.text('إشعارات الغياب'), findsOneWidget);
@@ -810,8 +910,9 @@ void mainFlow() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('E2: course name + criteria can be edited from the course page',
-      (tester) async {
+  testWidgets('E2: course name + criteria can be edited from the course page', (
+    tester,
+  ) async {
     final repos = await _flowRepos();
     await tester.pumpWidget(_flowWrap(repos, '/admin'));
     await tester.pumpAndSettle();
@@ -837,8 +938,9 @@ void mainFlow() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('E2: deleting a course removes it from the landing page',
-      (tester) async {
+  testWidgets('E2: deleting a course removes it from the landing page', (
+    tester,
+  ) async {
     final repos = await _flowRepos();
     await tester.pumpWidget(_flowWrap(repos, '/admin'));
     await tester.pumpAndSettle();
@@ -875,8 +977,9 @@ void mainFlow() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Student shell: welcome identity on top, page title below',
-      (tester) async {
+  testWidgets('Student shell: welcome identity on top, page title below', (
+    tester,
+  ) async {
     final repos = await _flowRepos();
     final router = GoRouter(
       initialLocation: '/my-progress',
@@ -896,16 +999,18 @@ void mainFlow() {
         ),
       ],
     );
-    await tester.pumpWidget(AdminRepositoryScope(
-      repository: repos.admin,
-      child: StudentRepositoryScope(
-        repository: repos.student,
-        child: MaterialApp.router(
-          theme: AppTheme.light(),
-          routerConfig: router,
+    await tester.pumpWidget(
+      AdminRepositoryScope(
+        repository: repos.admin,
+        child: StudentRepositoryScope(
+          repository: repos.student,
+          child: MaterialApp.router(
+            theme: AppTheme.light(),
+            routerConfig: router,
+          ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     expect(find.textContaining('عبد الرحمن'), findsWidgets);
@@ -913,5 +1018,57 @@ void mainFlow() {
     // The current tab title is rendered below the AppBar (plus the nav label).
     expect(find.text('دوراتي'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('responsive smoke: admin screens have no overflow', (
+    tester,
+  ) async {
+    final repos = await _flowRepos();
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const paths = [
+      '/admin',
+      '/admin/courses/1',
+      '/admin/courses/1/exams/500',
+      '/admin/sessions/100',
+      '/admin/sessions/100/attendance',
+      '/admin/students',
+      '/admin/students/1',
+      '/admin/students/1/courses/1',
+      '/admin/teams',
+      '/admin/notifications',
+      '/admin/content',
+      '/admin/system',
+      '/admin/account',
+      '/admin/assets',
+      '/admin/users',
+      '/admin/import',
+      '/admin/audit',
+      '/admin/change-requests',
+      '/admin/tools',
+      '/admin/sync-kiosk',
+      '/admin/settings',
+    ];
+    const sizes = [
+      Size(390, 844),
+      Size(844, 390),
+      Size(768, 1024),
+      Size(1280, 800),
+    ];
+
+    for (final path in paths) {
+      for (final size in sizes) {
+        tester.view.physicalSize = size;
+        await tester.pumpWidget(_flowWrap(repos, path));
+        await tester.pumpAndSettle();
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: '$path @ ${size.width}x${size.height}',
+        );
+      }
+    }
   });
 }

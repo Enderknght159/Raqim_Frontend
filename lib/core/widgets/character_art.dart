@@ -7,14 +7,20 @@ import '../theme/app_theme.dart';
 /// See `ui-ux-foundations.md` §9 — no images are produced yet; this is a
 /// unified placeholder describing the character (state + icon + prompt).
 enum CharacterState {
-  welcome(Icons.waving_hand, 'cute mosque kid waving, flat vector, brand green, plain white bg'),
+  welcome(
+    Icons.waving_hand,
+    'cute mosque kid waving, flat vector, brand green, plain white bg',
+  ),
   busy(Icons.auto_stories, 'kid focused reading Quran, warm, flat vector'),
   proud(Icons.menu_book, 'kid proudly holding a glowing Quran page'),
   celebrating(Icons.celebration, 'kid jumping, confetti, stars, joyful'),
   surprised(Icons.emoji_emotions, 'surprised kid, wide eyes, flat vector'),
   encouraging(Icons.rocket_launch, 'kid at a start path, hopeful'),
   crowned(Icons.emoji_events, 'kid wearing a medal, very proud'),
-  waiting(Icons.hourglass_top, 'friendly kid waiting patiently, hourglass, flat vector');
+  waiting(
+    Icons.hourglass_top,
+    'friendly kid waiting patiently, hourglass, flat vector',
+  );
 
   const CharacterState(this.icon, this.prompt);
 
@@ -89,10 +95,9 @@ class _DashedBorderPainter extends CustomPainter {
     const gap = 5.0;
     const r = 12.0;
     final path = Path()
-      ..addRRect(RRect.fromRectAndRadius(
-        Offset.zero & size,
-        const Radius.circular(r),
-      ));
+      ..addRRect(
+        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(r)),
+      );
     for (final metric in path.computeMetrics()) {
       var distance = 0.0;
       while (distance < metric.length) {

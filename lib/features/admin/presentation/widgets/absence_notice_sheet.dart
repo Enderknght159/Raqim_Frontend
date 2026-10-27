@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/status_badge.dart';
-import '../../data/admin_local_repository.dart';
+import '../../data/admin_repository.dart';
 import '../../domain/admin_models.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// E3 — absence notices: pick the absent students and send each an in-app
 /// notice. Returns the number of notices sent (null when cancelled).
@@ -12,10 +13,11 @@ Future<int?> showAbsenceNoticeSheet(
   BuildContext context, {
   required int sessionId,
   required List<AdminSessionMember> absentees,
-  required AdminLocalRepository repository,
+  required AdminRepository repository,
 }) {
-  return showModalBottomSheet<int>(
+  return showAppSheet<int>(
     context: context,
+    maxWidth: 640,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (context) => AbsenceNoticeSheet(
@@ -36,7 +38,7 @@ class AbsenceNoticeSheet extends StatefulWidget {
 
   final int sessionId;
   final List<AdminSessionMember> absentees;
-  final AdminLocalRepository repository;
+  final AdminRepository repository;
 
   @override
   State<AbsenceNoticeSheet> createState() => _AbsenceNoticeSheetState();
@@ -73,30 +75,34 @@ class _AbsenceNoticeSheetState extends State<AbsenceNoticeSheet> {
               Icon(Icons.campaign_outlined, color: tokens.info),
               const SizedBox(width: 8),
               Expanded(
-                child: Text('إشعارات الغياب',
-                    style: Theme.of(context).textTheme.titleLarge),
+                child: Text(
+                  'إشعارات الغياب',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
               ),
               StatusBadge(
-                  label: '${widget.absentees.length} غائب',
-                  color: widget.absentees.isEmpty
-                      ? tokens.textMuted
-                      : tokens.danger),
+                label: '${widget.absentees.length} غائب',
+                color: widget.absentees.isEmpty
+                    ? tokens.textMuted
+                    : tokens.danger,
+              ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
             'يصل إشعار داخل التطبيق لكل طالب محدد.',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: tokens.textMuted),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
           const SizedBox(height: 8),
           if (widget.absentees.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text('لا غياب في هذه الجلسة',
-                  style: Theme.of(context).textTheme.bodyMedium),
+              child: Text(
+                'لا غياب في هذه الجلسة',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             )
           else ...[
             Row(
@@ -118,9 +124,10 @@ class _AbsenceNoticeSheetState extends State<AbsenceNoticeSheet> {
                   ),
                 ),
                 const Spacer(),
-                Text('${_selected.length} محدد',
-                    style: TextStyle(
-                        color: tokens.textMuted, fontSize: 13)),
+                Text(
+                  '${_selected.length} محدد',
+                  style: TextStyle(color: tokens.textMuted, fontSize: 13),
+                ),
               ],
             ),
             Flexible(

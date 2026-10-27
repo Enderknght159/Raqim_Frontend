@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/empty_state.dart';
+import '../../../../core/widgets/responsive_grid.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../domain/student_stats.dart';
 import '../student_shell.dart';
@@ -48,23 +49,24 @@ class _MyCoursesScreenState extends State<MyCoursesScreen> {
           }
           return RefreshIndicator(
             onRefresh: _refresh,
-            child: ListView.separated(
+            child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
-              itemCount: overviews.length + 1,
-              separatorBuilder: (_, _) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return const Padding(
-                    padding: EdgeInsets.only(bottom: 4),
-                    child: SectionHeader(
-                      icon: Icons.auto_stories,
-                      title: 'متابعة الدورات',
-                    ),
-                  );
-                }
-                return CourseCard(overview: overviews[index - 1]);
-              },
+              children: [
+                const SectionHeader(
+                  icon: Icons.auto_stories,
+                  title: 'متابعة الدورات',
+                ),
+                const SizedBox(height: 12),
+                ResponsiveGrid(
+                  minItemWidth: 280,
+                  maxColumns: 3,
+                  children: [
+                    for (final overview in overviews)
+                      CourseCard(overview: overview),
+                  ],
+                ),
+              ],
             ),
           );
         },

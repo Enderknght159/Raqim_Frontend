@@ -25,10 +25,12 @@ void main() {
 
   test('split pages have 2 units with real surah names', () {
     expect(quranPageParts(106), 2);
-    expect(quranUnitsOfPage(106).map((u) => u.surah),
-        ['النساء', 'المائدة']);
-    expect(quranUnitsOfPage(596).map((u) => u.surah),
-        ['الليل', 'الضحى', 'الشرح']);
+    expect(quranUnitsOfPage(106).map((u) => u.surah), ['النساء', 'المائدة']);
+    expect(quranUnitsOfPage(596).map((u) => u.surah), [
+      'الليل',
+      'الضحى',
+      'الشرح',
+    ]);
     // A single page always exposes its real surah (no '—' stubs).
     expect(quranUnitsOfPage(1).single.surah, 'الفاتحة');
     expect(quranUnitsOfPage(255).map((u) => u.surah), ['الرعد', 'ابراهيم']);
@@ -37,9 +39,11 @@ void main() {
   test('partIndex is 1-based per page', () {
     for (var page = 1; page <= 604; page++) {
       final units = quranUnitsOfPage(page);
-      expect(units.map((u) => u.partIndex).toList(),
-          List.generate(units.length, (i) => i + 1),
-          reason: 'page $page');
+      expect(
+        units.map((u) => u.partIndex).toList(),
+        List.generate(units.length, (i) => i + 1),
+        reason: 'page $page',
+      );
     }
   });
 

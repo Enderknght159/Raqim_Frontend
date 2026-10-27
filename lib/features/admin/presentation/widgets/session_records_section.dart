@@ -5,6 +5,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../domain/admin_models.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// E3 «سجلات الجلسة»: the records written in this session grouped into
 /// memorization · matn · transactions, with a short preview and «عرض الكل».
@@ -30,27 +31,47 @@ class SessionRecordsSection extends StatelessWidget {
             children: [
               const Expanded(
                 child: SectionHeader(
-                    icon: Icons.receipt_long_outlined, title: 'سجلات الجلسة'),
+                  icon: Icons.receipt_long_outlined,
+                  title: 'سجلات الجلسة',
+                ),
               ),
               StatusBadge(
-                  label: '${records.length}',
-                  color: records.isEmpty ? tokens.textMuted : tokens.info),
+                label: '${records.length}',
+                color: records.isEmpty ? tokens.textMuted : tokens.info,
+              ),
             ],
           ),
           const SizedBox(height: 6),
           if (records.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text('لا سجلات في هذه الجلسة',
-                  style: Theme.of(context).textTheme.bodyMedium),
+              child: Text(
+                'لا سجلات في هذه الجلسة',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             )
           else ...[
-            _group(context, icon: Icons.menu_book, color: tokens.brand,
-                title: 'الحفظ', items: mems),
-            _group(context, icon: Icons.format_quote_outlined,
-                color: tokens.accentMatn, title: 'المتون', items: matns),
-            _group(context, icon: Icons.payments_outlined,
-                color: tokens.reward, title: 'المعاملات', items: txs),
+            _group(
+              context,
+              icon: Icons.menu_book,
+              color: tokens.brand,
+              title: 'الحفظ',
+              items: mems,
+            ),
+            _group(
+              context,
+              icon: Icons.format_quote_outlined,
+              color: tokens.accentMatn,
+              title: 'المتون',
+              items: matns,
+            ),
+            _group(
+              context,
+              icon: Icons.payments_outlined,
+              color: tokens.reward,
+              title: 'المعاملات',
+              items: txs,
+            ),
             const SizedBox(height: 4),
             Center(
               child: TextButton(
@@ -82,17 +103,19 @@ class SessionRecordsSection extends StatelessWidget {
             children: [
               Icon(icon, size: 16, color: color),
               const SizedBox(width: 6),
-              Text(title,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.w800)),
+              Text(
+                title,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
               const SizedBox(width: 6),
-              Text('(${items.length})',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted)),
+              Text(
+                '(${items.length})',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+              ),
             ],
           ),
           for (final r in items.take(_groupPreview)) _row(context, r),
@@ -114,10 +137,14 @@ class SessionRecordsSection extends StatelessWidget {
                   TextSpan(
                     text: '${r.studentName}: ',
                     style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: tokens.textPrimary),
+                      fontWeight: FontWeight.w700,
+                      color: tokens.textPrimary,
+                    ),
                   ),
-                  TextSpan(text: r.title, style: TextStyle(color: tokens.textSecondary)),
+                  TextSpan(
+                    text: r.title,
+                    style: TextStyle(color: tokens.textSecondary),
+                  ),
                 ],
               ),
               maxLines: 1,
@@ -131,10 +158,9 @@ class SessionRecordsSection extends StatelessWidget {
                 r.subtitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: tokens.textMuted),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
               ),
             ),
         ],
@@ -149,8 +175,9 @@ class SessionRecordsSection extends StatelessWidget {
     List<AdminSessionRecord> txs,
   ) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
+      maxWidth: 720,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (context) => DraggableScrollableSheet(
@@ -161,18 +188,34 @@ class SessionRecordsSection extends StatelessWidget {
           controller: controller,
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           children: [
-            Text('سجلات الجلسة',
-                style: Theme.of(context).textTheme.titleLarge),
+            Text('سجلات الجلسة', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             if (records.isEmpty)
-              Text('لا سجلات',
-                  style: Theme.of(context).textTheme.bodyMedium),
-            _fullGroup(context, tokens, 'الحفظ', mems,
-                Icons.menu_book, tokens.brand),
-            _fullGroup(context, tokens, 'المتون', matns,
-                Icons.format_quote_outlined, tokens.accentMatn),
-            _fullGroup(context, tokens, 'المعاملات', txs,
-                Icons.payments_outlined, tokens.reward),
+              Text('لا سجلات', style: Theme.of(context).textTheme.bodyMedium),
+            _fullGroup(
+              context,
+              tokens,
+              'الحفظ',
+              mems,
+              Icons.menu_book,
+              tokens.brand,
+            ),
+            _fullGroup(
+              context,
+              tokens,
+              'المتون',
+              matns,
+              Icons.format_quote_outlined,
+              tokens.accentMatn,
+            ),
+            _fullGroup(
+              context,
+              tokens,
+              'المعاملات',
+              txs,
+              Icons.payments_outlined,
+              tokens.reward,
+            ),
           ],
         ),
       ),
@@ -196,11 +239,12 @@ class SessionRecordsSection extends StatelessWidget {
           children: [
             Icon(icon, size: 18, color: color),
             const SizedBox(width: 6),
-            Text(title,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w800)),
+            Text(
+              title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
             const Spacer(),
             StatusBadge(label: '${items.length}', color: color),
           ],

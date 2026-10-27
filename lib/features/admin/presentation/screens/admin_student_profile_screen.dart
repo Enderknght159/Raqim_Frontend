@@ -8,6 +8,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/icon_toggle_group.dart';
 import '../../../../core/widgets/progress_bar.dart';
+import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/stat_tile.dart';
 import '../../../../core/widgets/status_badge.dart';
@@ -19,6 +20,7 @@ import '../../../student/presentation/widgets/tasmi_log_sheet.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
 import '../widgets/team_manager_sheet.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// E7 — Student profile (admin): the student's whole record — header (teams
 /// open their manager), overview, the full Quran map + tasmi'/certificates
@@ -35,8 +37,7 @@ class AdminStudentProfileScreen extends StatefulWidget {
       _AdminStudentProfileScreenState();
 }
 
-class _AdminStudentProfileScreenState
-    extends State<AdminStudentProfileScreen> {
+class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
   late Future<_Data> _future;
 
   @override
@@ -47,12 +48,16 @@ class _AdminStudentProfileScreenState
 
   Future<_Data> _load() async {
     final repo = AdminRepositoryScope.of(context);
-    final profile = await repo.studentProfile(widget.studentId);
-    final records = await repo.studentCourseRecords(widget.studentId);
-    final requests = (await repo.changeRequests())
+    final profileF = repo.studentProfile(widget.studentId);
+    final recordsF = repo.studentCourseRecords(widget.studentId);
+    final requestsF = repo.changeRequests();
+    final teamsF = repo.teams();
+    final profile = await profileF;
+    final records = await recordsF;
+    final requests = (await requestsF)
         .where((r) => r.studentId == widget.studentId)
         .toList();
-    final allTeams = await repo.teams();
+    final allTeams = await teamsF;
     return _Data(
       profile: profile,
       records: records,
@@ -73,29 +78,32 @@ class _AdminStudentProfileScreenState
       future: _future,
       builder: (context, data) => Scaffold(
         appBar: AppBar(title: Text(data.profile.profile.name)),
-        body: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _header(context, data),
-            const SizedBox(height: 12),
-            _overview(context, data.profile),
-            const SizedBox(height: 12),
-            _teamsCard(context, data),
-            const SizedBox(height: 12),
-            _quranCard(context, data.profile),
-            const SizedBox(height: 12),
-            _achievementCard(context, data.profile),
-            const SizedBox(height: 12),
-            _dataCard(context, data.profile),
-            const SizedBox(height: 12),
-            _phonesCard(context, data.profile),
-            const SizedBox(height: 12),
-            _qr(context, data.profile),
-            const SizedBox(height: 12),
-            _records(context, data),
-            const SizedBox(height: 12),
-            _changeRequests(context, data),
-          ],
+        body: ResponsivePage(
+          maxWidth: 1200,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _header(context, data),
+              const SizedBox(height: 12),
+              _overview(context, data.profile),
+              const SizedBox(height: 12),
+              _teamsCard(context, data),
+              const SizedBox(height: 12),
+              _quranCard(context, data.profile),
+              const SizedBox(height: 12),
+              _achievementCard(context, data.profile),
+              const SizedBox(height: 12),
+              _dataCard(context, data.profile),
+              const SizedBox(height: 12),
+              _phonesCard(context, data.profile),
+              const SizedBox(height: 12),
+              _qr(context, data.profile),
+              const SizedBox(height: 12),
+              _records(context, data),
+              const SizedBox(height: 12),
+              _changeRequests(context, data),
+            ],
+          ),
         ),
       ),
     );
@@ -113,28 +121,34 @@ class _AdminStudentProfileScreenState
           CircleAvatar(
             radius: 30,
             backgroundColor: tokens.brandTint,
-            child: Text(p.profile.name.characters.first,
-                style: TextStyle(
-                    color: tokens.brandText,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800)),
+            child: Text(
+              p.profile.name.characters.first,
+              style: TextStyle(
+                color: tokens.brandText,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(p.profile.name,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          color: tokens.textPrimary,
-                        )),
-                Text('#${p.profile.barcode}',
-                    textDirection: TextDirection.ltr,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: tokens.textMuted)),
+                Text(
+                  p.profile.name,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: tokens.textPrimary,
+                  ),
+                ),
+                Text(
+                  '#${p.profile.barcode}',
+                  textDirection: TextDirection.ltr,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                ),
               ],
             ),
           ),
@@ -163,8 +177,10 @@ class _AdminStudentProfileScreenState
           if (teams.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text('لا حلقات لهذا الطالب',
-                  style: Theme.of(context).textTheme.bodyMedium),
+              child: Text(
+                'لا حلقات لهذا الطالب',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             )
           else
             for (final team in teams)
@@ -174,20 +190,23 @@ class _AdminStudentProfileScreenState
                 leading: CircleAvatar(
                   radius: 16,
                   backgroundColor: tokens.brandTint,
-                  child:
-                      Icon(Icons.hub, size: 16, color: tokens.brandText),
+                  child: Icon(Icons.hub, size: 16, color: tokens.brandText),
                 ),
-                title: Text(team.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                title: Text(
+                  team.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
                 subtitle: Text(
                   '${team.typeName} · ${team.teacherName.isEmpty ? 'بلا معلم' : team.teacherName}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                trailing: Icon(Icons.chevron_left,
-                    color: tokens.borderStructural),
+                trailing: Icon(
+                  Icons.chevron_left,
+                  color: tokens.borderStructural,
+                ),
                 onTap: () => _openTeam(data, team),
               ),
         ],
@@ -212,7 +231,10 @@ class _AdminStudentProfileScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SectionHeader(icon: Icons.insights_outlined, title: 'نظرة عامة'),
+          const SectionHeader(
+            icon: Icons.insights_outlined,
+            title: 'نظرة عامة',
+          ),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -262,23 +284,35 @@ class _AdminStudentProfileScreenState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SectionHeader(
-              icon: Icons.auto_stories_outlined, title: 'البطاقة القرآنية'),
+            icon: Icons.auto_stories_outlined,
+            title: 'البطاقة القرآنية',
+          ),
           const SizedBox(height: 8),
           Row(
             children: [
               _miniStat(context, '${p.pagesMemorized}', 'صفحة', tokens.brand),
-              _miniStat(context, '${p.testedJuz}/30', 'أجزاء مختبرة',
-                  tokens.info),
-              _miniStat(context, '${p.certificatesCount}', 'شهادة',
-                  tokens.reward),
+              _miniStat(
+                context,
+                '${p.testedJuz}/30',
+                'أجزاء مختبرة',
+                tokens.info,
+              ),
+              _miniStat(
+                context,
+                '${p.certificatesCount}',
+                'شهادة',
+                tokens.reward,
+              ),
             ],
           ),
           const SizedBox(height: 12),
           if (p.memorizations.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Text('لا صفحات محفوظة بعد',
-                  style: Theme.of(context).textTheme.bodyMedium),
+              child: Text(
+                'لا صفحات محفوظة بعد',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             )
           else
             QuranMap(
@@ -319,15 +353,15 @@ class _AdminStudentProfileScreenState
 
   Widget _achievementCard(BuildContext context, AdminStudentProfile p) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    final hasMore =
-        p.examResults.isNotEmpty || p.matnRecitationLog.isNotEmpty;
+    final hasMore = p.examResults.isNotEmpty || p.matnRecitationLog.isNotEmpty;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SectionHeader(
-              icon: Icons.workspace_premium_outlined,
-              title: 'النتاج العلمي'),
+            icon: Icons.workspace_premium_outlined,
+            title: 'النتاج العلمي',
+          ),
           const SizedBox(height: 8),
           if (p.subjects.isNotEmpty) ...[
             for (final s in p.subjects)
@@ -338,14 +372,20 @@ class _AdminStudentProfileScreenState
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.menu_book_outlined,
-                            size: 14, color: tokens.accentMatn),
+                        Icon(
+                          Icons.menu_book_outlined,
+                          size: 14,
+                          color: tokens.accentMatn,
+                        ),
                         const SizedBox(width: 6),
                         Expanded(child: Text('${s.subject} (النهائي)')),
-                        Text(s.result == null ? '—' : '${s.result}%',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w800,
-                                color: tokens.info)),
+                        Text(
+                          s.result == null ? '—' : '${s.result}%',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: tokens.info,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -361,28 +401,28 @@ class _AdminStudentProfileScreenState
             const Divider(height: 1),
           ],
           const SizedBox(height: 6),
-          Text('نتائج الاختبارات',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted)),
+          Text(
+            'نتائج الاختبارات',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+          ),
           const SizedBox(height: 4),
           if (p.examResults.isEmpty)
-            Text('لا نتائج بعد',
-                style: Theme.of(context).textTheme.bodyMedium)
+            Text('لا نتائج بعد', style: Theme.of(context).textTheme.bodyMedium)
           else
             // Preview: the 3 latest — «عرض المزيد» shows the full list.
-            for (final r in p.examResults.take(3))
-              _examRow(context, tokens, r),
+            for (final r in p.examResults.take(3)) _examRow(context, tokens, r),
           if (p.matnProgress.isNotEmpty) ...[
             const SizedBox(height: 8),
             const Divider(height: 1),
             const SizedBox(height: 6),
-            Text('المتون',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: tokens.textMuted)),
+            Text(
+              'المتون',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+            ),
             const SizedBox(height: 4),
             for (final m in p.matnProgress)
               Padding(
@@ -393,11 +433,11 @@ class _AdminStudentProfileScreenState
                     Row(
                       children: [
                         Expanded(child: Text(m.name)),
-                        Text('${m.lastVerse} / ${m.totalVerses} بيت',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: tokens.textMuted)),
+                        Text(
+                          '${m.lastVerse} / ${m.totalVerses} بيت',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: tokens.textMuted),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -425,37 +465,42 @@ class _AdminStudentProfileScreenState
     );
   }
 
-  Widget _examRow(
-      BuildContext context, AppTokens tokens, AdminExamResult r) {
+  Widget _examRow(BuildContext context, AppTokens tokens, AdminExamResult r) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
-          Icon(Icons.assignment_turned_in_outlined,
-              size: 18, color: tokens.accentMatn),
+          Icon(
+            Icons.assignment_turned_in_outlined,
+            size: 18,
+            color: tokens.accentMatn,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${r.subject} · ${r.typeLabel}',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyLarge
-                        ?.copyWith(fontWeight: FontWeight.w600)),
-                Text('${r.date.day}/${r.date.month}/${r.date.year}',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: tokens.textMuted)),
+                Text(
+                  '${r.subject} · ${r.typeLabel}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  '${r.date.day}/${r.date.month}/${r.date.year}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                ),
               ],
             ),
           ),
           Text(
             '${_fmtMark(r.mark)}/${r.maxMark}',
             style: TextStyle(
-                fontWeight: FontWeight.w900,
-                color: r.passed ? tokens.brandText : tokens.dangerText),
+              fontWeight: FontWeight.w900,
+              color: r.passed ? tokens.brandText : tokens.dangerText,
+            ),
           ),
         ],
       ),
@@ -466,7 +511,7 @@ class _AdminStudentProfileScreenState
   /// log (E7 «عرض المزيد»).
   void _showOutputSheet(BuildContext context, AdminStudentProfile p) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
@@ -478,25 +523,35 @@ class _AdminStudentProfileScreenState
           controller: controller,
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           children: [
-            Text('النتاج العلمي الكامل',
-                style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'النتاج العلمي الكامل',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 8),
             Row(
               children: [
-                Icon(Icons.assignment_turned_in_outlined,
-                    size: 18, color: tokens.accentMatn),
+                Icon(
+                  Icons.assignment_turned_in_outlined,
+                  size: 18,
+                  color: tokens.accentMatn,
+                ),
                 const SizedBox(width: 8),
-                Text('نتائج الاختبارات',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'نتائج الاختبارات',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const Spacer(),
                 StatusBadge(
-                    label: '${p.examResults.length}',
-                    color: tokens.accentMatn),
+                  label: '${p.examResults.length}',
+                  color: tokens.accentMatn,
+                ),
               ],
             ),
             if (p.examResults.isEmpty)
-              Text('لا نتائج بعد',
-                  style: Theme.of(context).textTheme.bodyMedium)
+              Text(
+                'لا نتائج بعد',
+                style: Theme.of(context).textTheme.bodyMedium,
+              )
             else
               for (final r in p.examResults) _examRow(context, tokens, r),
             const SizedBox(height: 8),
@@ -504,27 +559,37 @@ class _AdminStudentProfileScreenState
             const SizedBox(height: 8),
             Row(
               children: [
-                Icon(Icons.menu_book_outlined,
-                    size: 18, color: tokens.accentMatn),
+                Icon(
+                  Icons.menu_book_outlined,
+                  size: 18,
+                  color: tokens.accentMatn,
+                ),
                 const SizedBox(width: 8),
-                Text('سجلات المتون',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'سجلات المتون',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const Spacer(),
                 StatusBadge(
-                    label: '${p.matnRecitationLog.length}',
-                    color: tokens.info),
+                  label: '${p.matnRecitationLog.length}',
+                  color: tokens.info,
+                ),
               ],
             ),
             if (p.matnRecitationLog.isEmpty)
-              Text('لا تسميعات متون بعد',
-                  style: Theme.of(context).textTheme.bodyMedium)
+              Text(
+                'لا تسميعات متون بعد',
+                style: Theme.of(context).textTheme.bodyMedium,
+              )
             else
               for (final m in p.matnRecitationLog)
                 ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  leading:
-                      Icon(Icons.format_quote_outlined, color: tokens.accentMatn),
+                  leading: Icon(
+                    Icons.format_quote_outlined,
+                    color: tokens.accentMatn,
+                  ),
                   title: Text('${m.matnName} — البيت الأخير ${m.lastVerse}'),
                   subtitle: Text(
                     '${m.teacherName}'
@@ -538,21 +603,30 @@ class _AdminStudentProfileScreenState
   }
 
   Widget _miniStat(
-      BuildContext context, String value, String label, Color color) {
+    BuildContext context,
+    String value,
+    String label,
+    Color color,
+  ) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     return Expanded(
       child: Column(
         children: [
-          Text(value,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900, color: color)),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(label,
-              textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted)),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+          ),
         ],
       ),
     );
@@ -571,69 +645,91 @@ class _AdminStudentProfileScreenState
         children: [
           const SectionHeader(icon: Icons.person_outline, title: 'البيانات'),
           const SizedBox(height: 6),
-          _dataRow(context, 'الاسم', profile.name,
-              () => _editField(
-                    context,
-                    profile,
-                    label: 'الاسم',
-                    initial: profile.name,
-                    onSave: (v) => AdminRepositoryScope.of(context).updateStudent(
-                          profile.id,
-                          name: v,
-                          fatherName: profile.fatherName,
-                          yearOfBirth: profile.yearOfBirth,
-                        ),
-                  )),
-          _dataRow(context, 'اسم الأب', profile.fatherName ?? '—',
-              () => _editField(
-                    context,
-                    profile,
-                    label: 'اسم الأب',
-                    initial: profile.fatherName ?? '',
-                    onSave: (v) => AdminRepositoryScope.of(context).updateStudent(
-                          profile.id,
-                          name: profile.name,
-                          fatherName: v.isEmpty ? null : v,
-                          yearOfBirth: profile.yearOfBirth,
-                        ),
-                  )),
-          _dataRow(context, 'سنة الميلاد', profile.yearOfBirth?.toString() ?? '—',
-              () => _editField(
-                    context,
-                    profile,
-                    label: 'سنة الميلاد',
-                    initial: profile.yearOfBirth?.toString() ?? '',
-                    numeric: true,
-                    onSave: (v) => AdminRepositoryScope.of(context).updateStudent(
-                          profile.id,
-                          name: profile.name,
-                          fatherName: profile.fatherName,
-                          yearOfBirth: int.tryParse(v),
-                        ),
-                  )),
-          _dataRow(context, 'آخر حضور',
-              profile.lastSeenAt == null
-                  ? '—'
-                  : _fmtDateTime(profile.lastSeenAt!),
-              null),
+          _dataRow(
+            context,
+            'الاسم',
+            profile.name,
+            () => _editField(
+              context,
+              profile,
+              label: 'الاسم',
+              initial: profile.name,
+              onSave: (v) => AdminRepositoryScope.of(context).updateStudent(
+                profile.id,
+                name: v,
+                fatherName: profile.fatherName,
+                yearOfBirth: profile.yearOfBirth,
+              ),
+            ),
+          ),
+          _dataRow(
+            context,
+            'اسم الأب',
+            profile.fatherName ?? '—',
+            () => _editField(
+              context,
+              profile,
+              label: 'اسم الأب',
+              initial: profile.fatherName ?? '',
+              onSave: (v) => AdminRepositoryScope.of(context).updateStudent(
+                profile.id,
+                name: profile.name,
+                fatherName: v.isEmpty ? null : v,
+                yearOfBirth: profile.yearOfBirth,
+              ),
+            ),
+          ),
+          _dataRow(
+            context,
+            'سنة الميلاد',
+            profile.yearOfBirth?.toString() ?? '—',
+            () => _editField(
+              context,
+              profile,
+              label: 'سنة الميلاد',
+              initial: profile.yearOfBirth?.toString() ?? '',
+              numeric: true,
+              onSave: (v) => AdminRepositoryScope.of(context).updateStudent(
+                profile.id,
+                name: profile.name,
+                fatherName: profile.fatherName,
+                yearOfBirth: int.tryParse(v),
+              ),
+            ),
+          ),
+          _dataRow(
+            context,
+            'آخر حضور',
+            profile.lastSeenAt == null
+                ? '—'
+                : _fmtDateTime(profile.lastSeenAt!),
+            null,
+          ),
         ],
       ),
     );
   }
 
-  Widget _dataRow(BuildContext context, String label, String value,
-      VoidCallback? onEdit) {
+  Widget _dataRow(
+    BuildContext context,
+    String label,
+    String value,
+    VoidCallback? onEdit,
+  ) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     return ListTile(
       dense: true,
       contentPadding: EdgeInsets.zero,
-      title: Text(label,
-          style: TextStyle(color: tokens.textMuted, fontSize: 13)),
-      subtitle: Text(value,
-          style: Theme.of(context)
-              .textTheme
-              .bodyLarge
-              ?.copyWith(fontWeight: FontWeight.w700)),
+      title: Text(
+        label,
+        style: TextStyle(color: tokens.textMuted, fontSize: 13),
+      ),
+      subtitle: Text(
+        value,
+        style: Theme.of(
+          context,
+        ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+      ),
       trailing: onEdit == null
           ? null
           : IconButton(
@@ -654,7 +750,7 @@ class _AdminStudentProfileScreenState
     bool numeric = false,
   }) async {
     final controller = TextEditingController(text: initial);
-    await showModalBottomSheet<void>(
+    await showAppSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -669,15 +765,18 @@ class _AdminStudentProfileScreenState
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('تعديل $label',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'تعديل $label',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: controller,
               autofocus: true,
               keyboardType: numeric ? TextInputType.number : TextInputType.text,
-              inputFormatters:
-                  numeric ? [FilteringTextInputFormatter.digitsOnly] : null,
+              inputFormatters: numeric
+                  ? [FilteringTextInputFormatter.digitsOnly]
+                  : null,
               decoration: InputDecoration(labelText: label),
             ),
             const SizedBox(height: 16),
@@ -713,8 +812,10 @@ class _AdminStudentProfileScreenState
           ),
           const SizedBox(height: 4),
           if (phones.isEmpty)
-            Text('لا أرقام مسجلة',
-                style: Theme.of(context).textTheme.bodyMedium)
+            Text(
+              'لا أرقام مسجلة',
+              style: Theme.of(context).textTheme.bodyMedium,
+            )
           else
             for (final phone in phones)
               ListTile(
@@ -743,11 +844,13 @@ class _AdminStudentProfileScreenState
         content: Text('إزالة الرقم ${phone.phone}؟'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('إلغاء')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('إزالة')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('إزالة'),
+          ),
         ],
       ),
     );
@@ -759,24 +862,26 @@ class _AdminStudentProfileScreenState
     _reload();
     messenger
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text('أُزيل الرقم ${phone.phone}'),
-        duration: const Duration(seconds: 6),
-        action: SnackBarAction(
-          label: 'تراجع',
-          onPressed: () async {
-            await repo.addPhone(p.profile.id, phone.phone, phone.type);
-            if (mounted) _reload();
-          },
+      ..showSnackBar(
+        SnackBar(
+          content: Text('أُزيل الرقم ${phone.phone}'),
+          duration: const Duration(seconds: 6),
+          action: SnackBarAction(
+            label: 'تراجع',
+            onPressed: () async {
+              await repo.addPhone(p.profile.id, phone.phone, phone.type);
+              if (mounted) _reload();
+            },
+          ),
         ),
-      ));
+      );
   }
 
   Future<void> _addPhone(BuildContext context, AdminStudentProfile p) async {
     final repo = AdminRepositoryScope.of(context);
     final number = TextEditingController();
     var type = 'parent';
-    await showModalBottomSheet<void>(
+    await showAppSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -792,8 +897,10 @@ class _AdminStudentProfileScreenState
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('إضافة رقم هاتف',
-                  style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'إضافة رقم هاتف',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 16),
               TextField(
                 controller: number,
@@ -806,17 +913,20 @@ class _AdminStudentProfileScreenState
                 onChanged: (v) => setSheetState(() => type = v),
                 options: const [
                   IconToggleOption(
-                      value: 'parent',
-                      icon: Icons.family_restroom,
-                      label: 'ولي الأمر'),
+                    value: 'parent',
+                    icon: Icons.family_restroom,
+                    label: 'ولي الأمر',
+                  ),
                   IconToggleOption(
-                      value: 'student',
-                      icon: Icons.person_outline,
-                      label: 'الطالب'),
+                    value: 'student',
+                    icon: Icons.person_outline,
+                    label: 'الطالب',
+                  ),
                   IconToggleOption(
-                      value: 'landline',
-                      icon: Icons.phone_in_talk_outlined,
-                      label: 'هاتف أرضي'),
+                    value: 'landline',
+                    icon: Icons.phone_in_talk_outlined,
+                    label: 'هاتف أرضي',
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
@@ -824,8 +934,7 @@ class _AdminStudentProfileScreenState
                 label: 'حفظ',
                 onPressed: () async {
                   if (number.text.trim().isEmpty) return;
-                  await repo.addPhone(
-                      p.profile.id, number.text.trim(), type);
+                  await repo.addPhone(p.profile.id, number.text.trim(), type);
                   if (context.mounted) Navigator.of(context).pop();
                 },
               ),
@@ -859,39 +968,52 @@ class _AdminStudentProfileScreenState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SectionHeader(
-              icon: Icons.menu_book_outlined, title: 'سجلات الدورات'),
+            icon: Icons.menu_book_outlined,
+            title: 'سجلات الدورات',
+          ),
           const SizedBox(height: 4),
           if (data.records.isEmpty)
-            Text('لا سجلات في أي دورة',
-                style: Theme.of(context).textTheme.bodyMedium)
+            Text(
+              'لا سجلات في أي دورة',
+              style: Theme.of(context).textTheme.bodyMedium,
+            )
           else
             for (final r in data.records)
               ListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.auto_stories_outlined,
-                    color: tokens.brandText),
-                title: Text(r.course,
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                leading: Icon(
+                  Icons.auto_stories_outlined,
+                  color: tokens.brandText,
+                ),
+                title: Text(
+                  r.course,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('${r.points}',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            color: tokens.rewardText)),
+                    Text(
+                      '${r.points}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: tokens.rewardText,
+                      ),
+                    ),
                     const SizedBox(width: 4),
-                    Text('نقطة',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: tokens.textMuted)),
+                    Text(
+                      'نقطة',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                    ),
                     const SizedBox(width: 4),
                     Icon(Icons.chevron_left, color: tokens.borderStructural),
                   ],
                 ),
                 onTap: () => context.push(
-                    '/admin/students/${widget.studentId}/courses/${r.courseId}'),
+                  '/admin/students/${widget.studentId}/courses/${r.courseId}',
+                ),
               ),
         ],
       ),
@@ -905,11 +1027,12 @@ class _AdminStudentProfileScreenState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SectionHeader(
-              icon: Icons.rule_folder_outlined, title: 'طلبات التغيير'),
+            icon: Icons.rule_folder_outlined,
+            title: 'طلبات التغيير',
+          ),
           const SizedBox(height: 8),
           if (data.requests.isEmpty)
-            Text('لا طلبات',
-                style: Theme.of(context).textTheme.bodyMedium)
+            Text('لا طلبات', style: Theme.of(context).textTheme.bodyMedium)
           else
             for (final r in data.requests)
               Padding(
@@ -920,8 +1043,10 @@ class _AdminStudentProfileScreenState
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('${r.fieldLabel}: ${r.currentValue ?? '—'} → ${r.requestedValue}',
-                              style: Theme.of(context).textTheme.bodyMedium),
+                          Text(
+                            '${r.fieldLabel}: ${r.currentValue ?? '—'} → ${r.requestedValue}',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
                         ],
                       ),
                     ),
@@ -1007,16 +1132,18 @@ class _TapRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyLarge
-                          ?.copyWith(fontWeight: FontWeight.w700)),
-                  Text(subtitle,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: tokens.textMuted)),
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                  ),
                 ],
               ),
             ),

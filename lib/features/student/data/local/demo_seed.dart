@@ -10,9 +10,9 @@ import 'student_database.dart' as db;
 ///   matn recitations, transactions, exams, certificates, distributions.
 /// Idempotent — runs only once (guarded by a marker row in `AppMeta`).
 Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
-  final marker = await (database.select(database.appMeta)
-        ..where((t) => t.key.equals('seeded')))
-      .getSingleOrNull();
+  final marker = await (database.select(
+    database.appMeta,
+  )..where((t) => t.key.equals('seeded'))).getSingleOrNull();
   if (marker != null) return;
 
   final now = DateTime.now();
@@ -20,7 +20,12 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
 
   // ── Teams + team types ─────────────────────────────────────────────────
   const teams = [
-    (id: 1, name: 'حلقة القرآن - أ', type: 'قرآن', teacher: 'أ. محمود عبد الله'),
+    (
+      id: 1,
+      name: 'حلقة القرآن - أ',
+      type: 'قرآن',
+      teacher: 'أ. محمود عبد الله',
+    ),
     (id: 2, name: 'حلقة المستوى العام', type: 'عام', teacher: 'أ. سامي حسن'),
     (id: 3, name: 'حلقة القرآن - ب', type: 'قرآن', teacher: 'أ. خالد الراجحي'),
     (id: 4, name: 'حلقة التلاوة', type: 'مستوى', teacher: 'أ. إبراهيم صالح'),
@@ -192,7 +197,9 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
   final c1Start = today.subtract(const Duration(days: 28));
   for (var i = 0; i < 14; i++) {
     final date = c1Start.add(Duration(days: i * 2));
-    await database.into(database.sessions).insert(
+    await database
+        .into(database.sessions)
+        .insert(
           db.SessionsCompanion.insert(
             id: Value(100 + i),
             courseId: 1,
@@ -205,7 +212,9 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
   final c2Start = today.subtract(const Duration(days: 90));
   for (var i = 0; i < 17; i++) {
     final date = c2Start.add(Duration(days: i * 3));
-    await database.into(database.sessions).insert(
+    await database
+        .into(database.sessions)
+        .insert(
           db.SessionsCompanion.insert(
             id: Value(120 + i),
             courseId: 2,
@@ -239,13 +248,16 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
         };
         final hour = isLate ? 16 : (early ? 15 : 16);
         final minute = isLate ? 40 : (early ? 45 : 5 + (studentId % 20));
-        await database.into(database.attendances).insert(
+        await database
+            .into(database.attendances)
+            .insert(
               db.AttendancesCompanion.insert(
                 id: Value(nextId++),
                 studentId: studentId,
                 sessionId: sessionBase + i,
                 arrivalTime: Value(
-                    DateTime(day.year, day.month, day.day, hour, minute)),
+                  DateTime(day.year, day.month, day.day, hour, minute),
+                ),
               ),
             );
       }
@@ -287,7 +299,9 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
       final units = quranUnitsOfPage(page);
       // Record every unit of split pages; single pages get one record.
       for (final unit in units) {
-        await database.into(database.memorizations).insert(
+        await database
+            .into(database.memorizations)
+            .insert(
               db.MemorizationsCompanion.insert(
                 id: Value(memId++),
                 studentId: studentId,
@@ -307,18 +321,28 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
 
   // Demo student: juz-30 pages 581..592 (incl. split pages 583/587/589/591/592).
   await seedMemorization(
-    courseId: 1, sessionBase: 100, sessionCount: 14,
-    studentId: 1, firstPage: 581, count: 12,
+    courseId: 1,
+    sessionBase: 100,
+    sessionCount: 14,
+    studentId: 1,
+    firstPage: 581,
+    count: 12,
   );
   // Demo student: a few pages in the ended course.
   await seedMemorization(
-    courseId: 2, sessionBase: 120, sessionCount: 17,
-    studentId: 1, firstPage: 540, count: 5,
+    courseId: 2,
+    sessionBase: 120,
+    sessionCount: 17,
+    studentId: 1,
+    firstPage: 540,
+    count: 5,
   );
   // Every other student memorizes a stretch of pages in course 1.
   for (var s = 2; s <= names.length; s++) {
     await seedMemorization(
-      courseId: 1, sessionBase: 100, sessionCount: 14,
+      courseId: 1,
+      sessionBase: 100,
+      sessionCount: 14,
       studentId: s,
       firstPage: 470 + (s % 8) * 15 + (s % 3),
       count: 6 + (s % 5),
@@ -331,7 +355,9 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
     for (var u = 0; u < units.length; u++) {
       final unit = units[u];
       final day = c1Start.add(const Duration(days: 20));
-      await database.into(database.memorizations).insert(
+      await database
+          .into(database.memorizations)
+          .insert(
             db.MemorizationsCompanion.insert(
               id: Value(memId++),
               studentId: s,
@@ -350,9 +376,16 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
 
   // ── Transactions (all 5 types) ──────────────────────────────────────────
   var txId = 400;
-  Future<void> seedTx(int studentId, String type, int value,
-      {int sessionId = 103, String? description}) async {
-    await database.into(database.transactions).insert(
+  Future<void> seedTx(
+    int studentId,
+    String type,
+    int value, {
+    int sessionId = 103,
+    String? description,
+  }) async {
+    await database
+        .into(database.transactions)
+        .insert(
           db.TransactionsCompanion.insert(
             id: Value(txId++),
             studentId: studentId,
@@ -368,7 +401,13 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
   await seedTx(1, 'reward', 5, description: 'مكافأة انتظام');
   await seedTx(1, 'penalty', 2, sessionId: 105, description: 'خصم تأخير');
   await seedTx(1, 'purchase', 3, sessionId: 107, description: 'شراء من المتجر');
-  await seedTx(1, 'collection', 4, sessionId: 109, description: 'تحصيل نقاط سابقة');
+  await seedTx(
+    1,
+    'collection',
+    4,
+    sessionId: 109,
+    description: 'تحصيل نقاط سابقة',
+  );
   await seedTx(1, 'incomeExpense', 6, sessionId: 111, description: 'دخل وصرف');
   for (var s = 2; s <= names.length; s++) {
     if (s % 2 == 0) {
@@ -439,9 +478,15 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
   });
 
   var subId = 600;
-  Future<void> seedSubmission(int studentId, int examId, double mark,
-      {DateTime? date}) async {
-    await database.into(database.examSubmissions).insert(
+  Future<void> seedSubmission(
+    int studentId,
+    int examId,
+    double mark, {
+    DateTime? date,
+  }) async {
+    await database
+        .into(database.examSubmissions)
+        .insert(
           db.ExamSubmissionsCompanion.insert(
             id: Value(subId++),
             studentId: studentId,
@@ -452,13 +497,37 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
         );
   }
 
-  await seedSubmission(1, 500, 44.0, date: c1Start.add(const Duration(days: 10)));
-  await seedSubmission(1, 501, 18.0, date: c1Start.add(const Duration(days: 16)));
-  await seedSubmission(1, 502, 88.0, date: c1Start.add(const Duration(days: 22)));
-  await seedSubmission(1, 503, 74.0, date: c2Start.add(const Duration(days: 40)));
+  await seedSubmission(
+    1,
+    500,
+    44.0,
+    date: c1Start.add(const Duration(days: 10)),
+  );
+  await seedSubmission(
+    1,
+    501,
+    18.0,
+    date: c1Start.add(const Duration(days: 16)),
+  );
+  await seedSubmission(
+    1,
+    502,
+    88.0,
+    date: c1Start.add(const Duration(days: 22)),
+  );
+  await seedSubmission(
+    1,
+    503,
+    74.0,
+    date: c2Start.add(const Duration(days: 40)),
+  );
   for (var s = 2; s <= 10; s++) {
-    await seedSubmission(s, 502, 40.0 + (s * 5) % 55,
-        date: c1Start.add(const Duration(days: 22)));
+    await seedSubmission(
+      s,
+      502,
+      40.0 + (s * 5) % 55,
+      date: c1Start.add(const Duration(days: 22)),
+    );
   }
 
   // ── Certificates ────────────────────────────────────────────────────────
@@ -535,9 +604,15 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
     );
   });
   var matnRecId = 900;
-  Future<void> seedMatnRec(int studentId, int matnId, int lastVerse,
-      {int? sessionId}) async {
-    await database.into(database.matnRecitations).insert(
+  Future<void> seedMatnRec(
+    int studentId,
+    int matnId,
+    int lastVerse, {
+    int? sessionId,
+  }) async {
+    await database
+        .into(database.matnRecitations)
+        .insert(
           db.MatnRecitationsCompanion.insert(
             id: Value(matnRecId++),
             studentId: studentId,
@@ -560,30 +635,60 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
 
   // ── Admin content (subjects + distributables + distributions) ───────────
   await database.batch((b) {
-    b.insert(database.subjects,
-        db.SubjectsCompanion.insert(
-            id: const Value(1), name: 'القرآن الكريم', book: const Value('المصحف')));
-    b.insert(database.subjects,
-        db.SubjectsCompanion.insert(
-            id: const Value(2), name: 'التجويد', book: const Value('الجزرية')));
-    b.insert(database.subjects,
-        db.SubjectsCompanion.insert(id: const Value(3), name: 'الحفظ'));
-    b.insert(database.subjects,
-        db.SubjectsCompanion.insert(
-            id: const Value(4), name: 'الفقه', book: const Value('الفقه الميسر')));
+    b.insert(
+      database.subjects,
+      db.SubjectsCompanion.insert(
+        id: const Value(1),
+        name: 'القرآن الكريم',
+        book: const Value('المصحف'),
+      ),
+    );
+    b.insert(
+      database.subjects,
+      db.SubjectsCompanion.insert(
+        id: const Value(2),
+        name: 'التجويد',
+        book: const Value('الجزرية'),
+      ),
+    );
+    b.insert(
+      database.subjects,
+      db.SubjectsCompanion.insert(id: const Value(3), name: 'الحفظ'),
+    );
+    b.insert(
+      database.subjects,
+      db.SubjectsCompanion.insert(
+        id: const Value(4),
+        name: 'الفقه',
+        book: const Value('الفقه الميسر'),
+      ),
+    );
 
-    b.insert(database.distributables,
-        db.DistributablesCompanion.insert(id: const Value(1), name: 'مصحف'));
-    b.insert(database.distributables,
-        db.DistributablesCompanion.insert(
-            id: const Value(2), name: 'دفتر', note: const Value('A5')));
-    b.insert(database.distributables,
-        db.DistributablesCompanion.insert(
-            id: const Value(3), name: 'بطاقة مكافأة'));
+    b.insert(
+      database.distributables,
+      db.DistributablesCompanion.insert(id: const Value(1), name: 'مصحف'),
+    );
+    b.insert(
+      database.distributables,
+      db.DistributablesCompanion.insert(
+        id: const Value(2),
+        name: 'دفتر',
+        note: const Value('A5'),
+      ),
+    );
+    b.insert(
+      database.distributables,
+      db.DistributablesCompanion.insert(
+        id: const Value(3),
+        name: 'بطاقة مكافأة',
+      ),
+    );
   });
   var distId = 1;
   for (var s = 1; s <= names.length; s++) {
-    await database.into(database.distributions).insert(
+    await database
+        .into(database.distributions)
+        .insert(
           db.DistributionsCompanion.insert(
             id: Value(distId++),
             studentId: s,
@@ -593,7 +698,9 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
           ),
         );
     if (s.isEven) {
-      await database.into(database.distributions).insert(
+      await database
+          .into(database.distributions)
+          .insert(
             db.DistributionsCompanion.insert(
               id: Value(distId++),
               studentId: s,
@@ -608,39 +715,47 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
   // ── Change requests ─────────────────────────────────────────────────────
   await database.batch((b) {
     b.insert(
-        database.changeRequests,
-        db.ChangeRequestsCompanion.insert(
-            id: const Value(1),
-            studentId: 1,
-            field: 'phoneNumber',
-            currentValue: const Value('+201001112233'),
-            requestedValue: '+201005554433',
-            createdAt: Value(now.subtract(const Duration(days: 1)))));
+      database.changeRequests,
+      db.ChangeRequestsCompanion.insert(
+        id: const Value(1),
+        studentId: 1,
+        field: 'phoneNumber',
+        currentValue: const Value('+201001112233'),
+        requestedValue: '+201005554433',
+        createdAt: Value(now.subtract(const Duration(days: 1))),
+      ),
+    );
     b.insert(
-        database.changeRequests,
-        db.ChangeRequestsCompanion.insert(
-            id: const Value(2),
-            studentId: 2,
-            field: 'fatherName',
-            currentValue: const Value('أب يوسف'),
-            requestedValue: 'أحمد محمود',
-            createdAt: Value(now.subtract(const Duration(days: 3)))));
+      database.changeRequests,
+      db.ChangeRequestsCompanion.insert(
+        id: const Value(2),
+        studentId: 2,
+        field: 'fatherName',
+        currentValue: const Value('أب يوسف'),
+        requestedValue: 'أحمد محمود',
+        createdAt: Value(now.subtract(const Duration(days: 3))),
+      ),
+    );
     b.insert(
-        database.changeRequests,
-        db.ChangeRequestsCompanion.insert(
-            id: const Value(3),
-            studentId: 15,
-            field: 'yearOfBirth',
-            currentValue: const Value('2013'),
-            requestedValue: '2012',
-            createdAt: Value(now.subtract(const Duration(days: 5)))));
+      database.changeRequests,
+      db.ChangeRequestsCompanion.insert(
+        id: const Value(3),
+        studentId: 15,
+        field: 'yearOfBirth',
+        currentValue: const Value('2013'),
+        requestedValue: '2012',
+        createdAt: Value(now.subtract(const Duration(days: 5))),
+      ),
+    );
   });
 
   // ── Mark as seeded ─────────────────────────────────────────────────────
-  await database.into(database.appMeta).insert(
+  await database
+      .into(database.appMeta)
+      .insert(
         db.AppMetaCompanion.insert(key: 'mosque_name', value: 'جامع الفرقان'),
       );
-  await database.into(database.appMeta).insert(
-        db.AppMetaCompanion.insert(key: 'seeded', value: '2'),
-      );
+  await database
+      .into(database.appMeta)
+      .insert(db.AppMetaCompanion.insert(key: 'seeded', value: '2'));
 }

@@ -33,19 +33,13 @@ class _AnimatedEntranceState extends State<AnimatedEntrance>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: widget.duration,
-    );
+    _controller = AnimationController(vsync: this, duration: widget.duration);
     final curve = CurvedAnimation(
       parent: _controller,
       curve: Curves.easeOutCubic,
     );
     _opacity = Tween<double>(begin: 0, end: 1).animate(curve);
-    _scale = Tween<double>(
-      begin: widget.fromScale,
-      end: 1,
-    ).animate(curve);
+    _scale = Tween<double>(begin: widget.fromScale, end: 1).animate(curve);
   }
 
   @override
@@ -105,10 +99,7 @@ class _AnimatedEntranceState extends State<AnimatedEntrance>
     if (_disableAnimations) return widget.child;
     return FadeTransition(
       opacity: _opacity,
-      child: ScaleTransition(
-        scale: _scale,
-        child: widget.child,
-      ),
+      child: ScaleTransition(scale: _scale, child: widget.child),
     );
   }
 }

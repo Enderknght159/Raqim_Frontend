@@ -16,9 +16,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.dark(),
-        home: const Scaffold(
-          body: AppCard(child: Text('hello')),
-        ),
+        home: const Scaffold(body: AppCard(child: Text('hello'))),
       ),
     );
     expect(find.text('hello'), findsOneWidget);
@@ -45,9 +43,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.dark(),
-        home: const Scaffold(
-          body: StatTile(label: 'الطلاب', value: 42),
-        ),
+        home: const Scaffold(body: StatTile(label: 'الطلاب', value: 42)),
       ),
     );
     expect(find.text('الطلاب'), findsOneWidget);

@@ -6,6 +6,7 @@ import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/date_grouped_list.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/icon_tile.dart';
+import '../../../../core/widgets/responsive_page.dart';
 import '../admin_shell.dart';
 
 /// E13 — Audit log (trial: derived recent writes; restore needs the server).
@@ -17,7 +18,13 @@ class AdminAuditScreen extends StatefulWidget {
   State<AdminAuditScreen> createState() => _AdminAuditScreenState();
 }
 
-typedef _Write = ({String model, String action, String description, DateTime when, int recordId});
+typedef _Write = ({
+  String model,
+  String action,
+  String description,
+  DateTime when,
+  int recordId,
+});
 
 class _AdminAuditScreenState extends State<AdminAuditScreen> {
   late Future<List<_Write>> _future;
@@ -77,7 +84,10 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
                 child: ListView(
                   scrollDirection: Axis.horizontal,
                   reverse: true,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   children: [
                     ChoiceChip(
                       label: const Text('الكل'),
@@ -89,8 +99,7 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
                       ChoiceChip(
                         label: Text(_modelLabel(m)),
                         selected: _modelFilter == m,
-                        onSelected: (_) =>
-                            setState(() => _modelFilter = m),
+                        onSelected: (_) => setState(() => _modelFilter = m),
                       ),
                       const SizedBox(width: 8),
                     ],
@@ -100,11 +109,13 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
               Expanded(
                 child: visible.isEmpty
                     ? const Center(child: Text('لا نتائج'))
-                    : DateGroupedList<_Write>(
-                        items: visible,
-                        dateOf: (w) => w.when,
-                        itemBuilder: (context, w) =>
-                            _row(context, w, tokens),
+                    : ResponsivePage(
+                        maxWidth: 1200,
+                        child: DateGroupedList<_Write>(
+                          items: visible,
+                          dateOf: (w) => w.when,
+                          itemBuilder: (context, w) => _row(context, w, tokens),
+                        ),
                       ),
               ),
             ],
@@ -121,22 +132,29 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
           children: [
-            IconTile(icon: _icon(w.model), color: tokens.info, size: 40, iconSize: 20),
+            IconTile(
+              icon: _icon(w.model),
+              color: tokens.info,
+              size: 40,
+              iconSize: 20,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(w.description,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyLarge
-                          ?.copyWith(fontWeight: FontWeight.w600)),
-                  Text('${_modelLabel(w.model)} · ${w.action}',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: tokens.textMuted)),
+                  Text(
+                    w.description,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    '${_modelLabel(w.model)} · ${w.action}',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                  ),
                 ],
               ),
             ),
@@ -145,7 +163,8 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
               icon: const Icon(Icons.restore, size: 20),
               onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                    content: Text('الاسترجاع يتطلب الخادم (مؤجّل تجريبيًا)')),
+                  content: Text('الاسترجاع يتطلب الخادم (مؤجّل تجريبيًا)'),
+                ),
               ),
             ),
           ],
@@ -155,16 +174,16 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
   }
 
   IconData _icon(String model) => switch (model) {
-        'Attendance' => Icons.schedule,
-        'Memorization' => Icons.menu_book,
-        'Transaction' => Icons.payments_outlined,
-        _ => Icons.edit_note,
-      };
+    'Attendance' => Icons.schedule,
+    'Memorization' => Icons.menu_book,
+    'Transaction' => Icons.payments_outlined,
+    _ => Icons.edit_note,
+  };
 
   String _modelLabel(String model) => switch (model) {
-        'Attendance' => 'الحضور',
-        'Memorization' => 'الحفظ',
-        'Transaction' => 'المعاملات',
-        _ => model,
-      };
+    'Attendance' => 'الحضور',
+    'Memorization' => 'الحفظ',
+    'Transaction' => 'المعاملات',
+    _ => model,
+  };
 }

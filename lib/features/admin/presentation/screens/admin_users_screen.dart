@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/responsive_grid.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
 import '../widgets/permission_editor.dart';
@@ -55,29 +56,42 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     if (existing != null) return existing;
     final result = switch (kind) {
       AdminUserKind.admin => const AdminPermissionResult(
-            isAdmin: true,
-            granted: {
-              'students', 'attendance', 'memorization', 'recitation', 'matn',
-              'points', 'exams', 'distributions', 'teams', 'courses',
-              'reports', 'imports',
-            },
-            abilities: {
-              'messagesExport', 'barcodeExport', 'phoneSearch',
-              'dataChangeApproval', 'auditView', 'userManagement',
-              'permissionManagement',
-            },
-          ),
+        isAdmin: true,
+        granted: {
+          'students',
+          'attendance',
+          'memorization',
+          'recitation',
+          'matn',
+          'points',
+          'exams',
+          'distributions',
+          'teams',
+          'courses',
+          'reports',
+          'imports',
+        },
+        abilities: {
+          'messagesExport',
+          'barcodeExport',
+          'phoneSearch',
+          'dataChangeApproval',
+          'auditView',
+          'userManagement',
+          'permissionManagement',
+        },
+      ),
       AdminUserKind.teacher => const AdminPermissionResult(
-            isAdmin: false,
-            granted: {'attendance', 'memorization', 'recitation', 'matn'},
-            abilities: {},
-            isTeacher: true,
-          ),
+        isAdmin: false,
+        granted: {'attendance', 'memorization', 'recitation', 'matn'},
+        abilities: {},
+        isTeacher: true,
+      ),
       AdminUserKind.student => const AdminPermissionResult(
-            isAdmin: false,
-            granted: {'students', 'attendance', 'points', 'courses'},
-            abilities: {},
-          ),
+        isAdmin: false,
+        granted: {'students', 'attendance', 'points', 'courses'},
+        abilities: {},
+      ),
     };
     _permissions[key] = result;
     return result;
@@ -141,37 +155,43 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              if (showAdmin)
-                _userTile(
-                  context,
-                  key: 'admin',
-                  name: 'مدير المسجد',
-                  subtitle: 'admin',
-                  kind: AdminUserKind.admin,
-                  username: 'admin',
-                ),
-              for (final t in visibleTeachers)
-                if (matchesFilter('t-${t.name}', AdminUserKind.teacher))
-                  _userTile(
-                    context,
-                    key: 't-${t.name}',
-                    name: t.name,
-                    subtitle: (teamNamesByTeacher[t.name] ?? []).isEmpty
-                        ? 'لا حلقات'
-                        : (teamNamesByTeacher[t.name]!).join(' · '),
-                    kind: AdminUserKind.teacher,
-                    teams: teamNamesByTeacher[t.name] ?? const [],
-                  ),
-              for (final s in visibleStudents)
-                if (matchesFilter('s-${s.id}', AdminUserKind.student))
-                  _userTile(
-                    context,
-                    key: 's-${s.id}',
-                    name: s.name,
-                    subtitle: 'حساب طالب · ${s.barcode}',
-                    kind: AdminUserKind.student,
-                    studentId: s.id,
-                  ),
+              ResponsiveGrid(
+                minItemWidth: 360,
+                maxColumns: 3,
+                children: [
+                  if (showAdmin)
+                    _userTile(
+                      context,
+                      key: 'admin',
+                      name: 'مدير المسجد',
+                      subtitle: 'admin',
+                      kind: AdminUserKind.admin,
+                      username: 'admin',
+                    ),
+                  for (final t in visibleTeachers)
+                    if (matchesFilter('t-${t.name}', AdminUserKind.teacher))
+                      _userTile(
+                        context,
+                        key: 't-${t.name}',
+                        name: t.name,
+                        subtitle: (teamNamesByTeacher[t.name] ?? []).isEmpty
+                            ? 'لا حلقات'
+                            : (teamNamesByTeacher[t.name]!).join(' · '),
+                        kind: AdminUserKind.teacher,
+                        teams: teamNamesByTeacher[t.name] ?? const [],
+                      ),
+                  for (final s in visibleStudents)
+                    if (matchesFilter('s-${s.id}', AdminUserKind.student))
+                      _userTile(
+                        context,
+                        key: 's-${s.id}',
+                        name: s.name,
+                        subtitle: 'حساب طالب · ${s.barcode}',
+                        kind: AdminUserKind.student,
+                        studentId: s.id,
+                      ),
+                ],
+              ),
             ],
           );
         },
@@ -209,8 +229,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               radius: 18,
               backgroundColor: switch (kind) {
                 AdminUserKind.admin => tokens.infoTint,
-                AdminUserKind.teacher =>
-                  tokens.accentMatn.withValues(alpha: 0.15),
+                AdminUserKind.teacher => tokens.accentMatn.withValues(
+                  alpha: 0.15,
+                ),
                 AdminUserKind.student => tokens.brandTint,
               },
               child: Icon(
@@ -232,17 +253,19 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyLarge
-                          ?.copyWith(fontWeight: FontWeight.w700)),
-                  Text(subtitle,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: tokens.textMuted)),
+                  Text(
+                    name,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                  ),
                 ],
               ),
             ),

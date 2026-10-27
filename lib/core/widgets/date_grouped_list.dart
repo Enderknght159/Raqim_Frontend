@@ -35,8 +35,7 @@ class DateGroupedList<T> extends StatelessWidget {
       groups.last.items.add(item);
     }
     return ListView.builder(
-      padding: EdgeInsets.symmetric(
-          horizontal: horizontalPadding, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 8),
       itemCount: groups.length,
       itemBuilder: (context, i) => _DayGroup<T>(
         day: groups[i].day,
@@ -56,8 +55,18 @@ String defaultDayLabel(DateTime day) {
   if (diff == 0) return 'اليوم';
   if (diff == 1) return 'أمس';
   const months = [
-    'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-    'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
+    'يناير',
+    'فبراير',
+    'مارس',
+    'أبريل',
+    'مايو',
+    'يونيو',
+    'يوليو',
+    'أغسطس',
+    'سبتمبر',
+    'أكتوبر',
+    'نوفمبر',
+    'ديسمبر',
   ];
   return '${day.day} ${months[day.month - 1]}';
 }
@@ -97,9 +106,9 @@ class _DayGroup<T> extends StatelessWidget {
               Text(
                 label,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: tokens.textPrimary,
-                    ),
+                  fontWeight: FontWeight.w800,
+                  color: tokens.textPrimary,
+                ),
               ),
             ],
           ),

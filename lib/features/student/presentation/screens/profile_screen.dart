@@ -7,14 +7,16 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/icon_toggle_group.dart';
+import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../auth/presentation/cubits/auth_cubit.dart';
-import '../../data/student_local_repository.dart';
+import '../../data/student_repository.dart';
 import '../../domain/models/student_models.dart';
 import '../student_shell.dart';
 import '../widgets/qr_code_view.dart';
 import '../widgets/student_header.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// B5 — الملف: welcome header (with mosque name) + barcode + data + phones +
 /// edit requests + account.
@@ -22,7 +24,8 @@ class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
   Future<({StudentProfileModel profile, String mosqueName})> _load(
-      StudentLocalRepository repo) async {
+    StudentRepository repo,
+  ) async {
     final profile = await repo.profile();
     final mosque = await repo.mosqueName();
     return (profile: profile, mosqueName: mosque);
@@ -36,106 +39,118 @@ class ProfileScreen extends StatelessWidget {
         future: _load(repo),
         builder: (context, data) {
           final profile = data.profile;
-          return RefreshIndicator(
-            onRefresh: () async {},
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              children: [
-                StudentHeader(profile: profile, mosqueName: data.mosqueName),
-                const SizedBox(height: 16),
-                _barcodeCard(context, profile),
-                const SizedBox(height: 16),
-                const SectionHeader(icon: Icons.person_outline, title: 'البيانات'),
-                const SizedBox(height: 8),
-                AppCard(
-                  child: Column(
-                    children: [
-                      _infoRow(
-                        context,
-                        label: 'الاسم',
-                        value: profile.name,
-                        onEdit: () => _requestEdit(
+          return ResponsivePage(
+            maxWidth: 720,
+            child: RefreshIndicator(
+              onRefresh: () async {},
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                children: [
+                  StudentHeader(profile: profile, mosqueName: data.mosqueName),
+                  const SizedBox(height: 16),
+                  _barcodeCard(context, profile),
+                  const SizedBox(height: 16),
+                  const SectionHeader(
+                    icon: Icons.person_outline,
+                    title: 'البيانات',
+                  ),
+                  const SizedBox(height: 8),
+                  AppCard(
+                    child: Column(
+                      children: [
+                        _infoRow(
                           context,
                           label: 'الاسم',
-                          currentValue: profile.name,
-                          kind: EditKind.text,
+                          value: profile.name,
+                          onEdit: () => _requestEdit(
+                            context,
+                            label: 'الاسم',
+                            currentValue: profile.name,
+                            kind: EditKind.text,
+                            field: 'name',
+                          ),
                         ),
-                      ),
-                      _divider(),
-                      _infoRow(
-                        context,
-                        label: 'اسم الأب',
-                        value: profile.fatherName ?? '—',
-                        onEdit: () => _requestEdit(
+                        _divider(),
+                        _infoRow(
                           context,
                           label: 'اسم الأب',
-                          currentValue: profile.fatherName ?? '',
-                          kind: EditKind.text,
+                          value: profile.fatherName ?? '—',
+                          onEdit: () => _requestEdit(
+                            context,
+                            label: 'اسم الأب',
+                            currentValue: profile.fatherName ?? '',
+                            kind: EditKind.text,
+                            field: 'fatherName',
+                          ),
                         ),
-                      ),
-                      _divider(),
-                      _infoRow(
-                        context,
-                        label: 'سنة الميلاد',
-                        value: profile.yearOfBirth?.toString() ?? '—',
-                        onEdit: () => _requestEdit(
+                        _divider(),
+                        _infoRow(
                           context,
                           label: 'سنة الميلاد',
-                          currentValue: profile.yearOfBirth?.toString() ?? '',
-                          kind: EditKind.year,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SectionHeader(
-                  icon: Icons.phone_outlined,
-                  title: 'أرقام الهاتف',
-                  trailing: _iconAction(
-                    context,
-                    tooltip: 'إضافة رقم',
-                    icon: Icons.add,
-                    onPressed: () => _addOrEditPhone(context),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                AppCard(
-                  child: Column(
-                    children: [
-                      if (profile.phones.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Text('لا أرقام مسجلة',
-                              style: Theme.of(context).textTheme.bodyMedium),
-                        )
-                      else
-                        for (final phone in profile.phones)
-                          _phoneRow(
+                          value: profile.yearOfBirth?.toString() ?? '—',
+                          onEdit: () => _requestEdit(
                             context,
-                            phone,
-                            onEdit: () => _addOrEditPhone(context, editing: phone),
+                            label: 'سنة الميلاد',
+                            currentValue: profile.yearOfBirth?.toString() ?? '',
+                            kind: EditKind.year,
+                            field: 'yearOfBirth',
                           ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                AppButton(
-                  label: 'تبديل الحساب',
-                  variant: AppButtonVariant.secondary,
-                  icon: Icons.swap_horiz,
-                  onPressed: () => _switchAccount(context),
-                ),
-                const SizedBox(height: 8),
-                AppButton(
-                  label: 'خروج',
-                  variant: AppButtonVariant.destructive,
-                  icon: Icons.logout,
-                  onPressed: () => _confirmLogout(context),
-                ),
-                const SizedBox(height: 24),
-              ],
+                  const SizedBox(height: 16),
+                  SectionHeader(
+                    icon: Icons.phone_outlined,
+                    title: 'أرقام الهاتف',
+                    trailing: _iconAction(
+                      context,
+                      tooltip: 'إضافة رقم',
+                      icon: Icons.add,
+                      onPressed: () => _addOrEditPhone(context),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  AppCard(
+                    child: Column(
+                      children: [
+                        if (profile.phones.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Text(
+                              'لا أرقام مسجلة',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          )
+                        else
+                          for (final phone in profile.phones)
+                            _phoneRow(
+                              context,
+                              phone,
+                              onEdit: () =>
+                                  _addOrEditPhone(context, editing: phone),
+                            ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  AppButton(
+                    label: 'تبديل الحساب',
+                    variant: AppButtonVariant.secondary,
+                    icon: Icons.swap_horiz,
+                    onPressed: () => _switchAccount(context),
+                  ),
+                  const SizedBox(height: 8),
+                  AppButton(
+                    label: 'خروج',
+                    variant: AppButtonVariant.destructive,
+                    icon: Icons.logout,
+                    onPressed: () => _confirmLogout(context),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
             ),
           );
         },
@@ -175,21 +190,28 @@ class ProfileScreen extends StatelessWidget {
       onTap: () => _showBarcode(context, profile),
       child: Row(
         children: [
-          Icon(Icons.qr_code_2,
-              size: 40, color: Theme.of(context).extension<AppTokens>()!.info),
+          Icon(
+            Icons.qr_code_2,
+            size: 40,
+            color: Theme.of(context).extension<AppTokens>()!.info,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(profile.barcode,
-                    textDirection: TextDirection.ltr,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.2,
-                        )),
-                Text('اضغط للعرض الكامل',
-                    style: TextStyle(color: tokens.textMuted, fontSize: 13)),
+                Text(
+                  profile.barcode,
+                  textDirection: TextDirection.ltr,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                Text(
+                  'اضغط للعرض الكامل',
+                  style: TextStyle(color: tokens.textMuted, fontSize: 13),
+                ),
               ],
             ),
           ),
@@ -205,8 +227,9 @@ class ProfileScreen extends StatelessWidget {
     // screens never overflow (the old fixed sheet overflowed by ~81px).
     final size = MediaQuery.sizeOf(context);
     final qrSize = (size.width - 96).clamp(140.0, 220.0);
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
+      maxWidth: 420,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (context) => SafeArea(
@@ -216,22 +239,25 @@ class ProfileScreen extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('الباركود الخاص بك',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: tokens.info,
-                      )),
+              Text(
+                'الباركود الخاص بك',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: tokens.info,
+                ),
+              ),
               const SizedBox(height: 16),
-              Center(child: QrCodeCard(code: profile.barcode, size: qrSize)),
+              Center(
+                child: QrCodeCard(code: profile.barcode, size: qrSize),
+              ),
               const SizedBox(height: 12),
               Text(
                 'اعرضه أمام الماسح عند بوابة الحلقة',
                 textAlign: TextAlign.center,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: tokens.textMuted),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
               ),
             ],
           ),
@@ -265,13 +291,16 @@ class ProfileScreen extends StatelessWidget {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      title: Text(label,
-          style: TextStyle(color: tokens.textMuted, fontSize: 13)),
-      subtitle: Text(value,
-          style: Theme.of(context)
-              .textTheme
-              .bodyLarge
-              ?.copyWith(fontWeight: FontWeight.w700)),
+      title: Text(
+        label,
+        style: TextStyle(color: tokens.textMuted, fontSize: 13),
+      ),
+      subtitle: Text(
+        value,
+        style: Theme.of(
+          context,
+        ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+      ),
       trailing: _iconAction(
         context,
         tooltip: 'تعديل $label',
@@ -281,8 +310,11 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _phoneRow(BuildContext context, Phone phone,
-      {required VoidCallback onEdit}) {
+  Widget _phoneRow(
+    BuildContext context,
+    Phone phone, {
+    required VoidCallback onEdit,
+  }) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     return ListTile(
       dense: true,
@@ -290,9 +322,7 @@ class ProfileScreen extends StatelessWidget {
       leading: Icon(Icons.phone_outlined, color: tokens.brandText),
       title: Row(
         children: [
-          Expanded(
-            child: Text(phone.phone, textDirection: TextDirection.ltr),
-          ),
+          Expanded(child: Text(phone.phone, textDirection: TextDirection.ltr)),
           const SizedBox(width: 8),
           StatusBadge(label: phone.typeLabel, color: tokens.infoLight),
         ],
@@ -306,14 +336,17 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  void _requestEdit(BuildContext context,
-      {required String label,
-      required String currentValue,
-      required EditKind kind}) {
+  void _requestEdit(
+    BuildContext context, {
+    required String label,
+    required String currentValue,
+    required EditKind kind,
+    required String field,
+  }) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final controller = TextEditingController(text: currentValue);
     var error = '';
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -329,11 +362,15 @@ class ProfileScreen extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('طلب تعديل — $label',
-                  style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'طلب تعديل — $label',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 8),
-              Text('يُرسل الطلب للموافقة من الإدارة',
-                  style: TextStyle(color: tokens.textMuted)),
+              Text(
+                'يُرسل الطلب للموافقة من الإدارة',
+                style: TextStyle(color: tokens.textMuted),
+              ),
               const SizedBox(height: 16),
               TextField(
                 controller: controller,
@@ -350,19 +387,30 @@ class ProfileScreen extends StatelessWidget {
               const SizedBox(height: 16),
               AppButton(
                 label: 'إرسال الطلب',
-                onPressed: () {
+                onPressed: () async {
                   final newValue = controller.text.trim();
                   if (newValue.isEmpty || newValue == currentValue.trim()) {
-                    setState(() => error =
-                        'أدخل قيمة جديدة مختلفة عن القيمة الحالية');
+                    setState(
+                      () => error = 'أدخل قيمة جديدة مختلفة عن القيمة الحالية',
+                    );
                     return;
                   }
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content:
-                            Text('تم إرسال طلب التعديل — بانتظار الموافقة')),
-                  );
-                  Navigator.of(context).pop();
+                  try {
+                    await StudentRepositoryScope.of(
+                      context,
+                    ).requestChange(field: field, requestedValue: newValue);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'تم إرسال طلب التعديل — بانتظار الموافقة',
+                        ),
+                      ),
+                    );
+                    Navigator.of(context).pop();
+                  } catch (e) {
+                    setState(() => error = 'تعذّر الإرسال: $e');
+                  }
                 },
               ),
             ],
@@ -377,7 +425,7 @@ class ProfileScreen extends StatelessWidget {
     final numberController = TextEditingController(text: editing?.phone ?? '');
     var type = editing?.type ?? 'parent';
     var error = '';
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -398,8 +446,10 @@ class ProfileScreen extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
-              Text('الأنواع: ولي الأمر · الطالب · أرضي (BR-622)',
-                  style: TextStyle(color: tokens.textMuted)),
+              Text(
+                'الأنواع: ولي الأمر · الطالب · أرضي (BR-622)',
+                style: TextStyle(color: tokens.textMuted),
+              ),
               const SizedBox(height: 16),
               TextField(
                 controller: numberController,
@@ -421,40 +471,55 @@ class ProfileScreen extends StatelessWidget {
                 onChanged: (v) => setState(() => type = v),
                 options: const [
                   IconToggleOption(
-                      value: 'parent',
-                      icon: Icons.family_restroom,
-                      label: 'ولي الأمر'),
+                    value: 'parent',
+                    icon: Icons.family_restroom,
+                    label: 'ولي الأمر',
+                  ),
                   IconToggleOption(
-                      value: 'student',
-                      icon: Icons.person_outline,
-                      label: 'الطالب'),
+                    value: 'student',
+                    icon: Icons.person_outline,
+                    label: 'الطالب',
+                  ),
                   IconToggleOption(
-                      value: 'landline',
-                      icon: Icons.phone_in_talk_outlined,
-                      label: 'هاتف أرضي'),
+                    value: 'landline',
+                    icon: Icons.phone_in_talk_outlined,
+                    label: 'هاتف أرضي',
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
               AppButton(
                 label: 'إرسال الطلب',
-                onPressed: () {
+                onPressed: () async {
                   final newPhone = numberController.text.trim();
                   if (newPhone.isEmpty ||
-                    (editing != null &&
-                        newPhone == editing.phone.trim() &&
-                        type == editing.type)) {
-                    setState(() =>
-                        error = 'أدخل رقمًا جديدًا مختلفًا أو غيّر النوع');
+                      (editing != null &&
+                          newPhone == editing.phone.trim() &&
+                          type == editing.type)) {
+                    setState(
+                      () => error = 'أدخل رقمًا جديدًا مختلفًا أو غيّر النوع',
+                    );
                     return;
                   }
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
+                  try {
+                    await StudentRepositoryScope.of(context).requestChange(
+                      field: 'phoneNumber',
+                      requestedValue: newPhone,
+                    );
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
                         content: Text(
-                            editing == null
-                                ? 'تم إرسال طلب إضافة الرقم'
-                                : 'تم إرسال طلب تعديل الرقم')),
-                  );
-                  Navigator.of(context).pop();
+                          editing == null
+                              ? 'تم إرسال طلب إضافة الرقم'
+                              : 'تم إرسال طلب تعديل الرقم',
+                        ),
+                      ),
+                    );
+                    Navigator.of(context).pop();
+                  } catch (e) {
+                    setState(() => error = 'تعذّر الإرسال: $e');
+                  }
                 },
               ),
               if (editing != null) ...[
@@ -464,8 +529,7 @@ class ProfileScreen extends StatelessWidget {
                   variant: AppButtonVariant.destructive,
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('تم إرسال طلب إزالة الرقم')),
+                      const SnackBar(content: Text('تم إرسال طلب إزالة الرقم')),
                     );
                     Navigator.of(context).pop();
                   },
@@ -479,19 +543,17 @@ class ProfileScreen extends StatelessWidget {
   }
 
   TextInputType _keyboardFor(EditKind kind) => switch (kind) {
-        EditKind.year => TextInputType.number,
-        EditKind.text => TextInputType.text,
-      };
+    EditKind.year => TextInputType.number,
+    EditKind.text => TextInputType.text,
+  };
 
   List<TextInputFormatter> _formattersFor(EditKind kind) => switch (kind) {
-        EditKind.year => [FilteringTextInputFormatter.digitsOnly],
-        EditKind.text => [],
-      };
+    EditKind.year => [FilteringTextInputFormatter.digitsOnly],
+    EditKind.text => [],
+  };
 
   void _switchAccount(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('وضع تجريبي — حساب واحد فقط')),
-    );
+    context.read<AuthCubit>().logout();
   }
 }
 

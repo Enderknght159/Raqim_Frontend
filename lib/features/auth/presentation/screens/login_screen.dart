@@ -64,8 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: BlocBuilder<AuthCubit, AuthState>(
                 builder: (context, state) {
                   final loading = state is AuthLoginLoading;
-                  final error =
-                      state is AuthLoginFailure ? state.error : null;
+                  final error = state is AuthLoginFailure ? state.error : null;
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -85,17 +84,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       Text(
                         'تسجيل الدخول',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: tokens.info,
-                            ),
+                          fontWeight: FontWeight.w800,
+                          color: tokens.info,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'أدخل كلمة المرور للمتابعة',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(color: tokens.textMuted),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: tokens.textMuted,
+                        ),
                       ),
                       const SizedBox(height: 20),
                       TextField(
@@ -121,8 +119,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           errorText:
                               _submitted && _passwordController.text.isEmpty
-                                  ? 'أدخل كلمة المرور'
-                                  : null,
+                              ? 'أدخل كلمة المرور'
+                              : null,
                         ),
                       ),
                       if (error != null) ...[
@@ -167,17 +165,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   widget.username.isEmpty ? '—' : widget.username,
                   textDirection: TextDirection.ltr,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: tokens.info,
-                      ),
+                    fontWeight: FontWeight.w800,
+                    color: tokens.info,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   'يتم تحديد المسجد تلقائيًا من اسم المستخدم',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
               ],
             ),
@@ -202,10 +199,9 @@ class _LoginScreenState extends State<LoginScreen> {
           Expanded(
             child: Text(
               error.message(arabic: true),
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: tokens.dangerText),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: tokens.dangerText),
             ),
           ),
         ],

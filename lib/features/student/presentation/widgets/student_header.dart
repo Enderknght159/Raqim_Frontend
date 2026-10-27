@@ -31,33 +31,30 @@ class StudentHeader extends StatelessWidget {
               Text(
                 profile.name,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: tokens.textPrimary,
-                    ),
+                  fontWeight: FontWeight.w800,
+                  color: tokens.textPrimary,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
                 '#${profile.barcode}',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: tokens.textMuted),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
               ),
               if (mosqueName != null && mosqueName!.isNotEmpty) ...[
                 const SizedBox(height: 2),
                 Row(
                   children: [
-                    Icon(Icons.mosque_outlined,
-                        size: 13, color: tokens.info),
+                    Icon(Icons.mosque_outlined, size: 13, color: tokens.info),
                     const SizedBox(width: 4),
                     Flexible(
                       child: Text(
                         mosqueName!,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: tokens.info),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: tokens.info),
                       ),
                     ),
                   ],
@@ -67,10 +64,9 @@ class StudentHeader extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   'آخر ظهور: ${_relative(profile.lastSeenAt!)}',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.brandText),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.brandText),
                 ),
               ],
             ],

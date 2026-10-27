@@ -4,16 +4,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:raqim/core/storage/secure_storage.dart';
 import 'package:raqim/features/auth/data/auth_remote_data_source.dart';
 import 'package:raqim/features/auth/data/auth_repository.dart';
+import 'package:raqim/features/auth/domain/auth_session.dart';
+import 'package:raqim/features/auth/domain/models/app_role.dart';
 import 'package:raqim/features/auth/domain/models/user_profile.dart';
 import 'package:raqim/features/auth/presentation/cubits/auth_cubit.dart';
 import 'package:raqim/features/auth/presentation/cubits/auth_state.dart';
+import 'package:raqim/core/router/route_guards.dart';
 
 class _SuccessRepo extends AuthRepository {
   _SuccessRepo()
-      : super(
-          remote: AuthRemoteDataSource(dio: Dio()),
-          storage: SecureStorage(),
-        );
+    : super(
+        remote: AuthRemoteDataSource(dio: Dio()),
+        storage: SecureStorage(),
+        session: ApiSession(),
+      );
 
   @override
   Future<bool> isLoggedIn() async => false;
@@ -27,16 +31,19 @@ class _SuccessRepo extends AuthRepository {
 }
 
 void main() {
-  test('login success notifies onAuthChanged (drives GoRouter refresh)', () async {
-    final notifier = _Counter();
-    final cubit = AuthCubit(_SuccessRepo(), onAuthChanged: notifier.bump);
+  test(
+    'login success notifies onAuthChanged (drives GoRouter refresh)',
+    () async {
+      final notifier = _Counter();
+      final cubit = AuthCubit(_SuccessRepo(), onAuthChanged: notifier.bump);
 
-    expect(notifier.count, 0);
-    await cubit.login('admin', 'password');
+      expect(notifier.count, 0);
+      await cubit.login('admin', 'password');
 
-    expect(cubit.state, isA<AuthAuthenticated>());
-    expect(notifier.count, 1, reason: 'router must re-evaluate redirects');
-  });
+      expect(cubit.state, isA<AuthAuthenticated>());
+      expect(notifier.count, 1, reason: 'router must re-evaluate redirects');
+    },
+  );
 
   test('failed login also notifies so the UI settles', () async {
     final notifier = _Counter();
@@ -47,6 +54,27 @@ void main() {
 
     expect(cubit.state, isA<AuthLoginFailure>());
     expect(notifier.count, 1);
+  });
+
+  test('firstSectionPath lands each real role on its surface', () {
+    expect(
+      firstSectionPath(
+        const UserProfile(id: 1, name: 'admin', role: AppRole.admin),
+      ),
+      '/admin/courses',
+    );
+    expect(
+      firstSectionPath(
+        const UserProfile(id: 1, name: 'student', role: AppRole.student),
+      ),
+      '/my-progress',
+    );
+    expect(
+      firstSectionPath(
+        const UserProfile(id: 1, name: 'teacher', role: AppRole.teacher),
+      ),
+      '/teacher-soon',
+    );
   });
 }
 

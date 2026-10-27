@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/date_time_utils.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/responsive_page.dart';
+import '../../../../core/widgets/responsive_scope.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../domain/models/student_models.dart';
 import '../../domain/student_stats.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// Full-page «محصلة النقاط» (student + admin student view): two hero
 /// balances, a colored icon grid for every points source, and the latest
@@ -24,111 +27,120 @@ class PointsBreakdownView extends StatelessWidget {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final transactions = [...bundle.transactions]
       ..sort((a, b) => b.date.compareTo(a.date));
+    final expanded = ResponsiveScope.of(context).isExpanded;
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _hero(context, b),
-        const SizedBox(height: 16),
-        const SectionHeader(icon: Icons.insights_outlined, title: 'تفصيل النقاط'),
-        const SizedBox(height: 8),
-        GridView.count(
-          crossAxisCount: 3,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
-          childAspectRatio: 0.98,
-          children: [
-            _PointTile(
-              icon: Icons.schedule,
-              color: tokens.infoLight,
-              label: 'الحضور',
-              value: b.attendance,
-            ),
-            _PointTile(
-              icon: Icons.menu_book,
-              color: tokens.brand,
-              label: 'القرآن الكريم',
-              value: b.memorization,
-            ),
-            _PointTile(
-              icon: Icons.school_outlined,
-              color: tokens.reward,
-              label: 'شهادات القرآن',
-              value: b.certificates,
-            ),
-            _PointTile(
-              icon: Icons.assignment_turned_in_outlined,
-              color: tokens.accentMatn,
-              label: 'الاختبارات العلمية',
-              value: b.exams,
-            ),
-            _PointTile(
-              icon: Icons.format_quote_outlined,
-              color: tokens.accentMatn,
-              label: 'المتون',
-              value: b.matn,
-            ),
-            _PointTile(
-              icon: Icons.add_circle_outline,
-              color: tokens.brand,
-              label: 'المكافآت',
-              // دخل/صرف يُجمع هنا (لا يظهر بندًا منفصلًا).
-              value: b.reward + b.incomeExpense,
-            ),
-            _PointTile(
-              icon: Icons.remove_circle_outline,
-              color: tokens.danger,
-              label: 'العقوبات',
-              value: -b.penalty,
-            ),
-            _PointTile(
-              icon: Icons.shopping_bag_outlined,
-              color: tokens.reward,
-              label: 'الشراء',
-              // دخل/صرف يُجمع هنا أيضًا (لا يظهر بندًا منفصلًا).
-              value: -(b.purchase + b.incomeExpense),
-              valueColor: tokens.rewardText,
-            ),
-            _PointTile(
-              icon: Icons.savings_outlined,
-              color: tokens.info,
-              label: 'التحصيل',
-              value: b.collection,
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        SectionHeader(
-          icon: Icons.receipt_long_outlined,
-          title: 'المعاملات',
-          trailing: transactions.length > _previewTransactions
-              ? TextButton(
-                  onPressed: () =>
-                      _showAllTransactions(context, transactions),
-                  child: const Text('عرض الكل'),
-                )
-              : null,
-        ),
-        const SizedBox(height: 4),
-        AppCard(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: transactions.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text('لا توجد معاملات',
-                      style: Theme.of(context).textTheme.bodyMedium),
-                )
-              : Column(
-                  children: [
-                    for (final t in transactions.take(_previewTransactions))
-                      _transactionRow(context, t),
-                  ],
-                ),
-        ),
-        const SizedBox(height: 24),
-      ],
+    return ResponsivePage(
+      maxWidth: 1100,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _hero(context, b),
+          const SizedBox(height: 16),
+          const SectionHeader(
+            icon: Icons.insights_outlined,
+            title: 'تفصيل النقاط',
+          ),
+          const SizedBox(height: 8),
+          GridView.count(
+            crossAxisCount: expanded ? 4 : 3,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 0.98,
+            children: [
+              _PointTile(
+                icon: Icons.schedule,
+                color: tokens.infoLight,
+                label: 'الحضور',
+                value: b.attendance,
+              ),
+              _PointTile(
+                icon: Icons.menu_book,
+                color: tokens.brand,
+                label: 'القرآن الكريم',
+                value: b.memorization,
+              ),
+              _PointTile(
+                icon: Icons.school_outlined,
+                color: tokens.reward,
+                label: 'شهادات القرآن',
+                value: b.certificates,
+              ),
+              _PointTile(
+                icon: Icons.assignment_turned_in_outlined,
+                color: tokens.accentMatn,
+                label: 'الاختبارات العلمية',
+                value: b.exams,
+              ),
+              _PointTile(
+                icon: Icons.format_quote_outlined,
+                color: tokens.accentMatn,
+                label: 'المتون',
+                value: b.matn,
+              ),
+              _PointTile(
+                icon: Icons.add_circle_outline,
+                color: tokens.brand,
+                label: 'المكافآت',
+                // دخل/صرف يُجمع هنا (لا يظهر بندًا منفصلًا).
+                value: b.reward + b.incomeExpense,
+              ),
+              _PointTile(
+                icon: Icons.remove_circle_outline,
+                color: tokens.danger,
+                label: 'العقوبات',
+                value: -b.penalty,
+              ),
+              _PointTile(
+                icon: Icons.shopping_bag_outlined,
+                color: tokens.reward,
+                label: 'الشراء',
+                // دخل/صرف يُجمع هنا أيضًا (لا يظهر بندًا منفصلًا).
+                value: -(b.purchase + b.incomeExpense),
+                valueColor: tokens.rewardText,
+              ),
+              _PointTile(
+                icon: Icons.savings_outlined,
+                color: tokens.info,
+                label: 'التحصيل',
+                value: b.collection,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SectionHeader(
+            icon: Icons.receipt_long_outlined,
+            title: 'المعاملات',
+            trailing: transactions.length > _previewTransactions
+                ? TextButton(
+                    onPressed: () =>
+                        _showAllTransactions(context, transactions),
+                    child: const Text('عرض الكل'),
+                  )
+                : null,
+          ),
+          const SizedBox(height: 4),
+          AppCard(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: transactions.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      'لا توجد معاملات',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  )
+                : Column(
+                    children: [
+                      for (final t in transactions.take(_previewTransactions))
+                        _transactionRow(context, t),
+                    ],
+                  ),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
     );
   }
 
@@ -147,11 +159,7 @@ class PointsBreakdownView extends StatelessWidget {
               icon: Icons.emoji_events,
             ),
           ),
-          Container(
-            width: 1,
-            height: 56,
-            color: tokens.borderStructural,
-          ),
+          Container(width: 1, height: 56, color: tokens.borderStructural),
           Expanded(
             child: _balance(
               context,
@@ -182,13 +190,14 @@ class PointsBreakdownView extends StatelessWidget {
             Icon(icon, size: 16, color: color),
             const SizedBox(width: 4),
             Flexible(
-              child: Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted)),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+              ),
             ),
           ],
         ),
@@ -196,15 +205,16 @@ class PointsBreakdownView extends StatelessWidget {
         Text(
           '$value',
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: color,
-              ),
+            fontWeight: FontWeight.w900,
+            color: color,
+          ),
         ),
-        Text('نقطة',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: tokens.textMuted)),
+        Text(
+          'نقطة',
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+        ),
       ],
     );
   }
@@ -235,10 +245,13 @@ class PointsBreakdownView extends StatelessWidget {
   }
 
   void _showAllTransactions(
-      BuildContext context, List<StudentTransaction> transactions) {
+    BuildContext context,
+    List<StudentTransaction> transactions,
+  ) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
+      maxWidth: 720,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (context) => DraggableScrollableSheet(
@@ -255,13 +268,18 @@ class PointsBreakdownView extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
                   children: [
-                    Text('كل المعاملات',
-                        style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      'كل المعاملات',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                     const Spacer(),
-                    Text('${transactions.length}',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            color: tokens.info)),
+                    Text(
+                      '${transactions.length}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: tokens.info,
+                      ),
+                    ),
                   ],
                 ),
               );
@@ -315,10 +333,11 @@ class _PointTile extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: valueColor ??
-                      (negative ? tokens.dangerText : tokens.textPrimary),
-                ),
+              fontWeight: FontWeight.w900,
+              color:
+                  valueColor ??
+                  (negative ? tokens.dangerText : tokens.textPrimary),
+            ),
           ),
           const SizedBox(height: 2),
           Text(
@@ -326,10 +345,10 @@ class _PointTile extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: tokens.textMuted, fontSize: 12),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: tokens.textMuted,
+              fontSize: 12,
+            ),
           ),
         ],
       ),
@@ -338,26 +357,25 @@ class _PointTile extends StatelessWidget {
 }
 
 IconData _txIcon(TransactionType t) => switch (t) {
-      TransactionType.reward => Icons.add_circle_outline,
-      TransactionType.penalty => Icons.remove_circle_outline,
-      TransactionType.purchase => Icons.shopping_bag_outlined,
-      TransactionType.collection => Icons.savings_outlined,
-      TransactionType.incomeExpense => Icons.swap_horiz,
-    };
+  TransactionType.reward => Icons.add_circle_outline,
+  TransactionType.penalty => Icons.remove_circle_outline,
+  TransactionType.purchase => Icons.shopping_bag_outlined,
+  TransactionType.collection => Icons.savings_outlined,
+  TransactionType.incomeExpense => Icons.swap_horiz,
+};
 
 Color _txColor(TransactionType t, AppTokens tokens) => switch (t) {
-      TransactionType.penalty => tokens.danger,
-      TransactionType.purchase => tokens.reward,
-      _ => tokens.brand,
-    };
+  TransactionType.penalty => tokens.danger,
+  TransactionType.purchase => tokens.reward,
+  _ => tokens.brand,
+};
 
 String _txSigned(TransactionType t, int value) {
   final v = value.abs();
   return switch (t) {
     TransactionType.reward ||
     TransactionType.collection ||
-    TransactionType.incomeExpense =>
-      '+$v',
+    TransactionType.incomeExpense => '+$v',
     _ => '-$v',
   };
 }

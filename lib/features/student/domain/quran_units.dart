@@ -638,11 +638,7 @@ int quranPageParts(int page) => quranPageSurahs[page]?.length ?? 1;
 final List<QuranUnit> quranUnits = [
   for (var page = 1; page <= 604; page++)
     for (var i = 0; i < quranPageSurahs[page]!.length; i++)
-      QuranUnit(
-        page: page,
-        partIndex: i + 1,
-        surah: quranPageSurahs[page]![i],
-      ),
+      QuranUnit(page: page, partIndex: i + 1, surah: quranPageSurahs[page]![i]),
 ];
 
 /// Units belonging to a page, in part order.
@@ -685,8 +681,7 @@ int juzEndPage(int juz) {
 }
 
 /// `(first, last)` page range of a juz.
-(int, int) juzPageRange(int juz) =>
-    (juzStartPage(juz), juzEndPage(juz));
+(int, int) juzPageRange(int juz) => (juzStartPage(juz), juzEndPage(juz));
 
 /// Number of pages in a juz.
 int juzPageCount(int juz) => juzEndPage(juz) - juzStartPage(juz) + 1;

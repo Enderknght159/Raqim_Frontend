@@ -8,16 +8,18 @@ import 'package:raqim/core/theme/app_theme.dart';
 import 'package:raqim/core/storage/secure_storage.dart';
 import 'package:raqim/features/auth/data/auth_remote_data_source.dart';
 import 'package:raqim/features/auth/data/auth_repository.dart';
+import 'package:raqim/features/auth/domain/auth_session.dart';
 import 'package:raqim/features/auth/domain/models/user_profile.dart';
 import 'package:raqim/features/auth/presentation/cubits/auth_cubit.dart';
 import 'package:raqim/features/auth/presentation/screens/login_screen.dart';
 
 class _FakeAuthRepository extends AuthRepository {
   _FakeAuthRepository()
-      : super(
-          remote: AuthRemoteDataSource(dio: Dio()),
-          storage: SecureStorage(),
-        );
+    : super(
+        remote: AuthRemoteDataSource(dio: Dio()),
+        storage: SecureStorage(),
+        session: ApiSession(),
+      );
 
   int loginCalls = 0;
   String? lastUsername;
@@ -49,7 +51,9 @@ Future<void> _pumpLogin(WidgetTester tester, _FakeAuthRepository repo) async {
 }
 
 void main() {
-  testWidgets('A3 login: requires password and shows the E1 error', (tester) async {
+  testWidgets('A3 login: requires password and shows the E1 error', (
+    tester,
+  ) async {
     final repo = _FakeAuthRepository();
     await _pumpLogin(tester, repo);
 

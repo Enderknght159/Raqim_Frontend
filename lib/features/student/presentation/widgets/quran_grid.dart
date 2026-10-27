@@ -5,11 +5,7 @@ import '../../domain/quran_units.dart';
 
 /// Horizontal juz selector (B2 quran map).
 class JuzSlider extends StatelessWidget {
-  const JuzSlider({
-    super.key,
-    required this.selected,
-    required this.onChanged,
-  });
+  const JuzSlider({super.key, required this.selected, required this.onChanged});
 
   final int selected; // 1..30
   final ValueChanged<int> onChanged;
@@ -118,10 +114,11 @@ class PageGridCell extends StatelessWidget {
                       '$page',
                       maxLines: 1,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color:
-                                rated ? _textColor(color, tokens) : tokens.textMuted,
-                          ),
+                        fontWeight: FontWeight.w800,
+                        color: rated
+                            ? _textColor(color, tokens)
+                            : tokens.textMuted,
+                      ),
                     ),
                     if (rated && rating! >= 3)
                       Icon(Icons.star, size: 10, color: color),

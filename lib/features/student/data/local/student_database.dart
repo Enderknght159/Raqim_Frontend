@@ -1,9 +1,8 @@
-import 'dart:io';
-
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+
+import 'student_database_connection.dart'
+    if (dart.library.io) 'student_database_connection_native.dart'
+    if (dart.library.js_interop) 'student_database_connection_web.dart';
 
 part 'student_database.g.dart';
 
@@ -17,7 +16,8 @@ class Courses extends Table {
   IntColumn get goodPoints => integer().withDefault(const Constant(1))();
   IntColumn get veryGoodPoints => integer().withDefault(const Constant(2))();
   IntColumn get excellentPoints => integer().withDefault(const Constant(3))();
-  IntColumn get certificatePoints => integer().withDefault(const Constant(10))();
+  IntColumn get certificatePoints =>
+      integer().withDefault(const Constant(10))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -68,7 +68,8 @@ class Transactions extends Table {
   IntColumn get id => integer()();
   IntColumn get studentId => integer()();
   IntColumn get sessionId => integer()();
-  TextColumn get type => text()(); // reward|penalty|purchase|collection|incomeExpense
+  TextColumn get type =>
+      text()(); // reward|penalty|purchase|collection|incomeExpense
   IntColumn get pointsValue => integer()();
   DateTimeColumn get date => dateTime()();
   TextColumn get description => text().nullable()();
@@ -261,31 +262,33 @@ class ChangeRequests extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [
-  Courses,
-  Sessions,
-  Attendances,
-  Memorizations,
-  Transactions,
-  Certificates,
-  Exams,
-  ExamSubmissions,
-  Teams,
-  StudentTeams,
-  Students,
-  Phones,
-  Matns,
-  MatnRecitations,
-  AppMeta,
-  StudentNotices,
-  TeamTypes,
-  Subjects,
-  Distributables,
-  Distributions,
-  ChangeRequests,
-])
+@DriftDatabase(
+  tables: [
+    Courses,
+    Sessions,
+    Attendances,
+    Memorizations,
+    Transactions,
+    Certificates,
+    Exams,
+    ExamSubmissions,
+    Teams,
+    StudentTeams,
+    Students,
+    Phones,
+    Matns,
+    MatnRecitations,
+    AppMeta,
+    StudentNotices,
+    TeamTypes,
+    Subjects,
+    Distributables,
+    Distributions,
+    ChangeRequests,
+  ],
+)
 class StudentDatabase extends _$StudentDatabase {
-  StudentDatabase() : super(_openConnection());
+  StudentDatabase() : super(openStudentDatabaseConnection());
 
   StudentDatabase.forTesting(super.executor);
 
@@ -294,33 +297,26 @@ class StudentDatabase extends _$StudentDatabase {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onUpgrade: (m, from, to) async {
-          if (from < 2) {
-            // SQLite can't ADD COLUMN with a volatile default, so the column
-            // is added nullable and existing rows are backfilled.
-            await m.addColumn(studentTeams, studentTeams.date);
-            await customStatement(
-                "UPDATE student_teams SET date = datetime('now') "
-                'WHERE date IS NULL');
-          }
-          if (from < 3) {
-            await m.createTable(teamTypes);
-            await m.createTable(subjects);
-            await m.createTable(distributables);
-            await m.createTable(distributions);
-            await m.createTable(changeRequests);
-          }
-          if (from < 4) {
-            await m.createTable(studentNotices);
-          }
-        },
-      );
-
-  static QueryExecutor _openConnection() {
-    return LazyDatabase(() async {
-      final dir = await getApplicationSupportDirectory();
-      final file = File(p.join(dir.path, 'raqim_student.sqlite'));
-      return NativeDatabase(file);
-    });
-  }
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        // SQLite can't ADD COLUMN with a volatile default, so the column
+        // is added nullable and existing rows are backfilled.
+        await m.addColumn(studentTeams, studentTeams.date);
+        await customStatement(
+          "UPDATE student_teams SET date = datetime('now') "
+          'WHERE date IS NULL',
+        );
+      }
+      if (from < 3) {
+        await m.createTable(teamTypes);
+        await m.createTable(subjects);
+        await m.createTable(distributables);
+        await m.createTable(distributions);
+        await m.createTable(changeRequests);
+      }
+      if (from < 4) {
+        await m.createTable(studentNotices);
+      }
+    },
+  );
 }

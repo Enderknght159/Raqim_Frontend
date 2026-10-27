@@ -7,6 +7,7 @@ import '../../../../core/widgets/number_stepper.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 enum CourseEditorResult { saved, deleted }
 
@@ -16,7 +17,7 @@ Future<CourseEditorResult?> showCourseEditorSheet(
   BuildContext context, {
   required AdminCourseSummary course,
 }) {
-  return showModalBottomSheet<CourseEditorResult>(
+  return showAppSheet<CourseEditorResult>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
@@ -34,8 +35,9 @@ class CourseEditorSheet extends StatefulWidget {
 }
 
 class _CourseEditorSheetState extends State<CourseEditorSheet> {
-  late final TextEditingController _name =
-      TextEditingController(text: widget.course.name);
+  late final TextEditingController _name = TextEditingController(
+    text: widget.course.name,
+  );
   late DateTime _startDate = widget.course.startDate;
   late DateTime _endDate = widget.course.endDate;
   late int _goodPoints = widget.course.goodPoints;
@@ -101,15 +103,18 @@ class _CourseEditorSheetState extends State<CourseEditorSheet> {
       builder: (context) => AlertDialog(
         title: const Text('حذف الدورة'),
         content: Text(
-            'سيتم حذف «${widget.course.name}» مع كل جلساتها وسجلاتها '
-            'وامتحاناتها وشهاداتها. لا يمكن التراجع عن هذا الإجراء.'),
+          'سيتم حذف «${widget.course.name}» مع كل جلساتها وسجلاتها '
+          'وامتحاناتها وشهاداتها. لا يمكن التراجع عن هذا الإجراء.',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('إلغاء')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('حذف')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('حذف'),
+          ),
         ],
       ),
     );
@@ -133,14 +138,17 @@ class _CourseEditorSheetState extends State<CourseEditorSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('تعديل الدورة',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'تعديل الدورة',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 4),
-            Text('الاسم والتواريخ ومعايير النقاط.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: tokens.textMuted)),
+            Text(
+              'الاسم والتواريخ ومعايير النقاط.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+            ),
             const SizedBox(height: 14),
             TextField(
               controller: _name,
@@ -171,14 +179,15 @@ class _CourseEditorSheetState extends State<CourseEditorSheet> {
             ),
             const SizedBox(height: 16),
             const SectionHeader(
-                icon: Icons.stars_outlined, title: 'معايير النقاط'),
+              icon: Icons.stars_outlined,
+              title: 'معايير النقاط',
+            ),
             const SizedBox(height: 4),
             Text(
               'نقاط الحفظ حسب تقييم التسميع (BR-304) ونقاط الشهادة لكل جزء.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
             ),
             const SizedBox(height: 8),
             _stepperRow(
@@ -209,8 +218,10 @@ class _CourseEditorSheetState extends State<CourseEditorSheet> {
             ),
             if (_error.isNotEmpty) ...[
               const SizedBox(height: 6),
-              Text(_error,
-                  style: TextStyle(color: tokens.dangerText, fontSize: 13)),
+              Text(
+                _error,
+                style: TextStyle(color: tokens.dangerText, fontSize: 13),
+              ),
             ],
             const SizedBox(height: 16),
             AppButton(label: 'حفظ التعديلات', onPressed: _save),
@@ -251,19 +262,21 @@ class _CourseEditorSheetState extends State<CourseEditorSheet> {
               children: [
                 Icon(Icons.event_outlined, size: 15, color: tokens.info),
                 const SizedBox(width: 5),
-                Text(label,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: tokens.textMuted)),
+                Text(
+                  label,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                ),
               ],
             ),
             const SizedBox(height: 4),
-            Text(formatDate(date),
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyLarge
-                    ?.copyWith(fontWeight: FontWeight.w700)),
+            Text(
+              formatDate(date),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+            ),
           ],
         ),
       ),
@@ -284,11 +297,12 @@ class _CourseEditorSheetState extends State<CourseEditorSheet> {
       child: Row(
         children: [
           Expanded(
-            child: Text(label,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyLarge
-                    ?.copyWith(fontWeight: FontWeight.w600)),
+            child: Text(
+              label,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+            ),
           ),
           NumberStepper(
             value: value,

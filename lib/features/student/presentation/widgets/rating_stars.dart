@@ -11,10 +11,10 @@ class RatingStars extends StatelessWidget {
   final double iconSize;
 
   static Color colorFor(int rating, AppTokens tokens) => switch (rating) {
-        1 => tokens.reward,
-        2 => tokens.infoLight,
-        _ => tokens.brand,
-      };
+    1 => tokens.reward,
+    2 => tokens.infoLight,
+    _ => tokens.brand,
+  };
 
   @override
   Widget build(BuildContext context) {

@@ -101,11 +101,9 @@ class _AppButtonState extends State<AppButton> {
   Border _border(Color bottom) {
     return switch (widget.variant) {
       AppButtonVariant.secondary ||
-      AppButtonVariant.dangerOutline =>
-        Border.all(color: bottom, width: 2),
+      AppButtonVariant.dangerOutline => Border.all(color: bottom, width: 2),
       AppButtonVariant.primary ||
-      AppButtonVariant.destructive =>
-        Border.all(color: bottom, width: 3),
+      AppButtonVariant.destructive => Border.all(color: bottom, width: 3),
     };
   }
 

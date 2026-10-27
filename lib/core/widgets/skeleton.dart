@@ -5,12 +5,7 @@ import '../theme/app_theme.dart';
 /// Static skeleton placeholder (loading). Matches `ui-ux-foundations.md`
 /// flat style — no gradients/shimmer.
 class Skeleton extends StatelessWidget {
-  const Skeleton({
-    super.key,
-    this.height = 16,
-    this.width,
-    this.radius,
-  });
+  const Skeleton({super.key, this.height = 16, this.width, this.radius});
 
   final double height;
   final double? width;
@@ -32,11 +27,7 @@ class Skeleton extends StatelessWidget {
 
 /// Column of skeleton rows, e.g. `[SkeletonBlock(rows: 4)]` for card lists.
 class SkeletonBlock extends StatelessWidget {
-  const SkeletonBlock({
-    super.key,
-    this.rows = 4,
-    this.height = 16,
-  });
+  const SkeletonBlock({super.key, this.rows = 4, this.height = 16});
 
   final int rows;
   final double height;

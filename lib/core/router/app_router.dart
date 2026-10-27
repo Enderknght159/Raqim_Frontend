@@ -39,12 +39,17 @@ import '../../features/student/presentation/screens/quran_screen.dart';
 import '../../features/student/presentation/student_shell.dart';
 import '../../shared/coming_soon_screen.dart';
 import '../../shared/splash_screen.dart';
+import '../../shared/teacher_soon_screen.dart';
 import 'route_guards.dart';
 
 /// Central go_router configuration with auth + section guards.
+///
+/// Student and admin routes live inside one [ShellRoute] so the role shell
+/// (bottom navigation on phones, rail on landscape/tablet/web) stays available
+/// on detail pages as well.
 class AppRouter {
   AppRouter({Listenable? refreshListenable})
-      : _refreshListenable = refreshListenable;
+    : _refreshListenable = refreshListenable;
 
   final Listenable? _refreshListenable;
 
@@ -66,158 +71,19 @@ class AppRouter {
       GoRoute(
         path: '/login',
         name: 'login',
-        builder: (context, state) => LoginScreen(
-          username: state.uri.queryParameters['username'] ?? '',
-        ),
+        builder: (context, state) =>
+            LoginScreen(username: state.uri.queryParameters['username'] ?? ''),
       ),
       GoRoute(
         path: '/not-allowed',
         name: 'notAllowed',
         builder: (context, state) => const ComingSoonScreen(title: 'غير مسموح'),
       ),
-      // ── Student full-screen pushed pages ──
       GoRoute(
-        path: '/my-progress/courses/:id',
-        name: 'studentCourseDetail',
-        builder: (context, state) => CourseDetailScreen(
-          courseId: int.parse(state.pathParameters['id']!),
-        ),
+        path: '/teacher-soon',
+        name: 'teacherSoon',
+        builder: (context, state) => const TeacherSoonScreen(),
       ),
-      GoRoute(
-        path: '/my-progress/courses/:id/points',
-        name: 'studentPoints',
-        builder: (context, state) => StudentPointsScreen(
-          courseId: int.parse(state.pathParameters['id']!),
-        ),
-      ),
-      GoRoute(
-        path: '/my-progress/notifications',
-        name: 'notifications',
-        builder: (context, state) => const NotificationsScreen(),
-      ),
-      GoRoute(
-        path: '/admin/notifications',
-        name: 'adminNotifications',
-        builder: (context, state) => const AdminNotificationsScreen(),
-      ),
-      // ── Admin full-screen pushed pages ──
-      GoRoute(
-        path: '/admin/courses/:id',
-        name: 'adminCourseDetail',
-        builder: (context, state) => AdminCourseDetailScreen(
-          courseId: int.parse(state.pathParameters['id']!),
-        ),
-      ),
-      GoRoute(
-        path: '/admin/sessions/:id',
-        name: 'adminSession',
-        builder: (context, state) => AdminSessionScreen(
-          sessionId: int.parse(state.pathParameters['id']!),
-        ),
-      ),
-      GoRoute(
-        path: '/admin/courses/:courseId/exams/:examId',
-        name: 'adminExam',
-        builder: (context, state) => AdminExamScreen(
-          courseId: int.parse(state.pathParameters['courseId']!),
-          examId: int.parse(state.pathParameters['examId']!),
-        ),
-      ),
-      GoRoute(
-        path: '/admin/sessions/:sessionId/attendance',
-        name: 'adminSessionAttendance',
-        builder: (context, state) => SessionAttendanceScreen(
-          sessionId: int.parse(state.pathParameters['sessionId']!),
-        ),
-      ),
-      GoRoute(
-        path: '/admin/scan-student',
-        name: 'adminScanStudent',
-        builder: (context, state) => const StudentBarcodeScanScreen(),
-      ),
-      GoRoute(
-        path: '/admin/students',
-        name: 'adminStudents',
-        builder: (context, state) => const AdminStudentsScreen(),
-      ),
-      GoRoute(
-        path: '/admin/students/:id',
-        name: 'adminStudentProfile',
-        builder: (context, state) => AdminStudentProfileScreen(
-          studentId: int.parse(state.pathParameters['id']!),
-        ),
-      ),
-      GoRoute(
-        path: '/admin/teams',
-        name: 'adminTeams',
-        builder: (context, state) => const AdminTeamsScreen(),
-      ),
-      GoRoute(
-        path: '/admin/teachers/:name',
-        name: 'adminTeacher',
-        // go_router already percent-decodes path parameters — do not decode
-        // again (double-decoding non-ASCII names throws).
-        builder: (context, state) => AdminTeacherScreen(
-          teacherName: state.pathParameters['name']!,
-        ),
-      ),
-      GoRoute(
-        path: '/admin/students/:id/courses/:courseId',
-        name: 'adminStudentCourse',
-        builder: (context, state) => AdminStudentCourseScreen(
-          studentId: int.parse(state.pathParameters['id']!),
-          courseId: int.parse(state.pathParameters['courseId']!),
-        ),
-      ),
-      GoRoute(
-        path: '/admin/students/:id/courses/:courseId/points',
-        name: 'adminStudentPoints',
-        builder: (context, state) => AdminStudentPointsScreen(
-          studentId: int.parse(state.pathParameters['id']!),
-          courseId: int.parse(state.pathParameters['courseId']!),
-        ),
-      ),
-      GoRoute(
-        path: '/admin/assets',
-        name: 'adminAssets',
-        builder: (context, state) => const AdminAssetsScreen(),
-      ),
-      GoRoute(
-        path: '/admin/users',
-        name: 'adminUsers',
-        builder: (context, state) => const AdminUsersScreen(),
-      ),
-      GoRoute(
-        path: '/admin/import',
-        name: 'adminImport',
-        builder: (context, state) => const AdminImportScreen(),
-      ),
-      GoRoute(
-        path: '/admin/audit',
-        name: 'adminAudit',
-        builder: (context, state) => const AdminAuditScreen(),
-      ),
-      GoRoute(
-        path: '/admin/change-requests',
-        name: 'adminChangeRequests',
-        builder: (context, state) => const AdminChangeRequestsScreen(),
-      ),
-      GoRoute(
-        path: '/admin/tools',
-        name: 'adminTools',
-        builder: (context, state) => const AdminToolsScreen(),
-      ),
-      GoRoute(
-        path: '/admin/sync-kiosk',
-        name: 'adminSyncKiosk',
-        builder: (context, state) => const AdminSyncKioskScreen(),
-      ),
-      GoRoute(
-        path: '/admin/settings',
-        name: 'adminSettings',
-        builder: (context, state) => const AdminSettingsScreen(),
-      ),
-      // ── Role shells (tab groups) ──
       ShellRoute(
         builder: (context, state, child) {
           if (state.uri.path.startsWith('/my-progress')) {
@@ -229,7 +95,148 @@ class AppRouter {
           return child;
         },
         routes: [
-          // Student tabs.
+          // ── Student detail pages (keep the shell on wide windows) ──
+          GoRoute(
+            path: '/my-progress/courses/:id',
+            name: 'studentCourseDetail',
+            builder: (context, state) => CourseDetailScreen(
+              courseId: int.parse(state.pathParameters['id']!),
+            ),
+          ),
+          GoRoute(
+            path: '/my-progress/courses/:id/points',
+            name: 'studentPoints',
+            builder: (context, state) => StudentPointsScreen(
+              courseId: int.parse(state.pathParameters['id']!),
+            ),
+          ),
+          GoRoute(
+            path: '/my-progress/notifications',
+            name: 'notifications',
+            builder: (context, state) => const NotificationsScreen(),
+          ),
+          GoRoute(
+            path: '/admin/notifications',
+            name: 'adminNotifications',
+            builder: (context, state) => const AdminNotificationsScreen(),
+          ),
+          // ── Admin detail pages ──
+          GoRoute(
+            path: '/admin/courses/:id',
+            name: 'adminCourseDetail',
+            builder: (context, state) => AdminCourseDetailScreen(
+              courseId: int.parse(state.pathParameters['id']!),
+            ),
+          ),
+          GoRoute(
+            path: '/admin/sessions/:id',
+            name: 'adminSession',
+            builder: (context, state) => AdminSessionScreen(
+              sessionId: int.parse(state.pathParameters['id']!),
+            ),
+          ),
+          GoRoute(
+            path: '/admin/courses/:courseId/exams/:examId',
+            name: 'adminExam',
+            builder: (context, state) => AdminExamScreen(
+              courseId: int.parse(state.pathParameters['courseId']!),
+              examId: int.parse(state.pathParameters['examId']!),
+            ),
+          ),
+          GoRoute(
+            path: '/admin/sessions/:sessionId/attendance',
+            name: 'adminSessionAttendance',
+            builder: (context, state) => SessionAttendanceScreen(
+              sessionId: int.parse(state.pathParameters['sessionId']!),
+            ),
+          ),
+          GoRoute(
+            path: '/admin/scan-student',
+            name: 'adminScanStudent',
+            builder: (context, state) => const StudentBarcodeScanScreen(),
+          ),
+          GoRoute(
+            path: '/admin/students',
+            name: 'adminStudents',
+            builder: (context, state) => const AdminStudentsScreen(),
+          ),
+          GoRoute(
+            path: '/admin/students/:id',
+            name: 'adminStudentProfile',
+            builder: (context, state) => AdminStudentProfileScreen(
+              studentId: int.parse(state.pathParameters['id']!),
+            ),
+          ),
+          GoRoute(
+            path: '/admin/teams',
+            name: 'adminTeams',
+            builder: (context, state) => const AdminTeamsScreen(),
+          ),
+          GoRoute(
+            path: '/admin/teachers/:name',
+            name: 'adminTeacher',
+            // go_router already percent-decodes path parameters — do not decode
+            // again (double-decoding non-ASCII names throws).
+            builder: (context, state) =>
+                AdminTeacherScreen(teacherName: state.pathParameters['name']!),
+          ),
+          GoRoute(
+            path: '/admin/students/:id/courses/:courseId',
+            name: 'adminStudentCourse',
+            builder: (context, state) => AdminStudentCourseScreen(
+              studentId: int.parse(state.pathParameters['id']!),
+              courseId: int.parse(state.pathParameters['courseId']!),
+            ),
+          ),
+          GoRoute(
+            path: '/admin/students/:id/courses/:courseId/points',
+            name: 'adminStudentPoints',
+            builder: (context, state) => AdminStudentPointsScreen(
+              studentId: int.parse(state.pathParameters['id']!),
+              courseId: int.parse(state.pathParameters['courseId']!),
+            ),
+          ),
+          GoRoute(
+            path: '/admin/assets',
+            name: 'adminAssets',
+            builder: (context, state) => const AdminAssetsScreen(),
+          ),
+          GoRoute(
+            path: '/admin/users',
+            name: 'adminUsers',
+            builder: (context, state) => const AdminUsersScreen(),
+          ),
+          GoRoute(
+            path: '/admin/import',
+            name: 'adminImport',
+            builder: (context, state) => const AdminImportScreen(),
+          ),
+          GoRoute(
+            path: '/admin/audit',
+            name: 'adminAudit',
+            builder: (context, state) => const AdminAuditScreen(),
+          ),
+          GoRoute(
+            path: '/admin/change-requests',
+            name: 'adminChangeRequests',
+            builder: (context, state) => const AdminChangeRequestsScreen(),
+          ),
+          GoRoute(
+            path: '/admin/tools',
+            name: 'adminTools',
+            builder: (context, state) => const AdminToolsScreen(),
+          ),
+          GoRoute(
+            path: '/admin/sync-kiosk',
+            name: 'adminSyncKiosk',
+            builder: (context, state) => const AdminSyncKioskScreen(),
+          ),
+          GoRoute(
+            path: '/admin/settings',
+            name: 'adminSettings',
+            builder: (context, state) => const AdminSettingsScreen(),
+          ),
+          // ── Student tabs ──
           GoRoute(
             path: '/my-progress',
             name: 'myProgress',
@@ -255,7 +262,7 @@ class AppRouter {
             name: 'profile',
             builder: (context, state) => const ProfileScreen(),
           ),
-          // Admin tabs.
+          // ── Admin tabs ──
           GoRoute(
             path: '/admin/courses',
             name: 'adminCourses',

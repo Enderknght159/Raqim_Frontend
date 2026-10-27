@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/responsive_grid.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/utils/date_time_utils.dart';
@@ -18,8 +19,7 @@ class AdminChangeRequestsScreen extends StatefulWidget {
       _AdminChangeRequestsScreenState();
 }
 
-class _AdminChangeRequestsScreenState
-    extends State<AdminChangeRequestsScreen> {
+class _AdminChangeRequestsScreenState extends State<AdminChangeRequestsScreen> {
   late Future<List<AdminChangeRequest>> _future;
 
   @override
@@ -48,13 +48,18 @@ class _AdminChangeRequestsScreenState
               message: 'لا توجد طلبات تعديل حالياً',
             );
           }
-          return ListView.builder(
+          return ListView(
             padding: const EdgeInsets.all(16),
-            itemCount: requests.length,
-            itemBuilder: (context, i) => _RequestCard(
-              request: requests[i],
-              onResolved: _reload,
-            ),
+            children: [
+              ResponsiveGrid(
+                minItemWidth: 360,
+                maxColumns: 2,
+                children: [
+                  for (final request in requests)
+                    _RequestCard(request: request, onResolved: _reload),
+                ],
+              ),
+            ],
           );
         },
       ),
@@ -80,11 +85,12 @@ class _RequestCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(request.studentName,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w800)),
+                  child: Text(
+                    request.studentName,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
                 StatusBadge(
                   label: _statusLabel(request.status),
@@ -97,14 +103,17 @@ class _RequestCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
-            Text('${request.fieldLabel}: ${request.currentValue ?? '—'} → ${request.requestedValue}',
-                style: Theme.of(context).textTheme.bodyMedium),
+            Text(
+              '${request.fieldLabel}: ${request.currentValue ?? '—'} → ${request.requestedValue}',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
             const SizedBox(height: 4),
-            Text(formatDate(request.createdAt),
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: tokens.textMuted)),
+            Text(
+              formatDate(request.createdAt),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+            ),
             if (request.status == 'pending') ...[
               const SizedBox(height: 8),
               Row(
@@ -112,8 +121,9 @@ class _RequestCard extends StatelessWidget {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () async {
-                        await AdminRepositoryScope.of(context)
-                            .resolveChangeRequest(request.id, approve: true);
+                        await AdminRepositoryScope.of(
+                          context,
+                        ).resolveChangeRequest(request.id, approve: true);
                         onResolved();
                       },
                       icon: const Icon(Icons.check, size: 18),
@@ -124,10 +134,12 @@ class _RequestCard extends StatelessWidget {
                   Expanded(
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                          foregroundColor: tokens.dangerText),
+                        foregroundColor: tokens.dangerText,
+                      ),
                       onPressed: () async {
-                        await AdminRepositoryScope.of(context)
-                            .resolveChangeRequest(request.id, approve: false);
+                        await AdminRepositoryScope.of(
+                          context,
+                        ).resolveChangeRequest(request.id, approve: false);
                         onResolved();
                       },
                       icon: const Icon(Icons.close, size: 18),
@@ -144,8 +156,8 @@ class _RequestCard extends StatelessWidget {
   }
 
   String _statusLabel(String status) => switch (status) {
-        'approved' => 'مقبول',
-        'rejected' => 'مرفوض',
-        _ => 'معلّق',
-      };
+    'approved' => 'مقبول',
+    'rejected' => 'مرفوض',
+    _ => 'معلّق',
+  };
 }

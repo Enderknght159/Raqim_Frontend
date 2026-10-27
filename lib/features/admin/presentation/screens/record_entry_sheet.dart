@@ -14,11 +14,13 @@ import '../../../student/presentation/widgets/quran_unit_picker.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
 import '../widgets/student_picker_field.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// E5 — quick (multi) record-entry sheet: حفظ · متون · معاملة.
 Future<void> showRecordEntrySheet(BuildContext context, int sessionId) {
-  return showModalBottomSheet<void>(
+  return showAppSheet<void>(
     context: context,
+    maxWidth: 720,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (context) => _RecordEntrySheet(sessionId: sessionId),
@@ -100,8 +102,10 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
                 children: [
                   Row(
                     children: [
-                      Text('تسجيل',
-                          style: Theme.of(context).textTheme.titleLarge),
+                      Text(
+                        'تسجيل',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                       const Spacer(),
                       if (_units.isNotEmpty)
                         StatusBadge(
@@ -154,10 +158,9 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
                   Text(
                     'يبقى الـSheet مفتوحًا لإدخال المزيد',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: tokens.textMuted),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   ),
                 ],
               ),
@@ -169,22 +172,24 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
     switch (_kind) {
       case _RecordKind.memorization:
         return [
-          Text('الصفحة من خريطة الحفظ',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted)),
+          Text(
+            'الصفحة من خريطة الحفظ',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+          ),
           const SizedBox(height: 6),
           QuranUnitPicker(
             selected: _units,
             onChanged: (units) => setState(() => _units = units),
           ),
           const SizedBox(height: 12),
-          Text('التقييم',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted)),
+          Text(
+            'التقييم',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+          ),
           const SizedBox(height: 6),
           RatingBar(
             levels: kMemorizationRatingLevels,
@@ -192,11 +197,12 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
             onChanged: (v) => setState(() => _rating = v),
           ),
           const SizedBox(height: 12),
-          Text('المسمِّع (افتراضي: معلم الحلقة)',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted)),
+          Text(
+            'المسمِّع (افتراضي: معلم الحلقة)',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+          ),
           const SizedBox(height: 6),
           SearchPickerField<String>(
             label: 'اختر المسمِّع',
@@ -209,11 +215,12 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
         ];
       case _RecordKind.matn:
         return [
-          Text('المتن',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted)),
+          Text(
+            'المتن',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+          ),
           const SizedBox(height: 6),
           SearchPickerField<AdminContentItem>(
             label: 'اختر المتن',
@@ -234,11 +241,12 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           ),
           const SizedBox(height: 12),
-          Text('المعلم',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted)),
+          Text(
+            'المعلم',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+          ),
           const SizedBox(height: 6),
           SearchPickerField<String>(
             label: 'اختر المعلم',
@@ -344,16 +352,16 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
 }
 
 IconData _txIcon(TransactionType t) => switch (t) {
-      TransactionType.reward => Icons.add_circle_outline,
-      TransactionType.penalty => Icons.remove_circle_outline,
-      TransactionType.purchase => Icons.shopping_bag_outlined,
-      TransactionType.collection => Icons.savings_outlined,
-      TransactionType.incomeExpense => Icons.swap_horiz,
-    };
+  TransactionType.reward => Icons.add_circle_outline,
+  TransactionType.penalty => Icons.remove_circle_outline,
+  TransactionType.purchase => Icons.shopping_bag_outlined,
+  TransactionType.collection => Icons.savings_outlined,
+  TransactionType.incomeExpense => Icons.swap_horiz,
+};
 
 Color _txColor(TransactionType t, AppTokens tokens) => switch (t) {
-      TransactionType.penalty => tokens.danger,
-      TransactionType.purchase => tokens.danger,
-      TransactionType.incomeExpense => tokens.info,
-      _ => tokens.reward,
-    };
+  TransactionType.penalty => tokens.danger,
+  TransactionType.purchase => tokens.danger,
+  TransactionType.incomeExpense => tokens.info,
+  _ => tokens.reward,
+};

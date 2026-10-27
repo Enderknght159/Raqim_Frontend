@@ -9,6 +9,7 @@ import '../../../../core/utils/date_time_utils.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../auth/presentation/cubits/auth_cubit.dart';
@@ -20,6 +21,7 @@ import '../widgets/absence_notice_sheet.dart';
 import '../widgets/session_records_section.dart';
 import '../widgets/session_setup_sheet.dart';
 import 'record_entry_sheet.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// E3 — Session page: single serial flow (attendance → records → summary →
 /// messages/export).
@@ -43,11 +45,15 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
 
   Future<_Data> _load() async {
     final repo = AdminRepositoryScope.of(context);
+    final sessionF = repo.sessionRow(widget.sessionId);
+    final attendanceF = repo.sessionAttendance(widget.sessionId);
+    final membersF = repo.sessionMembers(widget.sessionId);
+    final recordsF = repo.sessionRecords(widget.sessionId);
     return _Data(
-      session: await repo.sessionRow(widget.sessionId),
-      attendance: await repo.sessionAttendance(widget.sessionId),
-      members: await repo.sessionMembers(widget.sessionId),
-      records: await repo.sessionRecords(widget.sessionId),
+      session: await sessionF,
+      attendance: await attendanceF,
+      members: await membersF,
+      records: await recordsF,
     );
   }
 
@@ -89,32 +95,38 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
             ),
           ],
         ),
-        body: RefreshIndicator(
-          onRefresh: () async => _reload(),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(16),
-            children: [
-              _attendanceBar(context, data, canSendAbsence: canSendAbsence),
-              const SizedBox(height: 16),
-              _attendanceList(context, data),
-              const SizedBox(height: 16),
-              _recordSection(context),
-              const SizedBox(height: 16),
-              SessionRecordsSection(records: data.records),
-              const SizedBox(height: 16),
-              _summarySection(context, data),
-              const SizedBox(height: 16),
-              _messagesSection(context),
-            ],
+        body: ResponsivePage(
+          maxWidth: 1100,
+          child: RefreshIndicator(
+            onRefresh: () async => _reload(),
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              children: [
+                _attendanceBar(context, data, canSendAbsence: canSendAbsence),
+                const SizedBox(height: 16),
+                _attendanceList(context, data),
+                const SizedBox(height: 16),
+                _recordSection(context),
+                const SizedBox(height: 16),
+                SessionRecordsSection(records: data.records),
+                const SizedBox(height: 16),
+                _summarySection(context, data),
+                const SizedBox(height: 16),
+                _messagesSection(context),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _attendanceBar(BuildContext context, _Data data,
-      {required bool canSendAbsence}) {
+  Widget _attendanceBar(
+    BuildContext context,
+    _Data data, {
+    required bool canSendAbsence,
+  }) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final early = data.attendance
         .where((a) => a.category == AttendanceCategory.early)
@@ -139,17 +151,19 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
           Row(
             children: [
               Expanded(
-                child: Text('الحضور اللحظي',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w800)),
+                child: Text(
+                  'الحضور اللحظي',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
-              Text(formatDate(data.session.date),
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted)),
+              Text(
+                formatDate(data.session.date),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -161,8 +175,9 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
               StatusBadge(label: 'في الوقت $onTime', color: tokens.infoLight),
               StatusBadge(label: 'متأخر $late', color: tokens.danger),
               StatusBadge(
-                  label: 'غائب ${absent < 0 ? 0 : absent}',
-                  color: tokens.textMuted),
+                label: 'غائب ${absent < 0 ? 0 : absent}',
+                color: tokens.textMuted,
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -170,7 +185,9 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
             label: 'تسجيل الحضور (مسح + يدوي)',
             icon: Icons.qr_code_scanner,
             onPressed: () async {
-              await context.push('/admin/sessions/${widget.sessionId}/attendance');
+              await context.push(
+                '/admin/sessions/${widget.sessionId}/attendance',
+              );
               if (!mounted) return;
               _reload();
             },
@@ -191,9 +208,9 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
 
   Future<void> _sendAbsenceNotices(List<AdminSessionMember> absentees) async {
     if (absentees.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('لا غياب في هذه الجلسة')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('لا غياب في هذه الجلسة')));
       return;
     }
     final repo = AdminRepositoryScope.of(context);
@@ -206,9 +223,7 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
     if (count == null || !mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text('أُرسل $count إشعار غياب'),
-      ));
+      ..showSnackBar(SnackBar(content: Text('أُرسل $count إشعار غياب')));
   }
 
   static const _filterLabels = ['الكل', 'مبكر', 'في الوقت', 'متأخر', 'غائب'];
@@ -217,10 +232,10 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
   static const int _previewCount = 6;
 
   Widget _attendanceList(BuildContext context, _Data data) {
-    final members = data.members.isEmpty ? _fallbackMembers(data) : data.members;
-    final visible = members
-        .where((m) => _matchesFilter(m, data))
-        .toList();
+    final members = data.members.isEmpty
+        ? _fallbackMembers(data)
+        : data.members;
+    final visible = members.where((m) => _matchesFilter(m, data)).toList();
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -229,7 +244,9 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
             children: [
               const Expanded(
                 child: SectionHeader(
-                    icon: Icons.people_outline, title: 'قائمة اليوم'),
+                  icon: Icons.people_outline,
+                  title: 'قائمة اليوم',
+                ),
               ),
               TextButton(
                 onPressed: () => _showAll(context, data),
@@ -248,9 +265,12 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
                     padding: const EdgeInsets.only(left: 6),
                     child: ChoiceChip(
                       label: Text(label),
-                      selected: _filter == label || (_filter == null && label == 'الكل'),
-                      onSelected: (_) => setState(() =>
-                          _filter = label == 'الكل' ? null : label),
+                      selected:
+                          _filter == label ||
+                          (_filter == null && label == 'الكل'),
+                      onSelected: (_) => setState(
+                        () => _filter = label == 'الكل' ? null : label,
+                      ),
                     ),
                   ),
               ],
@@ -260,8 +280,10 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
           if (visible.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text('لا نتائج لهذا الفلتر',
-                  style: Theme.of(context).textTheme.bodyMedium),
+              child: Text(
+                'لا نتائج لهذا الفلتر',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             )
           else
             for (final m in visible.take(_previewCount))
@@ -282,13 +304,13 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
   /// Fallback when the roster is empty (e.g. brand-new session): show the
   /// scanned attendees only.
   List<AdminSessionMember> _fallbackMembers(_Data data) => [
-        for (final a in data.attendance)
-          AdminSessionMember(
-            studentId: a.studentId,
-            name: a.name,
-            arrivalTime: a.arrivalTime,
-          ),
-      ];
+    for (final a in data.attendance)
+      AdminSessionMember(
+        studentId: a.studentId,
+        name: a.name,
+        arrivalTime: a.arrivalTime,
+      ),
+  ];
 
   bool _matchesFilter(AdminSessionMember m, _Data data) {
     switch (_filter) {
@@ -342,11 +364,12 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
               ),
             ),
             if (m.arrivalTime != null)
-              Text(formatTime(m.arrivalTime!),
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted)),
+              Text(
+                formatTime(m.arrivalTime!),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+              ),
             const SizedBox(width: 8),
             StatusBadge(
               label: _categoryLabel(category ?? AttendanceCategory.absent),
@@ -370,7 +393,7 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
   Future<void> _editAttendance(_Data data, AdminSessionMember m) async {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final present = m.present;
-    final action = await showModalBottomSheet<String>(
+    final action = await showAppSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
@@ -384,25 +407,31 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
                   CircleAvatar(
                     radius: 16,
                     backgroundColor: tokens.brandTint,
-                    child: Text(m.name.characters.first,
-                        style: TextStyle(
-                            color: tokens.brandText,
-                            fontWeight: FontWeight.w800)),
+                    child: Text(
+                      m.name.characters.first,
+                      style: TextStyle(
+                        color: tokens.brandText,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(m.name,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w700)),
+                        Text(
+                          m.name,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
                         Text(
                           present
                               ? 'مسجّل حضور${m.arrivalTime == null ? '' : ' · ${formatTime(m.arrivalTime!)}'}'
                               : 'غائب عن هذه الجلسة',
                           style: TextStyle(
-                              color: tokens.textMuted, fontSize: 13),
+                            color: tokens.textMuted,
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
@@ -418,8 +447,10 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
                 onTap: () => Navigator.pop(context, 'time'),
               ),
               ListTile(
-                leading: Icon(Icons.remove_circle_outline,
-                    color: tokens.danger),
+                leading: Icon(
+                  Icons.remove_circle_outline,
+                  color: tokens.danger,
+                ),
                 title: const Text('إزالة الحضور'),
                 onTap: () => Navigator.pop(context, 'remove'),
               ),
@@ -444,8 +475,7 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
         _reload();
         messenger
           ..hideCurrentSnackBar()
-          ..showSnackBar(
-              SnackBar(content: Text('سُجّل حضور ${m.name}')));
+          ..showSnackBar(SnackBar(content: Text('سُجّل حضور ${m.name}')));
       case 'time':
         final base = m.arrivalTime ?? data.session.date;
         final picked = await showTimePicker(
@@ -470,30 +500,33 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
         _reload();
         messenger
           ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(
-            content: Text('أُزيل حضور ${m.name}'),
-            duration: const Duration(seconds: 6),
-            action: SnackBarAction(
-              label: 'تراجع',
-              onPressed: () async {
-                await repo.addManualAttendance(
-                  widget.sessionId,
-                  m.studentId,
-                  time: oldTime,
-                );
-                _reload();
-              },
+          ..showSnackBar(
+            SnackBar(
+              content: Text('أُزيل حضور ${m.name}'),
+              duration: const Duration(seconds: 6),
+              action: SnackBarAction(
+                label: 'تراجع',
+                onPressed: () async {
+                  await repo.addManualAttendance(
+                    widget.sessionId,
+                    m.studentId,
+                    time: oldTime,
+                  );
+                  _reload();
+                },
+              ),
             ),
-          ));
+          );
     }
   }
 
   void _showAll(BuildContext context, _Data data) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    final members = data.members.isEmpty ? _fallbackMembers(data) : data.members;
-    final visible =
-        members.where((m) => _matchesFilter(m, data)).toList();
-    showModalBottomSheet<void>(
+    final members = data.members.isEmpty
+        ? _fallbackMembers(data)
+        : data.members;
+    final visible = members.where((m) => _matchesFilter(m, data)).toList();
+    showAppSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
@@ -506,13 +539,18 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
           children: [
             Row(
               children: [
-                Text('قائمة اليوم (${visible.length})',
-                    style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  'قائمة اليوم (${visible.length})',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const Spacer(),
-                Text('حاضر ${visible.where((m) => m.present).length}',
-                    style: TextStyle(
-                        color: tokens.brandText,
-                        fontWeight: FontWeight.w800)),
+                Text(
+                  'حاضر ${visible.where((m) => m.present).length}',
+                  style: TextStyle(
+                    color: tokens.brandText,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -554,7 +592,10 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SectionHeader(icon: Icons.summarize_outlined, title: 'محصلة اليوم'),
+          const SectionHeader(
+            icon: Icons.summarize_outlined,
+            title: 'محصلة اليوم',
+          ),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -562,18 +603,20 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('$present',
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineMedium
-                            ?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                color: tokens.brandText)),
-                    Text('حاضر',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: tokens.textMuted)),
+                    Text(
+                      '$present',
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: tokens.brandText,
+                          ),
+                    ),
+                    Text(
+                      'حاضر',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                    ),
                   ],
                 ),
               ),
@@ -581,18 +624,20 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('$absent',
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineMedium
-                            ?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                color: tokens.textMuted)),
-                    Text('غائب',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: tokens.textMuted)),
+                    Text(
+                      '$absent',
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: tokens.textMuted,
+                          ),
+                    ),
+                    Text(
+                      'غائب',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                    ),
                   ],
                 ),
               ),
@@ -623,19 +668,21 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
             children: [
               Icon(Icons.circle, size: 10, color: tokens.brand),
               const SizedBox(width: 4),
-              Text('حضور',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted)),
+              Text(
+                'حضور',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+              ),
               const SizedBox(width: 14),
               Icon(Icons.circle, size: 10, color: tokens.textMuted),
               const SizedBox(width: 4),
-              Text('غياب',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.textMuted)),
+              Text(
+                'غياب',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+              ),
             ],
           ),
         ],
@@ -649,7 +696,10 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SectionHeader(icon: Icons.chat_outlined, title: 'الرسائل والتصدير'),
+          const SectionHeader(
+            icon: Icons.chat_outlined,
+            title: 'الرسائل والتصدير',
+          ),
           const SizedBox(height: 6),
           for (final label in const ['رسائل اليوم', 'تصدير حضور اليوم'])
             ListTile(
@@ -657,8 +707,10 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.send_outlined, color: tokens.brandText),
               title: Text(label),
-              trailing:
-                  Icon(Icons.chevron_left, color: tokens.borderStructural),
+              trailing: Icon(
+                Icons.chevron_left,
+                color: tokens.borderStructural,
+              ),
               onTap: () => ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('$label — يتطلب ربط الخادم')),
               ),
@@ -669,11 +721,11 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
   }
 
   String _categoryLabel(AttendanceCategory c) => switch (c) {
-        AttendanceCategory.early => 'مبكر',
-        AttendanceCategory.onTime => 'في الوقت',
-        AttendanceCategory.late => 'متأخر',
-        AttendanceCategory.absent => 'غائب',
-      };
+    AttendanceCategory.early => 'مبكر',
+    AttendanceCategory.onTime => 'في الوقت',
+    AttendanceCategory.late => 'متأخر',
+    AttendanceCategory.absent => 'غائب',
+  };
 
   Future<void> _editSession(BuildContext context, _Data data) async {
     final repo = AdminRepositoryScope.of(context);

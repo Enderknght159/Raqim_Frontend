@@ -23,7 +23,9 @@ class AuthRemoteDataSource {
       final data = response.data;
       // Accept a top-level object or one nested under `data` (Laravel/Sanctum
       // envelopes vary between backends).
-      final root = data is Map<String, dynamic> ? data : const <String, dynamic>{};
+      final root = data is Map<String, dynamic>
+          ? data
+          : const <String, dynamic>{};
       final nested = root['data'];
       final payload = nested is Map<String, dynamic> ? nested : root;
 
@@ -36,13 +38,14 @@ class AuthRemoteDataSource {
         root['access_token'],
         root['token'],
       ]);
-      final refreshToken = _firstString([
-        payload['refresh'],
-        payload['refresh_token'],
-        payload['refreshToken'],
-        root['refresh'],
-        root['refresh_token'],
-      ]) ??
+      final refreshToken =
+          _firstString([
+            payload['refresh'],
+            payload['refresh_token'],
+            payload['refreshToken'],
+            root['refresh'],
+            root['refresh_token'],
+          ]) ??
           '';
 
       if (accessToken == null || accessToken.isEmpty) {
@@ -58,10 +61,7 @@ class AuthRemoteDataSource {
         );
       }
       _log.info('Token received (HTTP ${response.statusCode})');
-      return LoginResult(
-        accessToken: accessToken,
-        refreshToken: refreshToken,
-      );
+      return LoginResult(accessToken: accessToken, refreshToken: refreshToken);
     } on DioException catch (e) {
       throw e.error is ApiException
           ? e.error as ApiException
@@ -84,14 +84,49 @@ class AuthRemoteDataSource {
     return UserProfile.fromJson(payload);
   }
 
-  Future<void> logout() async {
+  Future<void> logout({String? refresh}) async {
     try {
       await _dio.post(
         ApiEndpoints.logout,
+        data: refresh == null ? null : {'refresh': refresh},
         options: Options(extra: {'skipAuth': true}),
       );
     } on DioException {
       // Best-effort; local tokens are cleared regardless.
+    }
+  }
+
+  Future<void> updateMe({String? name, String? email, String? phone}) async {
+    try {
+      await _dio.patch<dynamic>(
+        ApiEndpoints.me,
+        data: {'name': ?name, 'email': ?email, 'phone': ?phone},
+      );
+    } on DioException catch (e) {
+      throw e.error is ApiException
+          ? e.error as ApiException
+          : const ApiException.server();
+    }
+  }
+
+  Future<void> changePassword({
+    required String oldPassword,
+    required String newPassword,
+    required String newPasswordConfirmation,
+  }) async {
+    try {
+      await _dio.post<dynamic>(
+        ApiEndpoints.changePassword,
+        data: {
+          'oldPassword': oldPassword,
+          'newPassword': newPassword,
+          'newPassword_confirmation': newPasswordConfirmation,
+        },
+      );
+    } on DioException catch (e) {
+      throw e.error is ApiException
+          ? e.error as ApiException
+          : const ApiException.server();
     }
   }
 

@@ -5,10 +5,12 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/list_row.dart';
+import '../../../../core/widgets/responsive_grid.dart';
 import '../../../../core/widgets/status_badge.dart';
-import '../../data/student_local_repository.dart';
+import '../../data/student_repository.dart';
 import '../../domain/models/student_models.dart';
 import '../student_shell.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// B4 — حلقاتي: team cards → details (teacher + peers).
 class MyTeamsScreen extends StatelessWidget {
@@ -28,12 +30,17 @@ class MyTeamsScreen extends StatelessWidget {
               message: 'تواصل مع إدارة المسجد',
             );
           }
-          return ListView.separated(
+          return ListView(
             padding: const EdgeInsets.all(16),
-            itemCount: teams.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (context, index) =>
-                _TeamCard(repo: repo, team: teams[index]),
+            children: [
+              ResponsiveGrid(
+                minItemWidth: 280,
+                maxColumns: 3,
+                children: [
+                  for (final team in teams) _TeamCard(repo: repo, team: team),
+                ],
+              ),
+            ],
           );
         },
       ),
@@ -44,7 +51,7 @@ class MyTeamsScreen extends StatelessWidget {
 class _TeamCard extends StatelessWidget {
   const _TeamCard({required this.repo, required this.team});
 
-  final StudentLocalRepository repo;
+  final StudentRepository repo;
   final Team team;
 
   @override
@@ -74,7 +81,8 @@ class _TeamCard extends StatelessWidget {
                         Text(
                           team.name,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
                                 fontWeight: FontWeight.w800,
                                 color: tokens.textPrimary,
                               ),
@@ -95,14 +103,21 @@ class _TeamCard extends StatelessWidget {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  const Icon(Icons.person_outline, size: 18, color: Color(0xFF004C69)),
+                  const Icon(
+                    Icons.person_outline,
+                    size: 18,
+                    color: Color(0xFF004C69),
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
-                    child: Text(team.teacherName.isEmpty ? 'لا معلم بعد' : team.teacherName,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(color: tokens.textSecondary)),
+                    child: Text(
+                      team.teacherName.isEmpty
+                          ? 'لا معلم بعد'
+                          : team.teacherName,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: tokens.textSecondary,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -112,13 +127,10 @@ class _TeamCard extends StatelessWidget {
                   _avatarStack(tokens, peers),
                   const SizedBox(width: 10),
                   Text(
-                    peers.isEmpty
-                        ? 'لا أصدقاء'
-                        : '${peers.length} أصدقاء',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: tokens.textMuted),
+                    peers.isEmpty ? 'لا أصدقاء' : '${peers.length} أصدقاء',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   ),
                 ],
               ),
@@ -159,18 +171,18 @@ class _TeamCard extends StatelessWidget {
   IconData _typeIcon() => team.typeName == 'قرآن'
       ? Icons.menu_book
       : team.typeName == 'عام'
-          ? Icons.groups_outlined
-          : Icons.school_outlined;
+      ? Icons.groups_outlined
+      : Icons.school_outlined;
 
   Color _typeColor(AppTokens tokens) => team.typeName == 'قرآن'
       ? tokens.brand
       : team.typeName == 'عام'
-          ? tokens.infoLight
-          : tokens.accentMatn;
+      ? tokens.infoLight
+      : tokens.accentMatn;
 
   void _showDetail(BuildContext context, List<StudentBrief> peers) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
@@ -195,20 +207,25 @@ class _TeamCard extends StatelessWidget {
               subtitle: 'معلم الحلقة',
             ),
             const SizedBox(height: 8),
-            Text('الأصدقاء (${peers.length})',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'الأصدقاء (${peers.length})',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 4),
             for (var i = 0; i < peers.length; i++)
               ListRow(
                 leading: CircleAvatar(
                   radius: 18,
-                  backgroundColor:
-                      AppColorsForPeer.color(i, tokens).withValues(alpha: 0.25),
+                  backgroundColor: AppColorsForPeer.color(
+                    i,
+                    tokens,
+                  ).withValues(alpha: 0.25),
                   child: Text(
                     peers[i].name.characters.first,
                     style: TextStyle(
-                        color: AppColorsForPeer.color(i, tokens),
-                        fontWeight: FontWeight.w800),
+                      color: AppColorsForPeer.color(i, tokens),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
                 title: peers[i].name,

@@ -5,11 +5,11 @@ import 'package:go_router/go_router.dart';
 import 'core/config/app_config.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/theme/app_theme.dart';
-import 'features/admin/data/admin_local_repository.dart';
+import 'features/admin/data/admin_repository.dart';
 import 'features/admin/presentation/admin_shell.dart';
 import 'features/auth/data/auth_repository.dart';
 import 'features/auth/presentation/cubits/auth_cubit.dart';
-import 'features/student/data/student_local_repository.dart';
+import 'features/student/data/student_repository.dart';
 import 'features/student/presentation/student_shell.dart';
 
 /// App dependencies shared across the tree.
@@ -23,8 +23,8 @@ class AppDependencies {
   });
 
   final AuthRepository authRepository;
-  final StudentLocalRepository studentRepository;
-  final AdminLocalRepository adminRepository;
+  final StudentRepository studentRepository;
+  final AdminRepository adminRepository;
   final ValueNotifier<int> sessionTick;
   final GoRouter router;
 }

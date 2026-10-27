@@ -43,8 +43,8 @@ class _InfoBannerState extends State<InfoBanner> {
             child: Text(
               widget.message,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
           ),
           if (widget.dismissible)

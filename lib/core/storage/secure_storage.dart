@@ -12,7 +12,7 @@ import 'package:path_provider/path_provider.dart';
 /// session survives app restarts on any supported platform.
 class SecureStorage {
   SecureStorage({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   static const _accessTokenKey = 'access_token';
   static const _refreshTokenKey = 'refresh_token';
@@ -31,8 +31,7 @@ class SecureStorage {
       if (!await file.exists()) return const {};
       final decoded = jsonDecode(await file.readAsString());
       if (decoded is! Map) return const {};
-      return decoded.map(
-          (k, v) => MapEntry(k.toString(), v.toString()));
+      return decoded.map((k, v) => MapEntry(k.toString(), v.toString()));
     } catch (_) {
       return const {};
     }

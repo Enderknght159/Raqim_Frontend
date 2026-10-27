@@ -6,6 +6,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/number_stepper.dart';
 import '../../../../core/widgets/section_header.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// Values of a session setup (thresholds + points + date, BR-402).
 class SessionSetupValues {
@@ -42,7 +43,7 @@ Future<SessionSetupValues?> showSessionSetupSheet(
   required SessionSetupValues initial,
   String title = 'تعديل الجلسة',
 }) {
-  return showModalBottomSheet<SessionSetupValues>(
+  return showAppSheet<SessionSetupValues>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
@@ -91,9 +92,15 @@ class _SessionSetupSheetState extends State<_SessionSetupSheet> {
       lastDate: DateTime(2100),
     );
     if (picked != null && mounted) {
-      setState(() => _date = DateTime(
-          picked.year, picked.month, picked.day,
-          _date.hour, _date.minute));
+      setState(
+        () => _date = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          _date.hour,
+          _date.minute,
+        ),
+      );
     }
   }
 
@@ -125,18 +132,19 @@ class _SessionSetupSheetState extends State<_SessionSetupSheet> {
 
   void _save() {
     if (!_validOrder) {
-      setState(() =>
-          _error = 'وقت التأخير يجب أن يكون بعد وقت الإبكار');
+      setState(() => _error = 'وقت التأخير يجب أن يكون بعد وقت الإبكار');
       return;
     }
-    Navigator.of(context).pop(SessionSetupValues(
-      earlyPoints: _earlyPoints,
-      midPoints: _midPoints,
-      latePoints: _latePoints,
-      earlyUntil: _fmt(_earlyUntil),
-      lateFrom: _fmt(_lateFrom),
-      date: _date,
-    ));
+    Navigator.of(context).pop(
+      SessionSetupValues(
+        earlyPoints: _earlyPoints,
+        midPoints: _midPoints,
+        latePoints: _latePoints,
+        earlyUntil: _fmt(_earlyUntil),
+        lateFrom: _fmt(_lateFrom),
+        date: _date,
+      ),
+    );
   }
 
   @override
@@ -154,15 +162,13 @@ class _SessionSetupSheetState extends State<_SessionSetupSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.title,
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
               'العتبات تختلف من جلسة لأخرى تبعًا لمواقيت الأذان (BR-402)',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.textMuted),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
             ),
             const SizedBox(height: 12),
             // Date.
@@ -173,14 +179,14 @@ class _SessionSetupSheetState extends State<_SessionSetupSheet> {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text('التاريخ: ${formatDate(_date)}',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyLarge
-                            ?.copyWith(fontWeight: FontWeight.w700)),
+                    child: Text(
+                      'التاريخ: ${formatDate(_date)}',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
-                  Icon(Icons.edit_outlined,
-                      size: 18, color: tokens.textMuted),
+                  Icon(Icons.edit_outlined, size: 18, color: tokens.textMuted),
                 ],
               ),
             ),
@@ -188,7 +194,9 @@ class _SessionSetupSheetState extends State<_SessionSetupSheet> {
 
             // Times.
             const SectionHeader(
-                icon: Icons.schedule_outlined, title: 'وقت الحضور'),
+              icon: Icons.schedule_outlined,
+              title: 'وقت الحضور',
+            ),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -219,20 +227,19 @@ class _SessionSetupSheetState extends State<_SessionSetupSheet> {
                   ? 'يُعدّ المتأخر من ${_fmt(_lateFrom)} فصاعدًا؛ بينهما في الوقت.'
                   : 'وقت التأخير يجب أن يكون بعد وقت الإبكار.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: _validOrder
-                        ? tokens.textMuted
-                        : tokens.dangerText,
-                  ),
+                color: _validOrder ? tokens.textMuted : tokens.dangerText,
+              ),
             ),
             const SizedBox(height: 16),
 
             // Points.
             const SectionHeader(
-                icon: Icons.stars_outlined, title: 'نقاط الحضور'),
+              icon: Icons.stars_outlined,
+              title: 'نقاط الحضور',
+            ),
             const SizedBox(height: 8),
             AppCard(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Column(
                 children: [
                   _stepperRow(
@@ -263,8 +270,10 @@ class _SessionSetupSheetState extends State<_SessionSetupSheet> {
             ),
             if (_error.isNotEmpty) ...[
               const SizedBox(height: 8),
-              Text(_error,
-                  style: TextStyle(color: tokens.dangerText, fontSize: 13)),
+              Text(
+                _error,
+                style: TextStyle(color: tokens.dangerText, fontSize: 13),
+              ),
             ],
             const SizedBox(height: 18),
             AppButton(label: 'حفظ', onPressed: _save),
@@ -286,11 +295,12 @@ class _SessionSetupSheetState extends State<_SessionSetupSheet> {
       child: Row(
         children: [
           Expanded(
-            child: Text(label,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyLarge
-                    ?.copyWith(fontWeight: FontWeight.w600)),
+            child: Text(
+              label,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+            ),
           ),
           NumberStepper(
             value: value,
@@ -362,10 +372,9 @@ class _SessionSetupSheetState extends State<_SessionSetupSheet> {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: tokens.textMuted),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   ),
                 ),
               ],
@@ -375,9 +384,9 @@ class _SessionSetupSheetState extends State<_SessionSetupSheet> {
               value,
               textDirection: TextDirection.ltr,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: tokens.textPrimary,
-                  ),
+                fontWeight: FontWeight.w900,
+                color: tokens.textPrimary,
+              ),
             ),
           ],
         ),

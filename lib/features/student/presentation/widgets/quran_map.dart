@@ -7,11 +7,13 @@ import '../../domain/models/student_models.dart';
 import '../../domain/quran_units.dart';
 import 'quran_grid.dart';
 import 'rating_stars.dart';
+import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// Latest rating per (page,partIndex); per page rating = max rating,
 /// progress = covered parts / total parts.
 Map<int, ({int? rating, double progress})> computeQuranPageStatus(
-    List<Memorization> memorizations) {
+  List<Memorization> memorizations,
+) {
   final latest = <String, Memorization>{};
   for (final m in memorizations) {
     final key = '${m.page}:${m.partIndex}';
@@ -25,11 +27,15 @@ Map<int, ({int? rating, double progress})> computeQuranPageStatus(
   return {
     for (final entry in byPage.entries)
       entry.key: (
-        rating:
-            entry.value.map((m) => m.rating).reduce((a, b) => a > b ? a : b),
-        progress: (entry.value.length /
-                (entry.value.first.parts <= 0 ? 1 : entry.value.first.parts))
-            .clamp(0.0, 1.0),
+        rating: entry.value
+            .map((m) => m.rating)
+            .reduce((a, b) => a > b ? a : b),
+        progress:
+            (entry.value.length /
+                    (entry.value.first.parts <= 0
+                        ? 1
+                        : entry.value.first.parts))
+                .clamp(0.0, 1.0),
       ),
   };
 }
@@ -109,8 +115,7 @@ class _QuranMapState extends State<QuranMap> {
   /// date and rating.
   void _showPageTasmi(BuildContext context, int page) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    final pageMems =
-        widget.memorizations.where((m) => m.page == page).toList();
+    final pageMems = widget.memorizations.where((m) => m.page == page).toList();
     // Latest record per unit (page may hold 1–3 units).
     final latest = <int, Memorization>{};
     for (final m in pageMems) {
@@ -123,7 +128,7 @@ class _QuranMapState extends State<QuranMap> {
       ..sort((a, b) => a.partIndex.compareTo(b.partIndex));
     final surahs = quranPageSurahs[page] ?? const <String>[];
 
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
@@ -139,10 +144,12 @@ class _QuranMapState extends State<QuranMap> {
                   Icon(Icons.auto_stories_outlined, color: tokens.brand),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text('صفحة $page',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleLarge),
+                    child: Text(
+                      'صفحة $page',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                   ),
                   const SizedBox(width: 6),
                   StatusBadge(
@@ -154,32 +161,39 @@ class _QuranMapState extends State<QuranMap> {
               const SizedBox(height: 4),
               Text(
                 surahs.isEmpty
-                    ? (units.isEmpty ? '—' : quranSurahOf(page, units.first.partIndex))
+                    ? (units.isEmpty
+                          ? '—'
+                          : quranSurahOf(page, units.first.partIndex))
                     : surahs.join(' · '),
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: tokens.textMuted),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
               ),
               const SizedBox(height: 8),
               if (units.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text('لا تسميعات مسجّلة لهذه الصفحة',
-                      style: Theme.of(context).textTheme.bodyMedium),
+                  child: Text(
+                    'لا تسميعات مسجّلة لهذه الصفحة',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                 )
               else
                 for (final m in units)
                   ListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.menu_book,
-                        color: RatingStars.colorFor(m.rating, tokens)),
+                    leading: Icon(
+                      Icons.menu_book,
+                      color: RatingStars.colorFor(m.rating, tokens),
+                    ),
                     title: Text(
-                        'الوحدة ${m.partIndex} — ${quranSurahOf(page, m.partIndex)}',
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                      'الوحدة ${m.partIndex} — ${quranSurahOf(page, m.partIndex)}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
                     subtitle: Text(
-                        'المسمِّع: ${m.reciterName} · ${formatDate(m.date)}'),
+                      'المسمِّع: ${m.reciterName} · ${formatDate(m.date)}',
+                    ),
                     trailing: RatingStars(rating: m.rating),
                   ),
             ],
@@ -195,10 +209,7 @@ class _QuranMapState extends State<QuranMap> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Quick slider: jump instantly between the 30 juz.
-        JuzSlider(
-          selected: _currentJuz,
-          onChanged: _jumpToJuz,
-        ),
+        JuzSlider(selected: _currentJuz, onChanged: _jumpToJuz),
         const SizedBox(height: 10),
         SizedBox(
           height: widget.height,
@@ -255,9 +266,9 @@ class _JuzPage extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: tokens.info,
-                    ),
+                  fontWeight: FontWeight.w800,
+                  color: tokens.info,
+                ),
               ),
             ),
             const Spacer(),
@@ -270,11 +281,20 @@ class _JuzPage extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Expanded(
-          child: QuranGrid(
-            juz: juz,
-            pageStatus: pageStatus,
-            columns: 7,
-            onPageTap: onPageTap,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 900
+                  ? 10
+                  : constraints.maxWidth >= 550
+                  ? 7
+                  : 5;
+              return QuranGrid(
+                juz: juz,
+                pageStatus: pageStatus,
+                columns: columns,
+                onPageTap: onPageTap,
+              );
+            },
           ),
         ),
       ],

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/adaptive_data_table.dart';
+import '../../../../core/widgets/adaptive_sheet.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
@@ -84,16 +86,100 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
                     message: 'أضف أول طالب',
                   );
                 }
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  itemCount: students.length,
-                  itemBuilder: (context, i) =>
-                      _StudentRowTile(student: students[i]),
+                return AdaptiveDataTable(
+                  table: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    children: [
+                      AppDataTable(
+                        columns: const [
+                          DataColumn(label: Text('الطالب')),
+                          DataColumn(label: Text('الحلقة')),
+                          DataColumn(label: Text('الباركود')),
+                          DataColumn(label: Text('الحالة')),
+                          DataColumn(label: Text('')),
+                        ],
+                        rows: [
+                          for (final student in students)
+                            DataRow(
+                              onSelectChanged: (_) =>
+                                  context.push('/admin/students/${student.id}'),
+                              cells: [
+                                DataCell(Text(student.name)),
+                                DataCell(Text(student.teamNames)),
+                                DataCell(
+                                  Text(
+                                    student.barcode,
+                                    textDirection: TextDirection.ltr,
+                                  ),
+                                ),
+                                DataCell(
+                                  Text(
+                                    student.active ? 'نشط' : 'معطّل',
+                                    style: TextStyle(
+                                      color: student.active
+                                          ? Theme.of(
+                                              context,
+                                            ).extension<AppTokens>()!.brandText
+                                          : Theme.of(context)
+                                                .extension<AppTokens>()!
+                                                .dangerText,
+                                    ),
+                                  ),
+                                ),
+                                DataCell(
+                                  IconButton(
+                                    tooltip: 'عرض الباركود',
+                                    icon: const Icon(Icons.qr_code_2, size: 20),
+                                    onPressed: () =>
+                                        _showStudentBarcode(context, student),
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  cards: ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    itemCount: students.length,
+                    itemBuilder: (context, i) =>
+                        _StudentRowTile(student: students[i]),
+                  ),
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showStudentBarcode(BuildContext context, AdminStudentRow student) {
+    showAppSheet<void>(
+      context: context,
+      maxWidth: 420,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'باركود ${student.name}',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
+            QrCodeCard(code: student.barcode, size: 180),
+            const SizedBox(height: 8),
+            Text(
+              student.barcode,
+              textDirection: TextDirection.ltr,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).extension<AppTokens>()!.textMuted,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -107,7 +193,7 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
     final teams = await repo.teams();
     if (!mounted) return;
     int? teamId;
-    final created = await showModalBottomSheet<int>(
+    final created = await showAppSheet<int>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -126,41 +212,44 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
               Text('طالب جديد', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 16),
               TextField(
-                  controller: name,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(labelText: 'الاسم')),
+                controller: name,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(labelText: 'الاسم'),
+              ),
               const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
                     child: TextField(
-                        controller: father,
-                        textInputAction: TextInputAction.next,
-                        decoration:
-                            const InputDecoration(labelText: 'اسم الأب')),
+                      controller: father,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(labelText: 'اسم الأب'),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
-                        controller: year,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        decoration: const InputDecoration(
-                            labelText: 'سنة الميلاد')),
+                      controller: year,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(
+                        labelText: 'سنة الميلاد',
+                      ),
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
               TextField(
-                  controller: phone,
-                  keyboardType: TextInputType.phone,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')),
-                  ],
-                  decoration: const InputDecoration(
-                      labelText: 'رقم ولي الأمر (اختياري)')),
+                controller: phone,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'رقم ولي الأمر (اختياري)',
+                ),
+              ),
               const SizedBox(height: 12),
               SearchPickerField<AdminTeamRow>(
                 label: 'اختر الحلقة (اختياري)',
@@ -222,30 +311,34 @@ class _StudentRowTile extends StatelessWidget {
             CircleAvatar(
               radius: 20,
               backgroundColor: tokens.brandTint,
-              child: Text(student.name.characters.first,
-                  style: TextStyle(
-                      color: tokens.brandText, fontWeight: FontWeight.w800)),
+              child: Text(
+                student.name.characters.first,
+                style: TextStyle(
+                  color: tokens.brandText,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(student.name,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyLarge
-                          ?.copyWith(fontWeight: FontWeight.w700)),
+                  Text(
+                    student.name,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   Text(
                     [
                       if (student.teamNames.isNotEmpty) student.teamNames,
                       if (student.yearOfBirth != null)
                         'ميلاد ${student.yearOfBirth}',
                     ].join(' · '),
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: tokens.textMuted),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   ),
                 ],
               ),
@@ -256,14 +349,15 @@ class _StudentRowTile extends StatelessWidget {
                 Text(
                   student.barcode,
                   textDirection: TextDirection.ltr,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.info),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.info),
                 ),
                 if (!student.active)
-                  Text('معطّل',
-                      style: TextStyle(color: tokens.dangerText, fontSize: 12)),
+                  Text(
+                    'معطّل',
+                    style: TextStyle(color: tokens.dangerText, fontSize: 12),
+                  ),
               ],
             ),
             const SizedBox(width: 6),
@@ -281,7 +375,7 @@ class _StudentRowTile extends StatelessWidget {
   }
 
   void _showBarcode(BuildContext context) {
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (context) => Padding(
@@ -289,18 +383,19 @@ class _StudentRowTile extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('باركود ${student.name}',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'باركود ${student.name}',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 12),
             QrCodeCard(code: student.barcode, size: 180),
             const SizedBox(height: 8),
             Text(
               student.barcode,
               textDirection: TextDirection.ltr,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: Theme.of(context).extension<AppTokens>()!.textMuted),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).extension<AppTokens>()!.textMuted,
+              ),
             ),
           ],
         ),

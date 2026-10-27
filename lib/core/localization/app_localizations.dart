@@ -12,9 +12,7 @@ class AppLocalizations {
 
   /// Arabic-only for the current build (design rule §5). English wiring kept
   /// for future, but not surfaced.
-  static const List<Locale> supportedLocales = [
-    Locale('ar'),
-  ];
+  static const List<Locale> supportedLocales = [Locale('ar')];
 
   static AppLocalizations of(BuildContext context) =>
       Localizations.of<AppLocalizations>(context, AppLocalizations)!;
@@ -25,8 +23,7 @@ class AppLocalizations {
   bool get isArabic => locale.languageCode == 'ar';
 
   /// Lookup helper — returns the Arabic value by default, else English.
-  String _t({required String ar, required String en}) =>
-      isArabic ? ar : en;
+  String _t({required String ar, required String en}) => isArabic ? ar : en;
 
   String get appTitle => _t(ar: 'رقيم', en: 'Raqim');
   String get loginTitle => _t(ar: 'رقيم', en: 'Raqim');

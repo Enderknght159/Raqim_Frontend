@@ -52,10 +52,9 @@ class ProgressBar extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 label!,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: tokens.textMuted),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
               ),
             ],
           );

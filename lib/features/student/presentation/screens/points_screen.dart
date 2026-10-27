@@ -21,7 +21,9 @@ class _StudentPointsScreenState extends State<StudentPointsScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _future ??= StudentRepositoryScope.of(context).courseBundle(widget.courseId);
+    _future ??= StudentRepositoryScope.of(
+      context,
+    ).courseBundle(widget.courseId);
   }
 
   @override

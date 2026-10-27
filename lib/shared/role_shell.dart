@@ -32,7 +32,8 @@ class RoleShell extends StatelessWidget {
               key: ValueKey('default-pw-${profile.id}'),
               icon: Icons.key,
               color: Theme.of(context).extension<AppTokens>()!.reward,
-              message: 'أنت تستخدم كلمة المرور الافتراضية (admin/admin1234) — '
+              message:
+                  'أنت تستخدم كلمة المرور الافتراضية (admin/admin1234) — '
                   'يُنصح بتغييرها من الإعدادات.',
             ),
           Expanded(child: child),
@@ -94,21 +95,21 @@ class RoleSection {
   const RoleSection(this.label, this.icon, this.path);
 
   const RoleSection.courses()
-      : label = 'الدورات',
-        icon = Icons.menu_book_outlined,
-        path = '/courses';
+    : label = 'الدورات',
+      icon = Icons.menu_book_outlined,
+      path = '/courses';
   const RoleSection.students()
-      : label = 'الطلاب',
-        icon = Icons.groups_outlined,
-        path = '/students';
+    : label = 'الطلاب',
+      icon = Icons.groups_outlined,
+      path = '/students';
   const RoleSection.more()
-      : label = 'المزيد',
-        icon = Icons.more_horiz,
-        path = '/more';
+    : label = 'المزيد',
+      icon = Icons.more_horiz,
+      path = '/more';
   const RoleSection.myProgress()
-      : label = 'تقدّمي',
-        icon = Icons.insights_outlined,
-        path = '/my-progress';
+    : label = 'تقدّمي',
+      icon = Icons.insights_outlined,
+      path = '/my-progress';
 
   final String label;
   final IconData icon;

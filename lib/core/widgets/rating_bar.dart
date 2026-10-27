@@ -20,7 +20,11 @@ class RatingLevel {
 /// Default memorization rating levels (BR-512): جيد / جيد جدًا / ممتاز.
 const List<RatingLevel> kMemorizationRatingLevels = [
   RatingLevel(value: 1, label: 'جيد', icon: Icons.sentiment_satisfied_alt),
-  RatingLevel(value: 2, label: 'جيد جدًا', icon: Icons.sentiment_very_satisfied),
+  RatingLevel(
+    value: 2,
+    label: 'جيد جدًا',
+    icon: Icons.sentiment_very_satisfied,
+  ),
   RatingLevel(value: 3, label: 'ممتاز', icon: Icons.emoji_events_outlined),
 ];
 
@@ -53,12 +57,14 @@ class RatingBar extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          levels.firstWhere((l) => l.value == value, orElse: () => levels.first).label,
+          levels
+              .firstWhere((l) => l.value == value, orElse: () => levels.first)
+              .label,
           textAlign: TextAlign.center,
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: tokens.info, fontWeight: FontWeight.w700),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: tokens.info,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ],
     );
@@ -74,7 +80,9 @@ class RatingBar extends StatelessWidget {
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? accent.withValues(alpha: 0.16) : tokens.surfaceSubtle,
+          color: selected
+              ? accent.withValues(alpha: 0.16)
+              : tokens.surfaceSubtle,
           borderRadius: BorderRadius.circular(tokens.radiusSmall),
           border: Border.all(
             color: selected ? accent : tokens.borderStructural,
@@ -83,14 +91,18 @@ class RatingBar extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Icon(level.icon, size: 20, color: selected ? accent : tokens.textMuted),
+            Icon(
+              level.icon,
+              size: 20,
+              color: selected ? accent : tokens.textMuted,
+            ),
             const SizedBox(height: 2),
             Text(
               '${level.value}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: selected ? accent : tokens.textMuted,
-                    fontWeight: FontWeight.w800,
-                  ),
+                color: selected ? accent : tokens.textMuted,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ],
         ),
