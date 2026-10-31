@@ -57,6 +57,10 @@ abstract class AdminRepository {
   Future<AdminTeacherDetail?> teacherDetail(int teacherId);
   Future<int> createTeacher(String name);
   Future<void> linkTeacherToUser(int userId, int teacherId);
+
+  /// Soft-deletes a teacher record (`DELETE /teachers/{id}`); the server also
+  /// unlinks the account and clears the teacher from every team.
+  Future<void> deleteTeacher(int teacherId);
   Future<List<AdminContentItem>> teamTypes();
   Future<List<AdminContentItem>> subjects();
   Future<List<AdminContentItem>> distributables();
@@ -178,6 +182,7 @@ abstract class AdminRepository {
   Future<void> removePhone(int phoneId);
 
   // ── Teams / teachers ────────────────────────────────────────────────────
+  Future<AdminTeamRow?> team(int teamId);
   Future<List<AdminStudentRow>> teamStudents(int teamId);
   Future<void> addStudentsToTeam(int teamId, List<int> studentIds);
   Future<void> removeStudentsFromTeam(int teamId, List<int> studentIds);
@@ -261,9 +266,11 @@ abstract class AdminRepository {
 
   // ── Mosque identity / lifecycle (E17) ───────────────────────────────────
   Future<MosqueInfo> mosque();
+
+  /// Mosque code is immutable (used by barcodes and usernames); it is never
+  /// sent to the server.
   Future<void> updateMosque({
     String? name,
-    String? code,
     String? contactEmail,
     String? contactPhone,
     String? city,

@@ -20,6 +20,8 @@ class _TeachingRepo extends AdminLocalRepository {
   AdminTeacherDetail? detail;
   final createdNames = <String>[];
   final links = <(int, int)>[];
+  final deletedTeachers = <int>[];
+  final removedTeams = <int>[];
 
   @override
   Future<AdminUserRow?> user(int userId) async => row;
@@ -60,6 +62,41 @@ class _TeachingRepo extends AdminLocalRepository {
       id: teacherId,
       name: createdNames.isEmpty ? 'معلم' : createdNames.last,
       userId: userId,
+    );
+  }
+
+  @override
+  Future<void> deleteTeacher(int teacherId) async {
+    deletedTeachers.add(teacherId);
+    detail = null;
+    final current = row;
+    if (current != null) {
+      row = AdminUserRow(
+        id: current.id,
+        name: current.name,
+        username: current.username,
+        active: current.active,
+        isAdmin: current.isAdmin,
+        isSupervisor: current.isSupervisor,
+        isTeacher: false,
+        isStudent: current.isStudent,
+        studentId: current.studentId,
+        teacherId: null,
+        teamNames: const [],
+      );
+    }
+  }
+
+  @override
+  Future<void> removeTeamTeacher(int teamId) async {
+    removedTeams.add(teamId);
+    final current = detail;
+    if (current == null) return;
+    detail = AdminTeacherDetail(
+      id: current.id,
+      name: current.name,
+      userId: current.userId,
+      teams: current.teams.where((team) => team.id != teamId).toList(),
     );
   }
 }
@@ -187,5 +224,81 @@ void main() {
     expect(repo.createdNames, ['أ. أحمد']);
     expect(repo.links, [(5, 77)]);
     expect(find.text('مدرّس'), findsOneWidget);
+  });
+
+  testWidgets('teaching page removes a team assignment (unlink only)', (
+    tester,
+  ) async {
+    final repo = await _repo();
+    repo.row = _studentRow;
+    repo.detail = const AdminTeacherDetail(
+      id: 9,
+      name: 'أ. أحمد',
+      userId: 5,
+      teams: [AdminTeamRef(id: 1, name: 'حلقة النور')],
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        const AdminUserTeachingScreen(
+          userId: 5,
+          initialName: 'أ. أحمد',
+          initialUsername: 'ahmad',
+          initialTeacherId: 9,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(TextButton, 'إزالة'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('إزالة'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repo.removedTeams, [1]);
+    expect(repo.deletedTeachers, isEmpty);
+  });
+
+  testWidgets('teaching page soft-deletes the teacher record', (tester) async {
+    final repo = await _repo();
+    repo.row = _studentRow;
+    repo.detail = const AdminTeacherDetail(
+      id: 9,
+      name: 'أ. أحمد',
+      userId: 5,
+      teams: [AdminTeamRef(id: 1, name: 'حلقة النور')],
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        const AdminUserTeachingScreen(
+          userId: 5,
+          initialName: 'أ. أحمد',
+          initialUsername: 'ahmad',
+          initialTeacherId: 9,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('إزالة حساب المدرس'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('إزالة'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repo.deletedTeachers, [9]);
+    expect(find.text('غير مدرّس'), findsOneWidget);
   });
 }

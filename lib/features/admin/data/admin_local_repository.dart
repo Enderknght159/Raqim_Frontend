@@ -552,6 +552,11 @@ class AdminLocalRepository implements AdminRepository {
   }
 
   @override
+  Future<AdminTeamRow?> team(int teamId) async {
+    return (await teams()).where((row) => row.id == teamId).firstOrNull;
+  }
+
+  @override
   Future<List<AdminTeacherRow>> teachers() async {
     final rows = await _database.select(_database.teams).get();
     final counts = <String, int>{};
@@ -722,6 +727,15 @@ class AdminLocalRepository implements AdminRepository {
 
   @override
   Future<void> linkTeacherToUser(int userId, int teacherId) async {}
+
+  @override
+  Future<void> deleteTeacher(int teacherId) async {
+    // Demo data has no standalone teacher table; clearing the team names is
+    // enough for the local fallback.
+    await _database
+        .update(_database.teams)
+        .write(const db.TeamsCompanion(teacherName: Value('')));
+  }
 
   @override
   Future<List<AdminContentItem>> teamTypes() async {
@@ -2309,7 +2323,6 @@ class AdminLocalRepository implements AdminRepository {
   @override
   Future<void> updateMosque({
     String? name,
-    String? code,
     String? contactEmail,
     String? contactPhone,
     String? city,

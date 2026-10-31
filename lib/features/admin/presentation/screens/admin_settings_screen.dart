@@ -117,11 +117,15 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                     ),
                     const SizedBox(height: 10),
                     TextField(
+                      key: const ValueKey('mosque-code-readonly'),
                       controller: _code,
+                      readOnly: true,
                       decoration: const InputDecoration(
                         labelText: 'الرمز',
                         helperText:
-                            'يُستخدم في الباركود (رمز المسجد + معرّف الطالب)',
+                            'الرمز ثابت ولا يمكن تغييره (يُستخدم في الباركود '
+                            'واسم المستخدم)',
+                        suffixIcon: Icon(Icons.lock_outline),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -253,7 +257,6 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       final repo = AdminRepositoryScope.of(context);
       await repo.updateMosque(
         name: _name.text,
-        code: _code.text,
         contactEmail: _email.text,
         contactPhone: _phone.text,
         city: _city.text,

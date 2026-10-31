@@ -786,11 +786,20 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
           name: asString(teams[index]['name']),
           typeName: typeNames[asInt(teams[index]['teamTypeId'])] ?? 'حلقة',
           teacherName: teacherNames[asInt(teams[index]['teacherId'])] ?? '',
+          teacherId: asInt(teams[index]['teacherId']) == 0
+              ? null
+              : asInt(teams[index]['teacherId']),
           studentsCount: counts[index],
         ),
     ];
     result.sort((a, b) => a.name.compareTo(b.name));
     return result;
+  }
+
+  @override
+  Future<AdminTeamRow?> team(int teamId) async {
+    final rows = await teams();
+    return rows.where((row) => row.id == teamId).firstOrNull;
   }
 
   @override
@@ -806,7 +815,9 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
     return [
       for (final teacher in teachers)
         AdminTeacherRow(
+          id: asInt(teacher['id']),
           name: asString(teacher['name']),
+          userId: teacher['userId'] == null ? null : asInt(teacher['userId']),
           teamsCount: counts[asInt(teacher['id'])] ?? 0,
         ),
     ]..sort((a, b) => b.teamsCount.compareTo(a.teamsCount));
@@ -875,6 +886,17 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
     _teachersRaw = null;
     _teacherNames.clear();
     _candidatesRaw = null;
+  }
+
+  @override
+  Future<void> deleteTeacher(int teacherId) async {
+    await deleteVoid(ApiEndpoints.teacherDetail(teacherId));
+    _teacherNames.clear();
+    _teachersRaw = null;
+    _candidatesRaw = null;
+    _teamsRaw = null;
+    _userPages.clear();
+    _touchCache();
   }
 
   @override
@@ -1653,6 +1675,7 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
           name: asString(mine[index]['name']),
           typeName: typeNames[asInt(mine[index]['teamTypeId'])] ?? 'حلقة',
           teacherName: teacherName,
+          teacherId: teacherId,
           studentsCount: counts[index],
         ),
     ];
@@ -1683,6 +1706,7 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
     _teachersRaw = null;
     _teacherNames.clear();
     _candidatesRaw = null;
+    _userPages.clear();
     _touchCache();
   }
 
@@ -1692,6 +1716,9 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
     _teamsRaw = null;
     _teachersRaw = null;
     _teacherNames.clear();
+    _candidatesRaw = null;
+    _userPages.clear();
+    _touchCache();
   }
 
   // ── Content writes ──────────────────────────────────────────────────────
@@ -2030,7 +2057,6 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
   @override
   Future<void> updateMosque({
     String? name,
-    String? code,
     String? contactEmail,
     String? contactPhone,
     String? city,
@@ -2039,7 +2065,6 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
       ApiEndpoints.mosque,
       data: {
         if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
-        if (code != null && code.trim().isNotEmpty) 'code': code.trim(),
         'contactEmail': ?contactEmail,
         'contactPhone': ?contactPhone,
         'city': ?city,

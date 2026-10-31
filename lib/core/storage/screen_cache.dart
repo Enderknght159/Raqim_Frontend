@@ -18,5 +18,11 @@ class ScreenCache {
     _values[key] = value;
   }
 
+  void remove(String key) => _values.remove(key);
+
+  void removeWhere(bool Function(String key) test) {
+    _values.removeWhere((key, _) => test(key));
+  }
+
   void clear() => _values.clear();
 }

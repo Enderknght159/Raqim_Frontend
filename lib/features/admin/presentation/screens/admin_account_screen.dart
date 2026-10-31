@@ -11,6 +11,7 @@ import '../../../../core/widgets/status_badge.dart';
 import '../../../auth/presentation/cubits/auth_cubit.dart';
 import '../../../auth/presentation/cubits/auth_state.dart';
 import '../../../../shared/account_switcher.dart';
+import '../../../../shared/permissions.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// E18 — Admin "حسابي": profile card + editable fields (like the student
@@ -70,6 +71,10 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
       auth = null;
     }
     final profile = auth is AuthAuthenticated ? auth.profile : null;
+    // Account identity (phone/password) is exclusive to the general supervisor
+    // (mosque admin). Everyone else manages student phones through the
+    // students module when they hold `students.update`.
+    final isGeneralSupervisor = profile?.isAdmin == true;
     return Scaffold(
       body: ResponsivePage(
         maxWidth: 720,
@@ -122,58 +127,63 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            const SectionHeader(
-              icon: Icons.person_outline,
-              title: 'بيانات الحساب',
-            ),
-            const SizedBox(height: 8),
-            AppCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextField(
-                    controller: _name,
-                    decoration: const InputDecoration(labelText: 'الاسم'),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _username,
-                    readOnly: true,
-                    decoration: const InputDecoration(
-                      labelText: 'اسم المستخدم',
-                      helperText: 'لا يمكن تغيير اسم المستخدم من هنا',
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _phone,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(labelText: 'الهاتف'),
-                  ),
-                  const SizedBox(height: 10),
-                  AppButton(
-                    label: _saving ? 'جارٍ الحفظ…' : 'حفظ البيانات',
-                    variant: AppButtonVariant.secondary,
-                    loading: _saving,
-                    onPressed: _saving ? null : () => _save(context),
-                  ),
-                ],
+            if (isGeneralSupervisor) ...[
+              const SizedBox(height: 16),
+              const SectionHeader(
+                icon: Icons.person_outline,
+                title: 'بيانات الحساب',
               ),
-            ),
+              const SizedBox(height: 8),
+              AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: _name,
+                      decoration: const InputDecoration(labelText: 'الاسم'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      key: const ValueKey('account-username'),
+                      controller: _username,
+                      readOnly: true,
+                      decoration: const InputDecoration(
+                        labelText: 'اسم المستخدم',
+                        helperText: 'لا يمكن تغيير اسم المستخدم من هنا',
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _phone,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(labelText: 'الهاتف'),
+                    ),
+                    const SizedBox(height: 10),
+                    AppButton(
+                      label: _saving ? 'جارٍ الحفظ…' : 'حفظ البيانات',
+                      variant: AppButtonVariant.secondary,
+                      loading: _saving,
+                      onPressed: _saving ? null : () => _save(context),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             const SectionHeader(
               icon: Icons.security_outlined,
               title: 'الأمان والحساب',
             ),
             const SizedBox(height: 8),
-            _tile(
-              context,
-              Icons.lock_outline,
-              'تغيير كلمة المرور',
-              () => _changePassword(context),
-            ),
-            const SizedBox(height: 8),
+            if (isGeneralSupervisor) ...[
+              _tile(
+                context,
+                Icons.lock_outline,
+                'تغيير كلمة المرور',
+                () => _changePassword(context),
+              ),
+              const SizedBox(height: 8),
+            ],
             AppButton(
               label: 'تبديل الحساب',
               variant: AppButtonVariant.secondary,
@@ -186,30 +196,6 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
               variant: AppButtonVariant.destructive,
               icon: Icons.logout,
               onPressed: () => _confirmLogout(context),
-            ),
-            const SizedBox(height: 16),
-            const SectionHeader(
-              icon: Icons.mosque_outlined,
-              title: 'بيانات المسجد',
-            ),
-            const SizedBox(height: 8),
-            AppCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _readOnlyRow(context, 'المسجد', profile?.mosqueName ?? '—'),
-                  _readOnlyRow(context, 'الرمز', profile?.mosqueCode ?? '—'),
-                  const SizedBox(height: 4),
-                  Text(
-                    profile?.isAdmin == true
-                        ? 'تعديل بيانات المسجد من تبويب النظام ← الإعدادات.'
-                        : 'بيانات المسجد للقراءة فقط، وتعديلها من صلاحية المشرف العام.',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                  ),
-                ],
-              ),
             ),
             const SizedBox(height: 24),
           ],
@@ -248,6 +234,8 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
 
   Future<void> _save(BuildContext context) async {
     if (_saving) return;
+    final profile = currentProfile(context);
+    if (profile?.isAdmin != true) return;
     setState(() => _saving = true);
     try {
       await context.read<AuthCubit>().updateProfile(
@@ -297,25 +285,6 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
           Icon(Icons.chevron_left, color: tokens.borderStructural),
         ],
       ),
-    );
-  }
-
-  Widget _readOnlyRow(BuildContext context, String label, String value) {
-    final tokens = Theme.of(context).extension<AppTokens>()!;
-    return ListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      title: Text(
-        label,
-        style: TextStyle(color: tokens.textMuted, fontSize: 13),
-      ),
-      subtitle: Text(
-        value,
-        style: Theme.of(
-          context,
-        ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
-      ),
-      trailing: Icon(Icons.lock_outline, size: 18, color: tokens.textMuted),
     );
   }
 

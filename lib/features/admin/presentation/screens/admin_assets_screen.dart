@@ -7,6 +7,7 @@ import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/responsive_grid.dart';
 import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
+import '../../../../shared/permissions.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
@@ -20,7 +21,7 @@ class AdminAssetsScreen extends StatefulWidget {
 }
 
 class _AdminAssetsScreenState extends State<AdminAssetsScreen> {
-  late Future<List<List<AdminContentItem>>> _future;
+  late Future<_AssetsData> _future;
 
   @override
   void initState() {
@@ -28,13 +29,44 @@ class _AdminAssetsScreenState extends State<AdminAssetsScreen> {
     _future = _load();
   }
 
-  Future<List<List<AdminContentItem>>> _load() async {
+  Future<T?> _safe<T>(Future<T> future) async {
+    try {
+      return await future;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<_AssetsData> _load() async {
     final repo = AdminRepositoryScope.of(context);
-    return [
-      await repo.matns(),
-      await repo.subjects(),
-      await repo.distributables(),
-    ];
+    final canMatn = canViewModule(context, 'matn');
+    final canExams = canViewModule(context, 'exams');
+    final canDistributions = canViewModule(context, 'distributions');
+    final canEditMatn = canEditModule(context, 'matn');
+    final canDeleteMatn = canDeleteModule(context, 'matn');
+    final canEditExams = canEditModule(context, 'exams');
+    final canDeleteExams = canDeleteModule(context, 'exams');
+    final canEditDistributions = canEditModule(context, 'distributions');
+    final canDeleteDistributions = canDeleteModule(context, 'distributions');
+    final matns = canMatn ? await _safe(repo.matns()) : null;
+    final subjects = canExams ? await _safe(repo.subjects()) : null;
+    final distributables = canDistributions
+        ? await _safe(repo.distributables())
+        : null;
+    return _AssetsData(
+      canMatn: canMatn,
+      canExams: canExams,
+      canDistributions: canDistributions,
+      matns: matns ?? const [],
+      subjects: subjects ?? const [],
+      distributables: distributables ?? const [],
+      canEditMatn: canEditMatn,
+      canDeleteMatn: canDeleteMatn,
+      canEditExams: canEditExams,
+      canDeleteExams: canDeleteExams,
+      canEditDistributions: canEditDistributions,
+      canDeleteDistributions: canDeleteDistributions,
+    );
   }
 
   void _reload() {
@@ -45,37 +77,50 @@ class _AdminAssetsScreenState extends State<AdminAssetsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AsyncView<List<List<AdminContentItem>>>(
+    return AsyncView<_AssetsData>(
       future: _future,
       cacheKey: 'admin-assets',
-      builder: (context, lists) => Scaffold(
+      frame: (context, child) => Scaffold(
+        appBar: AppBar(title: const Text('المحتوى')),
+        body: child,
+      ),
+      builder: (context, data) => Scaffold(
         appBar: AppBar(title: const Text('المحتوى')),
         body: ResponsivePage(
           maxWidth: 1100,
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _section(
-                'المتون',
-                lists[0],
-                () => _addMatn(),
-                onEdit: (item) => _editMatn(item),
-                onDelete: _deleteMatn,
-              ),
-              _section(
-                'المواد',
-                lists[1],
-                () => _addSimple('مادة'),
-                onEdit: (item) => _editSimple('مادة', item),
-                onDelete: _deleteSubject,
-              ),
-              _section(
-                'الموزّعات',
-                lists[2],
-                () => _addSimple('موزّع'),
-                onEdit: (item) => _editSimple('موزّع', item),
-                onDelete: _deleteDistributable,
-              ),
+              if (data.canMatn)
+                _section(
+                  'المتون',
+                  data.matns,
+                  data.canEditMatn ? () => _addMatn() : null,
+                  onEdit: data.canEditMatn ? (item) => _editMatn(item) : null,
+                  onDelete: data.canDeleteMatn ? _deleteMatn : null,
+                ),
+              if (data.canExams)
+                _section(
+                  'المواد',
+                  data.subjects,
+                  data.canEditExams ? () => _addSimple('مادة') : null,
+                  onEdit: data.canEditExams
+                      ? (item) => _editSimple('مادة', item)
+                      : null,
+                  onDelete: data.canDeleteExams ? _deleteSubject : null,
+                ),
+              if (data.canDistributions)
+                _section(
+                  'الموزّعات',
+                  data.distributables,
+                  data.canEditDistributions ? () => _addSimple('موزّع') : null,
+                  onEdit: data.canEditDistributions
+                      ? (item) => _editSimple('موزّع', item)
+                      : null,
+                  onDelete: data.canDeleteDistributions
+                      ? _deleteDistributable
+                      : null,
+                ),
             ],
           ),
         ),
@@ -86,9 +131,9 @@ class _AdminAssetsScreenState extends State<AdminAssetsScreen> {
   Widget _section(
     String title,
     List<AdminContentItem> items,
-    VoidCallback onAdd, {
-    required ValueChanged<AdminContentItem> onEdit,
-    required Future<void> Function(AdminContentItem) onDelete,
+    VoidCallback? onAdd, {
+    ValueChanged<AdminContentItem>? onEdit,
+    Future<void> Function(AdminContentItem)? onDelete,
   }) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     return Column(
@@ -123,7 +168,7 @@ class _AdminAssetsScreenState extends State<AdminAssetsScreen> {
                     horizontal: 14,
                     vertical: 6,
                   ),
-                  onTap: () => onEdit(it),
+                  onTap: onEdit == null ? null : () => onEdit(it),
                   child: Row(
                     children: [
                       Expanded(
@@ -146,7 +191,7 @@ class _AdminAssetsScreenState extends State<AdminAssetsScreen> {
                         tooltip: 'حذف',
                         icon: const Icon(Icons.delete_outline, size: 20),
                         color: tokens.dangerText,
-                        onPressed: () => onDelete(it),
+                        onPressed: onDelete == null ? null : () => onDelete(it),
                       ),
                       Icon(Icons.chevron_left, color: tokens.borderStructural),
                     ],
@@ -473,4 +518,34 @@ class _AdminAssetsScreenState extends State<AdminAssetsScreen> {
     if (!mounted) return;
     _reload();
   }
+}
+
+class _AssetsData {
+  const _AssetsData({
+    required this.canMatn,
+    required this.canExams,
+    required this.canDistributions,
+    required this.matns,
+    required this.subjects,
+    required this.distributables,
+    required this.canEditMatn,
+    required this.canDeleteMatn,
+    required this.canEditExams,
+    required this.canDeleteExams,
+    required this.canEditDistributions,
+    required this.canDeleteDistributions,
+  });
+
+  final bool canMatn;
+  final bool canExams;
+  final bool canDistributions;
+  final List<AdminContentItem> matns;
+  final List<AdminContentItem> subjects;
+  final List<AdminContentItem> distributables;
+  final bool canEditMatn;
+  final bool canDeleteMatn;
+  final bool canEditExams;
+  final bool canDeleteExams;
+  final bool canEditDistributions;
+  final bool canDeleteDistributions;
 }

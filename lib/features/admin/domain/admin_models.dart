@@ -105,6 +105,7 @@ class AdminTeamRow {
     required this.typeName,
     required this.teacherName,
     required this.studentsCount,
+    this.teacherId,
   });
 
   final int id;
@@ -112,12 +113,23 @@ class AdminTeamRow {
   final String typeName;
   final String teacherName;
   final int studentsCount;
+
+  /// Linked teacher row id (`teacher.id`) when a teacher is assigned.
+  final int? teacherId;
 }
 
 class AdminTeacherRow {
-  const AdminTeacherRow({required this.name, required this.teamsCount});
+  const AdminTeacherRow({
+    this.id = 0,
+    required this.name,
+    this.userId,
+    required this.teamsCount,
+  });
 
+  /// Teacher row id (`teacher.id`), used by the unified teacher page.
+  final int id;
   final String name;
+  final int? userId;
   final int teamsCount;
 }
 

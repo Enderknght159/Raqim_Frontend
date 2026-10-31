@@ -25,6 +25,7 @@ import '../../features/admin/presentation/screens/admin_students_screen.dart';
 import '../../features/admin/presentation/screens/admin_sync_kiosk_screen.dart';
 import '../../features/admin/presentation/screens/admin_system_screen.dart';
 import '../../features/admin/presentation/screens/admin_teacher_screen.dart';
+import '../../features/admin/presentation/screens/admin_team_screen.dart';
 import '../../features/admin/presentation/screens/admin_teams_screen.dart';
 import '../../features/admin/presentation/screens/admin_tools_screen.dart';
 import '../../features/admin/presentation/screens/admin_user_teaching_screen.dart';
@@ -42,7 +43,7 @@ import '../../features/student/presentation/screens/points_screen.dart';
 import '../../features/student/presentation/screens/profile_screen.dart';
 import '../../features/student/presentation/screens/quran_screen.dart';
 import '../../features/student/presentation/student_shell.dart';
-import '../../shared/coming_soon_screen.dart';
+import '../../shared/no_access_screen.dart';
 import '../../shared/splash_screen.dart';
 import '../../shared/teacher_soon_screen.dart';
 import 'route_guards.dart';
@@ -82,7 +83,7 @@ class AppRouter {
       GoRoute(
         path: '/not-allowed',
         name: 'notAllowed',
-        builder: (context, state) => const ComingSoonScreen(title: 'غير مسموح'),
+        builder: (context, state) => const NoAccessScreen(),
       ),
       GoRoute(
         path: '/teacher-soon',
@@ -184,6 +185,13 @@ class AppRouter {
             path: '/admin/teams',
             name: 'adminTeams',
             builder: (context, state) => const AdminTeamsScreen(),
+          ),
+          GoRoute(
+            path: '/admin/teams/:id',
+            name: 'adminTeam',
+            builder: (context, state) => AdminTeamScreen(
+              teamId: int.parse(state.pathParameters['id']!),
+            ),
           ),
           GoRoute(
             path: '/admin/teachers/:name',

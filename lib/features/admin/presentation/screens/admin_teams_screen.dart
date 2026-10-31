@@ -10,9 +10,9 @@ import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/search_picker_field.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
+import '../../data/admin_refresh.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
-import '../widgets/team_manager_sheet.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// E8 — Teams & teachers (unified card): teams · teachers · team types.
@@ -32,6 +32,18 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
   void initState() {
     super.initState();
     _future = _load();
+    AdminRefresh.instance.addListener(_onOrgChanged);
+  }
+
+  @override
+  void dispose() {
+    AdminRefresh.instance.removeListener(_onOrgChanged);
+    super.dispose();
+  }
+
+  void _onOrgChanged() {
+    if (!mounted) return;
+    _reload();
   }
 
   Future<_Data> _load() async {
@@ -57,6 +69,10 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
     return AsyncView<_Data>(
       future: _future,
       cacheKey: 'admin-teams',
+      frame: (context, child) => Scaffold(
+        appBar: AppBar(title: const Text('الحلقات والمعلمون')),
+        body: child,
+      ),
       builder: (context, data) => Scaffold(
         appBar: AppBar(
           title: const Text('الحلقات والمعلمون'),
@@ -269,10 +285,9 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
     );
   }
 
-  /// Team preview + bulk add/remove (E8).
+  /// Team page (replaces the old bottom sheet): summary, teacher, members.
   Future<void> _openTeam(BuildContext context, AdminTeamRow team) async {
-    final repo = AdminRepositoryScope.of(context);
-    await showTeamManagerSheet(context, team, repository: repo);
+    await context.push('/admin/teams/${team.id}');
     if (!mounted) return;
     _reload();
   }

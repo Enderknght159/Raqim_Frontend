@@ -69,6 +69,10 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
     return AsyncView<_ExamData>(
       future: _future,
       cacheKey: 'admin-exam-${widget.examId}',
+      frame: (context, child) => Scaffold(
+        appBar: AppBar(title: const Text('الامتحان')),
+        body: child,
+      ),
       builder: (context, data) {
         final detail = data.detail;
         if (detail == null) {

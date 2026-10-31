@@ -6,9 +6,28 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loading.dart';
 import '../../../../core/widgets/status_badge.dart';
+import '../../data/admin_refresh.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/admin_models.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
+
+/// Opens the teacher picker for a team. Returns `''` for "no teacher", a
+/// [TeacherCandidate] for a new assignment, or `null` when cancelled.
+Future<Object?> showTeamTeacherPicker(
+  BuildContext context, {
+  required List<TeacherCandidate> candidates,
+  required String selected,
+}) {
+  return showAppSheet<Object>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) => _TeacherPickerSheet(
+      candidates: candidates,
+      selected: selected,
+    ),
+  );
+}
 
 /// Opens the team members manager (E8): preview/remove with multi-select +
 /// add via tolerant search. Saves on close. Reused by the teams screen and
@@ -145,6 +164,7 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
       _selected = {};
       _selectedRows.clear();
     });
+    AdminRefresh.instance.teamsChanged();
   }
 
   Future<void> _addSelected() async {
@@ -159,18 +179,15 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
       _selected = {};
       _selectedRows.clear();
     });
+    AdminRefresh.instance.teamsChanged();
   }
 
   /// Change the team teacher at any time (any existing account).
   Future<void> _editTeacher() async {
-    final result = await showAppSheet<Object>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) => _TeacherPickerSheet(
-        candidates: _teacherCandidates,
-        selected: _teacherName,
-      ),
+    final result = await showTeamTeacherPicker(
+      context,
+      candidates: _teacherCandidates,
+      selected: _teacherName,
     );
     if (result == null || !mounted) return;
     try {
@@ -187,6 +204,7 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
       final updated = teams.where((t) => t.id == widget.team.id).firstOrNull;
       if (!mounted) return;
       setState(() => _teacherName = updated?.teacherName ?? '');
+      AdminRefresh.instance.teamsChanged();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(

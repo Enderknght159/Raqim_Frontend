@@ -4,7 +4,31 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/adaptive_sheet.dart';
 import '../../../../core/widgets/app_loading.dart';
 import '../../domain/admin_models.dart';
+import '../../domain/permission_packs.dart';
 import '../admin_shell.dart';
+
+/// Opens the account-wide scope picker. The chosen scope is applied to every
+/// enabled module; the advanced section can override individual modules.
+Future<AccountScope?> showAccountScopePicker(
+  BuildContext context, {
+  required AccountScope initial,
+  String title = 'نطاق الحساب',
+}) {
+  return showAppSheet<AccountScope>(
+    context: context,
+    maxWidth: 640,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) => _ScopePickerSheet<AccountScope>(
+      title: title,
+      description:
+          'يُطبَّق النطاق على كل الحزم المفعّلة. اترك الاختيار فارغًا لمنح كل '
+          'الدورات والحلقات. يمكن الجمع بين دورات وحلقات (تقاطع).',
+      initial: initial,
+      resultBuilder: (scope) => scope,
+    ),
+  );
+}
 
 /// Opens the course/team scope picker for a single module grant.
 ///
@@ -20,26 +44,39 @@ Future<AdminModuleGrant?> showPermissionScopePicker(
     maxWidth: 640,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (context) =>
-        PermissionScopePicker(moduleLabel: moduleLabel, initial: initial),
+    builder: (context) => _ScopePickerSheet<AdminModuleGrant>(
+      title: 'نطاق «$moduleLabel»',
+      description:
+          'اترك الاختيار فارغًا لمنح الوحدة على كل الدورات والحلقات. '
+          'يمكن الجمع بين دورات وحلقات (تقاطع).',
+      initial: AccountScope(
+        courseIds: initial.courseIds,
+        teamIds: initial.teamIds,
+      ),
+      resultBuilder: (scope) =>
+          initial.copyWith(courseIds: scope.courseIds, teamIds: scope.teamIds),
+    ),
   );
 }
 
-class PermissionScopePicker extends StatefulWidget {
-  const PermissionScopePicker({
-    super.key,
-    required this.moduleLabel,
+class _ScopePickerSheet<T> extends StatefulWidget {
+  const _ScopePickerSheet({
+    required this.title,
+    required this.description,
     required this.initial,
+    required this.resultBuilder,
   });
 
-  final String moduleLabel;
-  final AdminModuleGrant initial;
+  final String title;
+  final String description;
+  final AccountScope initial;
+  final T Function(AccountScope scope) resultBuilder;
 
   @override
-  State<PermissionScopePicker> createState() => _PermissionScopePickerState();
+  State<_ScopePickerSheet<T>> createState() => _ScopePickerSheetState<T>();
 }
 
-class _PermissionScopePickerState extends State<PermissionScopePicker> {
+class _ScopePickerSheetState<T> extends State<_ScopePickerSheet<T>> {
   late final Set<int> _courseIds = {...widget.initial.courseIds};
   late final Set<int> _teamIds = {...widget.initial.teamIds};
   Future<({List<AdminCourseSummary> courses, List<AdminTeamRow> teams})>?
@@ -61,7 +98,7 @@ class _PermissionScopePickerState extends State<PermissionScopePicker> {
     );
   }
 
-  AdminModuleGrant _result() => widget.initial.copyWith(
+  AccountScope _scope() => AccountScope(
     courseIds: _courseIds.toList()..sort(),
     teamIds: _teamIds.toList()..sort(),
   );
@@ -80,13 +117,12 @@ class _PermissionScopePickerState extends State<PermissionScopePicker> {
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               children: [
                 Text(
-                  'نطاق «${widget.moduleLabel}»',
+                  widget.title,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'اترك الاختيار فارغًا لمنح الوحدة على كل الدورات والحلقات. '
-                  'يمكن الجمع بين دورات وحلقات (تقاطع).',
+                  widget.description,
                   style: TextStyle(color: tokens.textMuted, fontSize: 13),
                 ),
                 const SizedBox(height: 12),
@@ -154,7 +190,8 @@ class _PermissionScopePickerState extends State<PermissionScopePicker> {
                     borderRadius: BorderRadius.circular(tokens.radiusSmall),
                   ),
                 ),
-                onPressed: () => Navigator.of(context).pop(_result()),
+                onPressed: () =>
+                    Navigator.of(context).pop(widget.resultBuilder(_scope())),
                 child: const Text('اعتماد النطاق'),
               ),
             ),

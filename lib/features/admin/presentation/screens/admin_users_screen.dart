@@ -7,6 +7,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_loading.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/responsive_page.dart';
+import '../../data/admin_refresh.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
 import '../widgets/admin_role_badges.dart';
@@ -41,15 +42,22 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    AdminRefresh.instance.addListener(_onOrgChanged);
     _load(reset: true);
   }
 
   @override
   void dispose() {
+    AdminRefresh.instance.removeListener(_onOrgChanged);
     _debounce?.cancel();
     _scroll.dispose();
     _search.dispose();
     super.dispose();
+  }
+
+  void _onOrgChanged() {
+    if (!mounted) return;
+    _load(reset: true);
   }
 
   Future<void> _load({required bool reset}) async {

@@ -20,7 +20,6 @@ import '../../../student/presentation/widgets/quran_map.dart';
 import '../../../student/presentation/widgets/tasmi_log_sheet.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
-import '../widgets/team_manager_sheet.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// E7 — Student profile (admin): the student's whole record — header (teams
@@ -86,6 +85,10 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
     return AsyncView<_Data>(
       future: _future,
       cacheKey: 'admin-student-${widget.studentId}',
+      frame: (context, child) => Scaffold(
+        appBar: AppBar(title: const Text('ملف الطالب')),
+        body: child,
+      ),
       builder: (context, data) => Scaffold(
         appBar: AppBar(title: Text(data.profile.profile.name)),
         body: ResponsivePage(
@@ -225,10 +228,7 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
   }
 
   Future<void> _openTeam(_Data data, Team team) async {
-    final row = data.allTeams.where((t) => t.id == team.id).firstOrNull;
-    if (row == null) return;
-    final repo = AdminRepositoryScope.of(context);
-    await showTeamManagerSheet(context, row, repository: repo);
+    await context.push('/admin/teams/${team.id}');
     if (!mounted) return;
     _reload();
   }

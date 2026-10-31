@@ -56,12 +56,12 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
   Future<_Data> _load() async {
     final repo = AdminRepositoryScope.of(context);
     final sessionF = repo.sessionRow(widget.sessionId);
-    final attendanceF = repo.sessionAttendance(widget.sessionId);
+    final attendanceF = _safe(repo.sessionAttendance(widget.sessionId));
     final membersF = _safe(repo.sessionMembers(widget.sessionId));
     final recordsF = _safe(repo.sessionRecords(widget.sessionId));
     return _Data(
       session: await sessionF,
-      attendance: await attendanceF,
+      attendance: await attendanceF ?? const [],
       members: await membersF ?? const [],
       records: await recordsF ?? const [],
     );
@@ -92,9 +92,15 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
   @override
   Widget build(BuildContext context) {
     final canSendAbsence = _canSendAbsenceNotice(context);
+    final canViewAttendance = canViewModule(context, 'attendance');
+    final canMessages = hasAnyAbility(context, const ['messagesExport']);
     return AsyncView<_Data>(
       future: _future,
       cacheKey: 'admin-session-${widget.sessionId}',
+      frame: (context, child) => Scaffold(
+        appBar: AppBar(title: const Text('الجلسة')),
+        body: child,
+      ),
       builder: (context, data) => Scaffold(
         appBar: AppBar(
           title: Text('جلسة #${data.session.index}'),
@@ -115,22 +121,26 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
               children: [
-                _attendanceBar(
-                  context,
-                  data,
-                  canSendAbsence: canSendAbsence,
-                  canRegister: canEditModule(context, 'attendance'),
-                ),
-                const SizedBox(height: 16),
-                _attendanceList(context, data),
-                const SizedBox(height: 16),
+                if (canViewAttendance) ...[
+                  _attendanceBar(
+                    context,
+                    data,
+                    canSendAbsence: canSendAbsence,
+                    canRegister: canEditModule(context, 'attendance'),
+                  ),
+                  const SizedBox(height: 16),
+                  _attendanceList(context, data),
+                  const SizedBox(height: 16),
+                ],
                 _recordSection(context),
                 const SizedBox(height: 16),
-                SessionRecordsSection(records: data.records),
-                const SizedBox(height: 16),
-                _summarySection(context, data),
-                const SizedBox(height: 16),
-                _messagesSection(context),
+                if (canViewAttendance) ...[
+                  SessionRecordsSection(records: data.records),
+                  const SizedBox(height: 16),
+                  _summarySection(context, data),
+                  const SizedBox(height: 16),
+                ],
+                if (canMessages) _messagesSection(context),
               ],
             ),
           ),

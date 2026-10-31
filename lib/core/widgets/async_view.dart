@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../shared/no_access_screen.dart';
+import '../network/api_exception.dart';
 import '../storage/screen_cache.dart';
 import '../theme/app_theme.dart';
 import 'app_loading.dart';
@@ -22,6 +24,7 @@ class AsyncView<T> extends StatefulWidget {
     this.onRetry,
     this.cacheKey,
     this.errorTitle = 'تعذر التحميل',
+    this.frame,
   });
 
   final Future<T> future;
@@ -34,6 +37,11 @@ class AsyncView<T> extends StatefulWidget {
   final Widget? loading;
   final VoidCallback? onRetry;
   final String errorTitle;
+
+  /// Wraps the first-load spinner and error states. Root-level screens that
+  /// build their own [Scaffold] only after data arrives must pass this so the
+  /// loading/error page keeps an AppBar (and a way back).
+  final Widget Function(BuildContext, Widget)? frame;
 
   @override
   State<AsyncView<T>> createState() => _AsyncViewState<T>();
@@ -148,7 +156,8 @@ class _AsyncViewState<T> extends State<AsyncView<T>> {
   @override
   Widget build(BuildContext context) {
     if (_waiting && !_hasData) {
-      return widget.loading ?? const AppLoadingView();
+      final loading = widget.loading ?? const AppLoadingView();
+      return widget.frame?.call(context, loading) ?? loading;
     }
     if (_failed && !_hasData) {
       VoidCallback? retry = widget.onRetry;
@@ -160,11 +169,31 @@ class _AsyncViewState<T> extends State<AsyncView<T>> {
           retry = null;
         }
       }
-      return AppErrorView(
-        error: _error,
-        title: widget.errorTitle,
-        onRetry: retry,
-      );
+      final error = _error;
+      final denied = error is ApiException && error.isForbidden;
+      Widget body;
+      if (denied) {
+        final noAccess = NoAccessView(
+          onRetry: retry,
+          onBack: () => goBackOrHome(context),
+        );
+        body = _canPop(context)
+            ? noAccess
+            : PopScope(
+                canPop: false,
+                onPopInvokedWithResult: (didPop, _) {
+                  if (!didPop) goHome(context);
+                },
+                child: noAccess,
+              );
+      } else {
+        body = AppErrorView(
+          error: error,
+          title: widget.errorTitle,
+          onRetry: retry,
+        );
+      }
+      return widget.frame?.call(context, body) ?? body;
     }
 
     final content = widget.builder(context, _data as T);
@@ -189,5 +218,15 @@ class _AsyncViewState<T> extends State<AsyncView<T>> {
         ),
       ],
     );
+  }
+
+  /// GoRouter's `canPop` asserts when a page is mounted without a GoRouter
+  /// (for example a widget test). Fall back to the plain Navigator.
+  bool _canPop(BuildContext context) {
+    try {
+      return context.canPop();
+    } catch (_) {
+      return Navigator.maybeOf(context)?.canPop() ?? false;
+    }
   }
 }

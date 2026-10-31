@@ -8,6 +8,7 @@ import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../../shared/permissions.dart';
+import '../../data/admin_refresh.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
 import '../widgets/permission_editor.dart';
@@ -65,7 +66,19 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
   void initState() {
     super.initState();
     _teacherId = widget.teacherId;
+    AdminRefresh.instance.addListener(_onOrgChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadAccount());
+  }
+
+  @override
+  void dispose() {
+    AdminRefresh.instance.removeListener(_onOrgChanged);
+    super.dispose();
+  }
+
+  void _onOrgChanged() {
+    if (!mounted) return;
+    _loadAccount();
   }
 
   Future<void> _loadAccount() async {
@@ -149,19 +162,21 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
     }
   }
 
-  void _openTeaching() {
+  Future<void> _openTeaching() async {
     final query = <String, String>{
       if (widget.name.isNotEmpty) 'name': widget.name,
       if (widget.username != null && widget.username!.isNotEmpty)
         'username': widget.username!,
       if (_teacherId != null) 'teacherId': '$_teacherId',
     };
-    context.push(
+    await context.push(
       Uri(
         path: '/admin/users/${widget.userId}/teaching',
         queryParameters: query,
       ).toString(),
     );
+    if (!mounted) return;
+    await _loadAccount();
   }
 
   @override

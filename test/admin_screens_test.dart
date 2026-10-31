@@ -27,6 +27,7 @@ import 'package:raqim/features/admin/presentation/screens/admin_students_screen.
 import 'package:raqim/features/admin/presentation/screens/admin_sync_kiosk_screen.dart';
 import 'package:raqim/features/admin/presentation/screens/admin_system_screen.dart';
 import 'package:raqim/features/admin/presentation/screens/admin_teacher_screen.dart';
+import 'package:raqim/features/admin/presentation/screens/admin_team_screen.dart';
 import 'package:raqim/features/admin/presentation/screens/admin_teams_screen.dart';
 import 'package:raqim/features/admin/presentation/screens/admin_tools_screen.dart';
 import 'package:raqim/features/admin/presentation/screens/admin_users_screen.dart';
@@ -281,6 +282,19 @@ void main() {
     expect(find.text('هوية المسجد'), findsOneWidget);
   });
 
+  testWidgets('Admin settings (E17) keeps the mosque code read-only', (
+    tester,
+  ) async {
+    final repos = await _repos();
+    await tester.pumpWidget(_wrap(repos, const AdminSettingsScreen()));
+    await tester.pumpAndSettle();
+    final code = tester.widget<TextField>(
+      find.byKey(const ValueKey('mosque-code-readonly')),
+    );
+    expect(code.readOnly, isTrue);
+    expect(code.controller?.text, 'frq');
+  });
+
   testWidgets('Admin account (E18) renders profile', (tester) async {
     final repos = await _repos();
     await tester.pumpWidget(_wrap(repos, const AdminAccountScreen()));
@@ -353,6 +367,12 @@ GoRouter _flowRouter(String initialLocation) {
       GoRoute(
         path: '/admin/teams',
         builder: (context, state) => const AdminTeamsScreen(),
+      ),
+      GoRoute(
+        path: '/admin/teams/:id',
+        builder: (context, state) => AdminTeamScreen(
+          teamId: int.parse(state.pathParameters['id']!),
+        ),
       ),
       // Same contract as the real router: go_router already decodes the
       // path parameter — no second Uri.decodeComponent (regression).
@@ -568,8 +588,8 @@ void mainFlow() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('مدرس الحلقة (من الباك)'), findsOneWidget);
-    expect(find.text('حلقاته (يمكن إزالته منها)'), findsOneWidget);
+    expect(find.text('مدرّس'), findsWidgets);
+    expect(find.text('حلقاته'), findsOneWidget);
   });
 
   testWidgets('E7: tasmi\' row opens the full memorization log', (
@@ -681,7 +701,7 @@ void mainFlow() {
     await tester.tap(find.text('حلقة القرآن - أ').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('إضافة طلاب'), findsOneWidget);
+    expect(find.text('إدارة الطلاب'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -973,7 +993,7 @@ void mainFlow() {
     expect(find.text('الحلقات'), findsOneWidget);
     await tester.tap(find.text('حلقة القرآن - أ').first);
     await tester.pumpAndSettle();
-    expect(find.text('إضافة طلاب'), findsOneWidget);
+    expect(find.text('إدارة الطلاب'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

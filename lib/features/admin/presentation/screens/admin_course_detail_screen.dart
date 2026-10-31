@@ -83,6 +83,10 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
     return AsyncView<_Data>(
       future: _future,
       cacheKey: 'admin-course-${widget.courseId}',
+      frame: (context, child) => Scaffold(
+        appBar: AppBar(title: const Text('الدورة')),
+        body: child,
+      ),
       builder: (context, data) => DefaultTabController(
         length: 5,
         child: Scaffold(

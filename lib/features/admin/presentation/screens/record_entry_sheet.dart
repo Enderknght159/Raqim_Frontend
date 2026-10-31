@@ -8,6 +8,7 @@ import '../../../../core/widgets/icon_toggle_group.dart';
 import '../../../../core/widgets/rating_bar.dart';
 import '../../../../core/widgets/search_picker_field.dart';
 import '../../../../core/widgets/status_badge.dart';
+import '../../../../shared/permissions.dart';
 import '../../../student/domain/models/student_models.dart';
 import '../../../student/domain/quran_units.dart';
 import '../../../student/presentation/widgets/quran_unit_picker.dart';
@@ -39,7 +40,7 @@ class _RecordEntrySheet extends StatefulWidget {
 }
 
 class _RecordEntrySheetState extends State<_RecordEntrySheet> {
-  _RecordKind _kind = _RecordKind.memorization;
+  late _RecordKind _kind;
   AdminStudentRow? _student;
   int _rating = 3;
   List<QuranUnit> _units = const [];
@@ -57,26 +58,69 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
   bool _saving = false;
   String? _feedback;
   bool _feedbackOk = true;
+  String? _loadError;
+
+  List<_RecordKind> _allowedKinds() {
+    return [
+      if (canEditModule(context, 'memorization')) _RecordKind.memorization,
+      if (canEditModule(context, 'matn')) _RecordKind.matn,
+      if (canEditModule(context, 'points')) _RecordKind.transaction,
+    ];
+  }
 
   @override
   void initState() {
     super.initState();
+    final allowed = _allowedKinds();
+    _kind = allowed.isEmpty ? _RecordKind.memorization : allowed.first;
     _load();
   }
 
+  bool get _needsTeachers =>
+      _kind == _RecordKind.memorization || _kind == _RecordKind.matn;
+
+  bool get _needsMatns => _kind == _RecordKind.matn;
+
   Future<void> _load() async {
-    final repo = AdminRepositoryScope.of(context);
-    final matns = await repo.matns();
-    final teachers = await repo.teachers();
     if (!mounted) return;
+    final repo = AdminRepositoryScope.of(context);
     setState(() {
-      _matns = matns;
-      _matnId = matns.isEmpty ? null : matns.first.id;
-      _teachers = teachers;
-      _reciter = teachers.isEmpty ? '' : teachers.first.name;
-      _teacher = teachers.isEmpty ? '' : teachers.first.name;
-      _loading = false;
+      _loading = true;
+      _loadError = null;
     });
+    try {
+      final teachers = _needsTeachers && _teachers.isEmpty
+          ? await repo.teachers()
+          : _teachers;
+      final matns = _needsMatns && _matns.isEmpty ? await repo.matns() : _matns;
+      if (!mounted) return;
+      setState(() {
+        _teachers = teachers;
+        _matns = matns;
+        if (_needsTeachers && _reciter.isEmpty && teachers.isNotEmpty) {
+          _reciter = teachers.first.name;
+        }
+        if (_needsMatns) {
+          _matnId ??= matns.isEmpty ? null : matns.first.id;
+          if (_teacher.isEmpty && teachers.isNotEmpty) {
+            _teacher = teachers.first.name;
+          }
+        }
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadError = '$error';
+      });
+    }
+  }
+
+  void _changeKind(_RecordKind kind) {
+    if (kind == _kind) return;
+    setState(() => _kind = kind);
+    _load();
   }
 
   @override
@@ -91,6 +135,7 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final allowed = _allowedKinds();
     return Padding(
       padding: EdgeInsets.only(left: 20, right: 20, bottom: 28 + bottom),
       child: _loading
@@ -119,30 +164,57 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
                   ),
                   const SizedBox(height: 12),
                   // Type: icons only — the label of the selected one appears
-                  // on the side.
+                  // on the side. Only the record types the account can write
+                  // are shown, so opening the sheet never depends on an
+                  // unrelated module.
                   IconToggleGroup<_RecordKind>(
                     value: _kind,
-                    onChanged: (v) => setState(() => _kind = v),
-                    options: const [
-                      IconToggleOption(
-                        value: _RecordKind.memorization,
-                        icon: Icons.menu_book_outlined,
-                        label: 'حفظ',
-                      ),
-                      IconToggleOption(
-                        value: _RecordKind.matn,
-                        icon: Icons.format_quote_outlined,
-                        label: 'متون',
-                        color: Color(0xFF7C3AED),
-                      ),
-                      IconToggleOption(
-                        value: _RecordKind.transaction,
-                        icon: Icons.payments_outlined,
-                        label: 'معاملة',
-                        color: Color(0xFFF59E0B),
-                      ),
+                    onChanged: _changeKind,
+                    options: [
+                      if (allowed.contains(_RecordKind.memorization))
+                        const IconToggleOption(
+                          value: _RecordKind.memorization,
+                          icon: Icons.menu_book_outlined,
+                          label: 'حفظ',
+                        ),
+                      if (allowed.contains(_RecordKind.matn))
+                        const IconToggleOption(
+                          value: _RecordKind.matn,
+                          icon: Icons.format_quote_outlined,
+                          label: 'متون',
+                          color: Color(0xFF7C3AED),
+                        ),
+                      if (allowed.contains(_RecordKind.transaction))
+                        const IconToggleOption(
+                          value: _RecordKind.transaction,
+                          icon: Icons.payments_outlined,
+                          label: 'معاملة',
+                          color: Color(0xFFF59E0B),
+                        ),
                     ],
                   ),
+                  if (_loadError != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 16,
+                          color: tokens.dangerText,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'تعذّر تحميل بعض البيانات: $_loadError',
+                            style: TextStyle(
+                              color: tokens.dangerText,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   StudentPickerField(
                     label: 'اختر الطالب',
@@ -355,6 +427,10 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
             _snack('اختر صفحة من الخريطة');
             return;
           }
+          if (_reciter.isEmpty) {
+            _snack('اختر المسمّع');
+            return;
+          }
           await repo.addMemorization(
             studentId: student.id,
             sessionId: widget.sessionId,
@@ -369,6 +445,10 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
         case _RecordKind.matn:
           if (_matnId == null) {
             _snack('لا متون متاحة');
+            return;
+          }
+          if (_teacher.isEmpty) {
+            _snack('اختر المعلم');
             return;
           }
           await repo.addMatnRecitation(

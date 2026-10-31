@@ -49,6 +49,10 @@ class _AdminStudentCourseScreenState extends State<AdminStudentCourseScreen> {
     return AsyncView<_Data>(
       future: _future,
       cacheKey: 'admin-student-course-${widget.studentId}-${widget.courseId}',
+      frame: (context, child) => Scaffold(
+        appBar: AppBar(title: const Text('إنجاز الطالب')),
+        body: child,
+      ),
       builder: (context, data) => Scaffold(
         appBar: AppBar(title: Text(data.bundle.course.name)),
         body: CourseAchievementView(
