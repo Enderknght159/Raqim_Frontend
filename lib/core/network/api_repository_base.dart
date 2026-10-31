@@ -1,25 +1,39 @@
 import 'package:dio/dio.dart';
 
+import '../storage/cache_store.dart';
 import 'api_exception.dart';
 
 /// Thin, typed wrapper around [Dio] used by the API repositories.
 ///
 /// It normalises paginated (`{results: [...]}`) and plain-list responses, and
 /// rethrows the [ApiException] produced by [ApiClient]'s error interceptor.
+///
+/// Successful GETs are cached in the local drift database. When the network
+/// is unavailable the same GET returns the last cached payload (read-only
+/// fallback); writes still fail with a network error.
 class ApiRepositoryBase {
-  ApiRepositoryBase(this.dio);
+  ApiRepositoryBase(this.dio, {this.cache});
 
   final Dio dio;
+  final CacheStore? cache;
 
   Future<Map<String, dynamic>> getMap(
     String path, {
     Map<String, dynamic>? query,
   }) async {
+    final key = _cacheKey(path, query);
     try {
       final response = await dio.get<dynamic>(path, queryParameters: query);
-      return _asMap(response.data);
+      final data = _asMap(response.data);
+      await cache?.writeJson(key, data, entityType: 'map');
+      return data;
     } on DioException catch (e) {
-      throw _mapError(e);
+      final mapped = _mapError(e);
+      if (_isNetwork(e) || mapped.isNetwork) {
+        final cached = await cache?.readJson(key);
+        if (cached is Map) return _asMap(cached);
+      }
+      throw mapped;
     }
   }
 
@@ -27,11 +41,19 @@ class ApiRepositoryBase {
     String path, {
     Map<String, dynamic>? query,
   }) async {
+    final key = _cacheKey(path, query);
     try {
       final response = await dio.get<dynamic>(path, queryParameters: query);
-      return _asList(response.data);
+      final data = _asList(response.data);
+      await cache?.writeJson(key, data, entityType: 'list');
+      return data;
     } on DioException catch (e) {
-      throw _mapError(e);
+      final mapped = _mapError(e);
+      if (_isNetwork(e) || mapped.isNetwork) {
+        final cached = await cache?.readJson(key);
+        if (cached is List) return cached;
+      }
+      throw mapped;
     }
   }
 
@@ -42,11 +64,12 @@ class ApiRepositoryBase {
     Map<String, dynamic>? query,
     int pageSize = 500,
   }) async {
+    final key = _cacheKey('all:$path', {...?query, 'page_size': pageSize});
     final out = <Map<String, dynamic>>[];
     String? next = path;
     var first = true;
-    while (next != null && next.isNotEmpty) {
-      try {
+    try {
+      while (next != null && next.isNotEmpty) {
         final response = await dio.get<dynamic>(
           next,
           queryParameters: first
@@ -71,12 +94,57 @@ class ApiRepositoryBase {
         } else {
           next = null;
         }
-      } on DioException catch (e) {
-        throw _mapError(e);
+        first = false;
       }
-      first = false;
+      await cache?.writeJson(key, out, entityType: 'list');
+      return out;
+    } on DioException catch (e) {
+      final mapped = _mapError(e);
+      if (_isNetwork(e) || mapped.isNetwork) {
+        final cached = await cache?.readJson(key);
+        if (cached is List) {
+          return cached
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+        }
+      }
+      throw mapped;
     }
-    return out;
+  }
+
+  /// Reads a previously cached map without touching the network.
+  Future<Map<String, dynamic>?> cachedMap(
+    String path, {
+    Map<String, dynamic>? query,
+  }) async {
+    final cached = await cache?.readJson(_cacheKey(path, query));
+    return cached is Map ? _asMap(cached) : null;
+  }
+
+  /// Reads a previously cached list without touching the network.
+  Future<List<dynamic>?> cachedList(
+    String path, {
+    Map<String, dynamic>? query,
+  }) async {
+    final cached = await cache?.readJson(_cacheKey(path, query));
+    return cached is List ? cached : null;
+  }
+
+  /// Reads a previously cached aggregated list (getAllPages key).
+  Future<List<Map<String, dynamic>>?> cachedAllPages(
+    String path, {
+    Map<String, dynamic>? query,
+    int pageSize = 500,
+  }) async {
+    final cached = await cache?.readJson(
+      _cacheKey('all:$path', {...?query, 'page_size': pageSize}),
+    );
+    if (cached is! List) return null;
+    return cached
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
   Future<Map<String, dynamic>> postMap(
@@ -180,6 +248,19 @@ class ApiRepositoryBase {
       throw _mapError(e);
     }
   }
+
+  String _cacheKey(String path, Map<String, dynamic>? query) {
+    if (query == null || query.isEmpty) return path;
+    final keys = query.keys.toList()..sort();
+    final suffix = keys.map((key) => '$key=${query[key]}').join('&');
+    return '$path?$suffix';
+  }
+
+  bool _isNetwork(DioException error) =>
+      error.type == DioExceptionType.connectionTimeout ||
+      error.type == DioExceptionType.connectionError ||
+      error.type == DioExceptionType.sendTimeout ||
+      error.type == DioExceptionType.receiveTimeout;
 
   Map<String, dynamic> _asMap(dynamic data) {
     if (data is Map<String, dynamic>) return data;

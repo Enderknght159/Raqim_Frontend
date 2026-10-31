@@ -68,6 +68,7 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
   Widget build(BuildContext context) {
     return AsyncView<_ExamData>(
       future: _future,
+      cacheKey: 'admin-exam-${widget.examId}',
       builder: (context, data) {
         final detail = data.detail;
         if (detail == null) {

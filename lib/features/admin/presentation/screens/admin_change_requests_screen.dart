@@ -40,6 +40,7 @@ class _AdminChangeRequestsScreenState extends State<AdminChangeRequestsScreen> {
       appBar: AppBar(title: const Text('طلبات التغيير')),
       body: AsyncView<List<AdminChangeRequest>>(
         future: _future,
+        cacheKey: 'admin-change-requests',
         builder: (context, requests) {
           if (requests.isEmpty) {
             return const EmptyState(

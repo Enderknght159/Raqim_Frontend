@@ -34,8 +34,24 @@ FutureOr<String?> authRedirect(BuildContext context, GoRouterState state) {
 }
 
 /// Path of the user's first section (their landing screen).
+String adminLandingPath(UserProfile profile) {
+  if (profile.isAdmin || profile.canView('courses')) {
+    return '/admin/courses';
+  }
+  if (profile.canView('students') ||
+      profile.canView('teams') ||
+      profile.canView('matn')) {
+    return '/admin/content';
+  }
+  return '/admin/account';
+}
+
 String firstSectionPath(UserProfile profile) {
-  if (profile.isAdmin || profile.isSupervisor) return '/admin/courses';
+  // A full admin lands on the admin surface; a dual-role student/supervisor
+  // lands on their student surface first and can switch via the role button.
+  if (profile.isAdmin) return '/admin/courses';
+  if (profile.hasStudentSection) return '/my-progress';
+  if (profile.isSupervisor) return adminLandingPath(profile);
   if (profile.isTeacher) return '/teacher-soon';
   if (profile.isStudent || profile.isDemo) return '/my-progress';
   return '/my-progress';
@@ -58,6 +74,16 @@ FutureOr<String?> sectionRedirect(
   final ownsSection = profile.sections.any((s) => s.value == sectionName);
   final defaultAccess = _defaultRoleAccess(profile.role, state.uri.path);
   return (ownsSection || defaultAccess) ? null : '/not-allowed';
+}
+
+/// Route-level guard for screens that the plan reserves to the mosque admin
+/// (mosque identity/settings, full export). UI-only; the server enforces.
+FutureOr<String?> adminOnlyRedirect(BuildContext context, GoRouterState state) {
+  final auth = context.read<AuthCubit>().state;
+  if (auth is AuthAuthenticated && !auth.profile.isAdmin) {
+    return '/not-allowed';
+  }
+  return null;
 }
 
 /// Path → section name (e.g. `/courses/3` → `courses`).

@@ -11,6 +11,7 @@ import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/sparkline.dart';
 import '../../../../core/widgets/stat_tile.dart';
 import '../../../../core/widgets/status_badge.dart';
+import '../../../../shared/permissions.dart';
 import '../admin_shell.dart';
 import '../../domain/admin_models.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
@@ -24,14 +25,8 @@ class AdminCoursesScreen extends StatefulWidget {
 }
 
 class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
-  late Future<
-    ({
-      GeneralStats stats,
-      List<AdminCourseSummary> courses,
-      AdminSessionRow? last,
-    })
-  >
-  _future;
+  late Future<AdminHomeData> _future;
+  Future<AdminHomeData?>? _cached;
 
   @override
   void initState() {
@@ -39,19 +34,16 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
     _future = _load();
   }
 
-  Future<
-    ({
-      GeneralStats stats,
-      List<AdminCourseSummary> courses,
-      AdminSessionRow? last,
-    })
-  >
-  _load() async {
+  Future<AdminHomeData> _load() async {
     final repo = AdminRepositoryScope.of(context);
     final statsF = repo.generalStats();
     final coursesF = repo.courses();
     final lastF = repo.lastSession();
-    return (stats: await statsF, courses: await coursesF, last: await lastF);
+    return AdminHomeData(
+      stats: await statsF,
+      courses: await coursesF,
+      last: await lastF,
+    );
   }
 
   Future<void> _refresh() async {
@@ -66,22 +58,26 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _addCourse,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(tokens.radiusSmall),
-        ),
-        backgroundColor: tokens.brand,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text(
-          'دورة',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-        ),
-      ),
-      body: AsyncView(
+      floatingActionButton: canEditModule(context, 'courses')
+          ? FloatingActionButton.extended(
+              onPressed: _addCourse,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(tokens.radiusSmall),
+              ),
+              backgroundColor: tokens.brand,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add),
+              label: const Text(
+                'دورة',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+              ),
+            )
+          : null,
+      body: AsyncView<AdminHomeData>(
         future: _future,
+        cacheKey: 'admin-home',
+        cached: _cached ??= AdminRepositoryScope.of(context).homeCached(),
         builder: (context, data) {
           return RefreshIndicator(
             onRefresh: _refresh,

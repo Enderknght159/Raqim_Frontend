@@ -1,4 +1,5 @@
 import '../../../core/config/api_endpoints.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/network/api_mappers.dart';
 import '../../../core/network/api_repository_base.dart';
 import '../../../core/utils/date_time_utils.dart';
@@ -11,7 +12,7 @@ import 'admin_repository.dart';
 
 /// API-backed implementation of [AdminRepository].
 class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
-  AdminApiRepository(super.dio, this.session);
+  AdminApiRepository(super.dio, this.session, {super.cache});
 
   final ApiSession session;
 
@@ -23,6 +24,13 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
   List<Map<String, dynamic>>? _matnsRaw;
   List<Map<String, dynamic>>? _candidatesRaw;
   final Map<int, String> _studentNames = {};
+  final Map<int, String> _teacherNames = {};
+  Future<List<Map<String, dynamic>>>? _studentsInFlight;
+  Future<List<Map<String, dynamic>>>? _teachersInFlight;
+  final Map<String, PagedResult<AdminStudentRow>> _studentPages = {};
+  final Map<String, PagedResult<AdminUserRow>> _userPages = {};
+  List<AdminCourseSummary>? _coursesCache;
+  DateTime? _coursesAt;
   DateTime? _cacheAt;
 
   bool get _cacheFresh {
@@ -42,13 +50,21 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
 
   Future<List<Map<String, dynamic>>> _allStudents() async {
     if (_studentsRaw != null && _cacheFresh) return _studentsRaw!;
-    final items = await getAllPages(ApiEndpoints.students, pageSize: 500);
-    _studentsRaw = items;
-    for (final item in items) {
-      _studentNames[asInt(item['id'])] = asString(item['name']);
+    final inFlight = _studentsInFlight;
+    if (inFlight != null) return inFlight;
+    final future = getAllPages(ApiEndpoints.students, pageSize: 500);
+    _studentsInFlight = future;
+    try {
+      final items = await future;
+      _studentsRaw = items;
+      for (final item in items) {
+        _studentNames[asInt(item['id'])] = asString(item['name']);
+      }
+      _touchCache();
+      return items;
+    } finally {
+      _studentsInFlight = null;
     }
-    _touchCache();
-    return items;
   }
 
   Future<List<Map<String, dynamic>>> _allTeams() async {
@@ -61,11 +77,45 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
 
   Future<List<Map<String, dynamic>>> _allTeachers() async {
     if (_teachersRaw != null && _cacheFresh) return _teachersRaw!;
-    final items = await getAllPages(ApiEndpoints.teachers);
-    _teachersRaw = items;
-    _touchCache();
-    return items;
+    final inFlight = _teachersInFlight;
+    if (inFlight != null) return inFlight;
+    final future = getAllPages(ApiEndpoints.teachers);
+    _teachersInFlight = future;
+    try {
+      final items = await future;
+      _teachersRaw = items;
+      for (final item in items) {
+        _teacherNames[asInt(item['id'])] = asString(item['name']);
+      }
+      _touchCache();
+      return items;
+    } finally {
+      _teachersInFlight = null;
+    }
   }
+
+  Future<String?> _studentNameOrNull(int id) async {
+    try {
+      await _allStudents();
+      final name = _studentNames[id];
+      return name == null || name.isEmpty ? null : name;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _teacherNameOrNull(int id) async {
+    try {
+      await _allTeachers();
+      final name = _teacherNames[id];
+      return name == null || name.isEmpty ? null : name;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _pageKey(String kind, Map<String, dynamic> query) =>
+      '$kind:${query.entries.map((e) => '${e.key}=${e.value}').join('&')}';
 
   Future<List<Map<String, dynamic>>> _allTeamTypes() async {
     if (_teamTypesRaw != null && _cacheFresh) return _teamTypesRaw!;
@@ -173,6 +223,10 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
   @override
   Future<GeneralStats> generalStats() async {
     final json = await getMap(ApiEndpoints.adminOverview);
+    return _statsFrom(json);
+  }
+
+  GeneralStats _statsFrom(Map<String, dynamic> json) {
     return GeneralStats(
       students: asInt(json['students']),
       teams: asInt(json['teams']),
@@ -184,21 +238,66 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
   }
 
   @override
+  Future<AdminHomeData?> homeCached() async {
+    final courses = _coursesCache;
+    if (courses == null || courses.isEmpty) return null;
+    final statsJson =
+        await cachedMap(ApiEndpoints.adminOverview) ??
+        const <String, dynamic>{};
+    final lastJson = await cachedMap(ApiEndpoints.sessionsLast);
+    return AdminHomeData(
+      stats: _statsFrom(statsJson),
+      courses: courses,
+      last: lastJson == null ? null : _sessionRowFrom(lastJson),
+    );
+  }
+
+  @override
   Future<List<AdminCourseSummary>> courses() async {
+    final cached = _coursesCache;
+    if (cached != null &&
+        _coursesAt != null &&
+        DateTime.now().difference(_coursesAt!).inSeconds < 30) {
+      return cached;
+    }
     final items = await getAllPages(ApiEndpoints.courses);
     final result = await Future.wait(items.map(_courseSummary));
-    result.sort((a, b) {
-      if (a.isActive != b.isActive) return a.isActive ? -1 : 1;
-      return b.startDate.compareTo(a.startDate);
-    });
+    result.sort(_sortCourses);
+    _coursesCache = result;
+    _coursesAt = DateTime.now();
     return result;
+  }
+
+  @override
+  Future<List<AdminCourseSummary>?> coursesCached() async {
+    final memory = _coursesCache;
+    if (memory != null && memory.isNotEmpty) return memory;
+    return null;
+  }
+
+  int _sortCourses(AdminCourseSummary a, AdminCourseSummary b) {
+    if (a.isActive != b.isActive) return a.isActive ? -1 : 1;
+    return b.startDate.compareTo(a.startDate);
+  }
+
+  void _replaceCourseSummary(AdminCourseSummary summary) {
+    final list = _coursesCache;
+    if (list == null) return;
+    _coursesCache = [
+      for (final item in list)
+        if (item.id != summary.id) item,
+      summary,
+    ]..sort(_sortCourses);
+    _coursesAt = DateTime.now();
   }
 
   @override
   Future<AdminCourseSummary?> courseSummary(int courseId) async {
     try {
       final item = await getMap(ApiEndpoints.courseDetail(courseId));
-      return _courseSummary(item);
+      final summary = await _courseSummary(item);
+      _replaceCourseSummary(summary);
+      return summary;
     } catch (_) {
       return null;
     }
@@ -356,6 +455,154 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
   }
 
   // ── Students / reference data ───────────────────────────────────────────
+
+  AdminStudentRow _studentRowFrom(
+    Map<String, dynamic> item, {
+    String fallbackTeamName = '',
+  }) {
+    final teams = asMapList(item['teams']);
+    final names = teams
+        .map((t) => asString(t['name']))
+        .where((n) => n.isNotEmpty)
+        .toList();
+    return AdminStudentRow(
+      id: asInt(item['id']),
+      name: asString(item['name']),
+      teamNames: names.isNotEmpty ? names.join(' · ') : fallbackTeamName,
+      barcode: asString(item['barcode']),
+      yearOfBirth: item['yearOfBirth'] == null
+          ? null
+          : asInt(item['yearOfBirth']),
+      active: item['active'] != false,
+    );
+  }
+
+  @override
+  Future<PagedResult<AdminStudentRow>> studentsPage({
+    String? query,
+    int? teamId,
+    int page = 1,
+    int pageSize = 30,
+  }) async {
+    final q = query?.trim() ?? '';
+    if (teamId != null) {
+      final items = await _safeGetList(ApiEndpoints.teamStudents(teamId));
+      final teams = await _allTeams();
+      final team = teams.where((t) => asInt(t['id']) == teamId).firstOrNull;
+      final teamName = team == null ? '' : asString(team['name']);
+      var rows = items
+          .map((item) => _studentRowFrom(item, fallbackTeamName: teamName))
+          .toList();
+      if (q.isNotEmpty) {
+        rows = rows.where((row) => studentMatchesQuery(row, q)).toList();
+      }
+      return PagedResult(
+        items: rows,
+        page: 1,
+        hasMore: false,
+        total: rows.length,
+      );
+    }
+
+    final json = await getMap(
+      ApiEndpoints.students,
+      query: {
+        'page': page,
+        'page_size': pageSize,
+        if (q.isNotEmpty) 'search': q,
+      },
+    );
+    var rows = asMapList(
+      json['results'],
+    ).map((item) => _studentRowFrom(item)).toList();
+    var total = asInt(json['count']);
+    var hasMore = json['next'] != null;
+    if (rows.isEmpty && q.isNotEmpty && RegExp(r'^[0-9+]{5,}$').hasMatch(q)) {
+      try {
+        final raw = await postDynamic(
+          ApiEndpoints.searchStudents,
+          data: {
+            'queries': [q],
+          },
+        );
+        final results = raw is List ? raw : [raw];
+        rows = [
+          for (final item in results.whereType<Map>())
+            if (asString(item['status']) == 'found')
+              AdminStudentRow(
+                id: asInt(item['id']),
+                name: asString(item['name']),
+                teamNames:
+                    (item['teams'] as List?)
+                        ?.map((team) => '')
+                        .where((name) => name.isNotEmpty)
+                        .join(' · ') ??
+                    '',
+                barcode: '',
+                yearOfBirth: item['yearOfBirth'] == null
+                    ? null
+                    : asInt(item['yearOfBirth']),
+                active: true,
+              ),
+        ];
+        total = rows.length;
+        hasMore = false;
+      } catch (_) {
+        // Phone lookup needs the phoneSearch ability.
+      }
+    }
+    final result = PagedResult(
+      items: rows,
+      page: page,
+      hasMore: hasMore,
+      total: total,
+    );
+    _studentPages[_pageKey('students', {
+          'page': page,
+          'page_size': pageSize,
+          if (q.isNotEmpty) 'search': q,
+          'team': ?teamId,
+        })] =
+        result;
+    return result;
+  }
+
+  @override
+  Future<PagedResult<AdminStudentRow>?> studentsPageCached({
+    String? query,
+    int? teamId,
+    int page = 1,
+    int pageSize = 30,
+  }) async {
+    final q = query?.trim() ?? '';
+    final key = _pageKey('students', {
+      'page': page,
+      'page_size': pageSize,
+      if (q.isNotEmpty) 'search': q,
+      'team': ?teamId,
+    });
+    final memory = _studentPages[key];
+    if (memory != null) return memory;
+    if (teamId != null) return null;
+    final cached = await cachedMap(
+      ApiEndpoints.students,
+      query: {
+        'page': page,
+        'page_size': pageSize,
+        if (q.isNotEmpty) 'search': q,
+      },
+    );
+    if (cached == null) return null;
+    final rows = asMapList(
+      cached['results'],
+    ).map((item) => _studentRowFrom(item)).toList();
+    return PagedResult(
+      items: rows,
+      page: page,
+      hasMore: cached['next'] != null,
+      total: asInt(cached['count']),
+    );
+  }
 
   @override
   Future<List<AdminStudentRow>> students({String? query, int? teamId}) async {
@@ -566,20 +813,199 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
   }
 
   @override
-  Future<List<({String name, String role})>> teacherCandidates() async {
+  Future<List<TeacherCandidate>> teacherCandidates() async {
     final items = await _allCandidates();
     return [
       for (final item in items)
-        (
-          name: asString(item['name'], asString(item['username'])),
+        TeacherCandidate(
+          userId: asInt(item['userId']),
+          name: asString(item['name']),
+          username: asString(item['username']),
           role: switch (asString(item['role'])) {
             'admin' => 'إدارة',
             'teacher' => 'معلم',
             'student' => 'طالب',
             final role => role,
           },
+          teacherId: item['teacherId'] == null
+              ? null
+              : asInt(item['teacherId']),
         ),
     ];
+  }
+
+  @override
+  Future<AdminTeacherDetail?> teacherDetail(int teacherId) async {
+    try {
+      final json = await getMap(ApiEndpoints.teacherDetail(teacherId));
+      if (json.isEmpty) return null;
+      return AdminTeacherDetail(
+        id: asInt(json['id'], teacherId),
+        name: asString(json['name']),
+        userId: json['userId'] == null ? null : asInt(json['userId']),
+        teams: [
+          for (final item in asMapList(json['teams']))
+            AdminTeamRef(id: asInt(item['id']), name: asString(item['name'])),
+        ],
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<int> createTeacher(String name) async {
+    final json = await postMap(
+      ApiEndpoints.teacherCreate,
+      data: {'name': name.trim()},
+    );
+    _teachersRaw = null;
+    _teacherNames.clear();
+    _candidatesRaw = null;
+    return asInt(json['id']);
+  }
+
+  @override
+  Future<void> linkTeacherToUser(int userId, int teacherId) async {
+    await patchMap(
+      ApiEndpoints.adminUser(userId),
+      data: {'teacherId': teacherId},
+    );
+    _userPages.clear();
+    _teachersRaw = null;
+    _teacherNames.clear();
+    _candidatesRaw = null;
+  }
+
+  @override
+  Future<PagedResult<AdminUserRow>> usersPage({
+    String? query,
+    String filter = 'all',
+    int page = 1,
+    int pageSize = 30,
+  }) async {
+    final q = query?.trim() ?? '';
+    final key = _pageKey('users', {
+      'page': page,
+      'page_size': pageSize,
+      if (q.isNotEmpty) 'search': q,
+      if (filter != 'all') 'filter': filter,
+    });
+    final json = await getMap(
+      ApiEndpoints.adminUsers,
+      query: {
+        'page': page,
+        'page_size': pageSize,
+        if (q.isNotEmpty) 'search': q,
+        if (filter != 'all') 'filter': filter,
+      },
+    );
+    final items = await Future.wait(
+      asMapList(json['results']).map(_adminUserRowFrom),
+    );
+    final result = PagedResult(
+      items: items,
+      page: page,
+      hasMore: json['next'] != null,
+      total: asInt(json['count']),
+    );
+    _userPages[key] = result;
+    return result;
+  }
+
+  @override
+  Future<PagedResult<AdminUserRow>?> usersPageCached({
+    String? query,
+    String filter = 'all',
+    int page = 1,
+    int pageSize = 30,
+  }) async {
+    final q = query?.trim() ?? '';
+    final key = _pageKey('users', {
+      'page': page,
+      'page_size': pageSize,
+      if (q.isNotEmpty) 'search': q,
+      if (filter != 'all') 'filter': filter,
+    });
+    return _userPages[key];
+  }
+
+  Future<AdminUserRow> _adminUserRowFrom(Map<String, dynamic> item) async {
+    final studentId = item['studentId'] == null
+        ? null
+        : asInt(item['studentId']);
+    final teacherId = item['teacherId'] == null
+        ? null
+        : asInt(item['teacherId']);
+    var name = asString(item['name']).trim();
+    if (name.isEmpty && studentId != null) {
+      name = await _studentNameOrNull(studentId) ?? '';
+    }
+    if (name.isEmpty && teacherId != null) {
+      name = await _teacherNameOrNull(teacherId) ?? '';
+    }
+    return AdminUserRow(
+      id: asInt(item['id']),
+      name: name,
+      username: asString(item['username']),
+      active: item['isActive'] == true,
+      isAdmin: item['isAdmin'] == true,
+      isSupervisor: item['isSupervisor'] == true,
+      isTeacher: item['isTeacher'] == true,
+      isStudent: item['isStudent'] == true,
+      studentId: studentId,
+      teacherId: teacherId,
+      teamNames: [
+        for (final team in asMapList(item['teams'])) asString(team['name']),
+      ].where((e) => e.isNotEmpty).toList(),
+    );
+  }
+
+  @override
+  Future<AdminUserRow?> user(int userId) async {
+    try {
+      final json = await getMap(ApiEndpoints.adminUser(userId));
+      if (json.isEmpty) return null;
+      return _adminUserRowFrom(json);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<AdminUserPermissions> userPermissions(int userId) async {
+    final json = await getMap(ApiEndpoints.adminUserPermissions(userId));
+    return AdminUserPermissions.fromJson(json);
+  }
+
+  @override
+  Future<void> updateUserPermissions(
+    int userId,
+    AdminUserPermissions permissions,
+  ) async {
+    await putMap(
+      ApiEndpoints.adminUserPermissions(userId),
+      data: {
+        // The permissions endpoint only promotes; demotion goes through the
+        // account endpoint (`setUserAdmin`) because the server ignores
+        // `isAdmin: false` here.
+        if (permissions.isAdmin) 'isAdmin': true,
+        'modules': {
+          for (final entry in permissions.modules.entries)
+            entry.key: entry.value.toJson(),
+        },
+        'specialAbilities': permissions.abilities.toList(),
+      },
+    );
+    _userPages.clear();
+  }
+
+  @override
+  Future<void> setUserAdmin(int userId, bool isAdmin) async {
+    // Verified against the live API (2026-10-31): any admin may demote another
+    // admin; precedence/creation order is not checked by the server.
+    await patchMap(ApiEndpoints.adminUser(userId), data: {'isAdmin': isAdmin});
+    _userPages.clear();
   }
 
   @override
@@ -790,18 +1216,29 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
         AdminSessionMember(
           studentId: asInt(item['studentId']),
           name: asString(item['name']),
+          barcode: asString(item['barcode']),
           arrivalTime: asDateOrNull(item['arrivalTime']),
         ),
     ];
   }
 
   @override
-  Future<String?> addAttendanceByBarcode(int sessionId, String barcode) async {
+  Future<AttendanceScanResult?> addAttendanceByBarcode(
+    int sessionId,
+    String barcode,
+  ) async {
     final json = await postMap(
       ApiEndpoints.sessionAttendanceScan(sessionId),
       data: {'barcode': barcode.trim()},
     );
-    return asString(asMap(json['student'])['name']);
+    final student = asMap(json['student']);
+    final studentId = asInt(student['id']);
+    if (studentId == 0) return null;
+    return AttendanceScanResult(
+      studentId: studentId,
+      name: asString(student['name']),
+      created: asString(json['status']) != 'ignored',
+    );
   }
 
   @override
@@ -1012,7 +1449,9 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
         'quranCertificatePoints': 100,
       },
     );
-    return asInt(json['id']);
+    final id = asInt(json['id']);
+    await courseSummary(id);
+    return id;
   }
 
   @override
@@ -1038,11 +1477,16 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
         'quranCertificatePoints': certificatePoints,
       },
     );
+    await courseSummary(id);
   }
 
   @override
   Future<void> deleteCourse(int courseId) async {
     await deleteVoid(ApiEndpoints.courseDetail(courseId));
+    _coursesCache = _coursesCache
+        ?.where((course) => course.id != courseId)
+        .toList();
+    _coursesAt = DateTime.now();
   }
 
   // ── Students writes ─────────────────────────────────────────────────────
@@ -1095,6 +1539,18 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
   Future<void> addPhone(int studentId, String phone, String type) async {
     await postMap(
       ApiEndpoints.studentPhones(studentId),
+      data: {'phone': phone, 'type': type},
+    );
+  }
+
+  @override
+  Future<void> updatePhone(
+    int phoneId, {
+    required String phone,
+    required String type,
+  }) async {
+    await patchMap(
+      ApiEndpoints.phoneDetail(phoneId),
       data: {'phone': phone, 'type': type},
     );
   }
@@ -1206,18 +1662,36 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
   @override
   Future<void> setTeamTeacher(int teamId, String teacherName) async {
     final userId = await _teacherUserIdByName(teacherName);
-    if (userId == null) return;
+    if (userId == null) {
+      throw const ApiException(
+        code: 'TEACHER_NOT_FOUND',
+        messageAr: 'تعذّر العثور على حساب هذا المعلم',
+        messageEn: 'Could not find the teacher account',
+      );
+    }
+    await setTeamTeacherById(teamId, userId);
+  }
+
+  @override
+  Future<void> setTeamTeacherById(int teamId, int userId) async {
     await putMap(
       ApiEndpoints.teamTeacher(teamId),
       data: {'userId': userId, 'replace': true},
     );
     _teamsRaw = null;
+    // Assigning may create a teacher row; never resolve names from stale lists.
+    _teachersRaw = null;
+    _teacherNames.clear();
+    _candidatesRaw = null;
+    _touchCache();
   }
 
   @override
   Future<void> removeTeamTeacher(int teamId) async {
     await deleteVoid(ApiEndpoints.teamTeacher(teamId));
     _teamsRaw = null;
+    _teachersRaw = null;
+    _teacherNames.clear();
   }
 
   // ── Content writes ──────────────────────────────────────────────────────
@@ -1543,6 +2017,13 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
       deletionMessage: json['deletionMessage'] == null
           ? null
           : asString(json['deletionMessage']),
+      contactEmail: json['contactEmail'] == null
+          ? null
+          : asString(json['contactEmail']),
+      contactPhone: json['contactPhone'] == null
+          ? null
+          : asString(json['contactPhone']),
+      city: json['city'] == null ? null : asString(json['city']),
     );
   }
 
@@ -1609,5 +2090,31 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
   Future<int?> requestFullExport() async {
     final json = await postMap(ApiEndpoints.exportsFull);
     return json['id'] == null ? null : asInt(json['id']);
+  }
+
+  @override
+  Future<void> warmCache() async {
+    Future<void> guard(Future<Object?> Function() action) async {
+      try {
+        await action();
+      } catch (_) {
+        // Best-effort; a failed warmer never affects the UI.
+      }
+    }
+
+    await Future.wait([
+      guard(() => generalStats()),
+      guard(() => courses()),
+      guard(() => lastSession()),
+      guard(() => studentsPage(pageSize: 30)),
+      guard(() => usersPage(pageSize: 30)),
+      guard(() => teachers()),
+      guard(() => teams()),
+      guard(() => teamTypes()),
+      guard(() => subjects()),
+      guard(() => matns()),
+      guard(() => notifications()),
+      guard(() => changeRequests()),
+    ]);
   }
 }

@@ -56,6 +56,7 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
   Widget build(BuildContext context) {
     return AsyncView<_Data>(
       future: _future,
+      cacheKey: 'admin-teams',
       builder: (context, data) => Scaffold(
         appBar: AppBar(
           title: const Text('الحلقات والمعلمون'),

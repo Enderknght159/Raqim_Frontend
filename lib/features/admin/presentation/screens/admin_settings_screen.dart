@@ -6,6 +6,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
+import '../../../../shared/permissions.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 import '../../domain/admin_models.dart';
@@ -68,10 +69,34 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
+    final profile = currentProfile(context);
+    if (profile != null && !profile.isAdmin) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('الإعدادات')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.lock_outline, size: 44, color: tokens.textMuted),
+                const SizedBox(height: 12),
+                Text(
+                  'إعدادات المسجد متاحة للمشرف العام فقط',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       appBar: AppBar(title: const Text('الإعدادات')),
       body: AsyncView<({MosqueInfo mosque, MosqueDeletionState state})>(
         future: _future,
+        cacheKey: 'admin-settings',
         builder: (context, data) => ResponsivePage(
           maxWidth: 720,
           child: ListView(
@@ -225,14 +250,29 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   Future<void> _save(MosqueInfo mosque) async {
     setState(() => _saving = true);
     try {
-      await AdminRepositoryScope.of(context).updateMosque(
+      final repo = AdminRepositoryScope.of(context);
+      await repo.updateMosque(
         name: _name.text,
         code: _code.text,
         contactEmail: _email.text,
         contactPhone: _phone.text,
         city: _city.text,
       );
+      final updated = await repo.mosque();
       if (!mounted) return;
+      if (updated.name.trim() != _name.text.trim()) {
+        _notice(
+          context,
+          'لم يتم تأكيد تعديل اسم المسجد على الخادم، حاول مرة أخرى.',
+        );
+        _reload();
+        return;
+      }
+      _name.text = updated.name;
+      _code.text = updated.code;
+      _email.text = updated.contactEmail ?? '';
+      _phone.text = updated.contactPhone ?? '';
+      _city.text = updated.city ?? '';
       _notice(context, 'تم حفظ هوية المسجد');
       _reload();
     } catch (error) {

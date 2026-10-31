@@ -4,7 +4,19 @@ import '../config/app_config.dart';
 import '../logging/api_log_interceptor.dart';
 import '../storage/secure_storage.dart';
 import 'api_exception.dart';
+import 'connectivity_status.dart';
 import 'token_refresher.dart';
+
+/// Whether [error] represents a connectivity failure (timeouts or connection
+/// errors) rather than an HTTP/auth error.
+///
+/// Cancellations and 4xx/5xx responses (401/403/404/422/500...) are **not**
+/// connectivity failures, so they never change the offline indicator.
+bool isConnectivityFailure(DioException error) =>
+    error.type == DioExceptionType.connectionTimeout ||
+    error.type == DioExceptionType.connectionError ||
+    error.type == DioExceptionType.sendTimeout ||
+    error.type == DioExceptionType.receiveTimeout;
 
 /// Configures the shared [Dio] instance with auth + refresh interceptors and
 /// Arabic-first headers. Exposed as a singleton so repositories can depend on
@@ -23,6 +35,7 @@ class ApiClient {
     _refresher = TokenRefresher(storage: _storage, dio: _dio);
     // Request/response logging (redacts passwords & tokens).
     _dio.interceptors.add(ApiLogInterceptor(logBodies: AppConfig.logApiBodies));
+    _dio.interceptors.add(ApiClient.createConnectivityInterceptor());
     _dio.interceptors.add(_authInterceptor);
     _dio.interceptors.add(_errorInterceptor);
   }
@@ -50,6 +63,27 @@ class ApiClient {
   }
 
   Dio get dio => _dio;
+
+  /// The single source of truth for connectivity updates. It is attached to
+  /// the shared [Dio] only; repositories must not mark online/offline
+  /// themselves to avoid double counting.
+  static Interceptor createConnectivityInterceptor({
+    ConnectivityStatus? status,
+  }) {
+    final target = status ?? ConnectivityStatus.instance;
+    return InterceptorsWrapper(
+      onResponse: (response, handler) {
+        target.markOnline();
+        handler.next(response);
+      },
+      onError: (error, handler) {
+        if (isConnectivityFailure(error)) {
+          target.markOffline();
+        }
+        handler.next(error);
+      },
+    );
+  }
 
   Interceptor get _authInterceptor => InterceptorsWrapper(
     onRequest: (options, handler) async {

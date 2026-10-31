@@ -10,7 +10,7 @@ import 'student_repository.dart';
 /// API-backed implementation of [StudentRepository].
 class StudentApiRepository extends ApiRepositoryBase
     implements StudentRepository {
-  StudentApiRepository(super.dio, this.session);
+  StudentApiRepository(super.dio, this.session, {super.cache});
 
   final ApiSession session;
 
@@ -238,6 +238,21 @@ class StudentApiRepository extends ApiRepositoryBase
     ];
   }
 
+  StudentLeaderboardEntry _leaderboardEntry(Map<String, dynamic> item) {
+    final student = asMap(item['student']);
+    return StudentLeaderboardEntry(
+      rank: asInt(item['rank']),
+      student: StudentBrief(
+        id: asInt(student['id']),
+        name: asString(student['name']),
+        yearOfBirth: student['yearOfBirth'] == null
+            ? null
+            : asInt(student['yearOfBirth']),
+      ),
+      points: asInt(item['points']),
+    );
+  }
+
   ({Exam exam, ExamSubmission? submission}) _examWithSubmission(
     Map<String, dynamic> item,
   ) {
@@ -257,11 +272,17 @@ class StudentApiRepository extends ApiRepositoryBase
   Future<QuranStats> quranStats() async {
     final json = await _quran();
     final stats = asMap(json['stats']);
-    return QuranStats(
-      pagesMemorized: asInt(stats['pagesMemorized']),
-      monthlyRate: asDouble(stats['monthlyRate']),
-      expectedCompletion: asDateOrNull(stats['expectedCompletion']),
-    );
+    final rate = asDouble(stats['monthlyRate']);
+    final expected = asDateOrNull(stats['expectedCompletion']);
+    if (rate > 0 || expected != null) {
+      return QuranStats(
+        pagesMemorized: asInt(stats['pagesMemorized']),
+        monthlyRate: rate,
+        expectedCompletion: expected,
+      );
+    }
+    // Older backends returned 0/null; derive it from the fetched records.
+    return computeQuranStats(await allMemorizations());
   }
 
   @override
@@ -303,5 +324,155 @@ class StudentApiRepository extends ApiRepositoryBase
       ApiEndpoints.meChangeRequests,
       data: {'field': field, 'requestedValue': requestedValue},
     );
+  }
+
+  @override
+  Future<StudentProfileModel?> cachedProfile() async {
+    final json = await cachedMap(ApiEndpoints.meProfile);
+    return json == null ? null : mapStudentProfile(json);
+  }
+
+  @override
+  Future<List<CourseOverview>?> cachedCourseOverviews() async {
+    final items = await cachedList(ApiEndpoints.meCourses);
+    if (items == null) return null;
+    return [
+      for (final item in items.whereType<Map>())
+        CourseOverview(
+          course: mapCourse(asMap(asMap(item)['course'])),
+          points: mapPoints(asMap(asMap(item)['points'])),
+          attendance: mapAttendanceSummary(asMap(asMap(item)['attendance'])),
+          rank: asMap(item)['rank'] == null ? null : asInt(asMap(item)['rank']),
+          lastUpdated: asDateOrNull(asMap(item)['lastUpdated']),
+        ),
+    ];
+  }
+
+  @override
+  Future<StudentCourseBundle?> cachedCourseBundle(int courseId) async {
+    final json = await cachedMap(ApiEndpoints.meCourse(courseId));
+    if (json == null) return null;
+    final matns = await cachedMatns() ?? const <Matn>[];
+    return mapBundle(json, matns: matns);
+  }
+
+  @override
+  Future<List<StudentLeaderboardEntry>?> cachedLeaderboard(int courseId) async {
+    final items = await cachedList(ApiEndpoints.meCourseLeaderboard(courseId));
+    if (items == null) return null;
+    return [
+      for (final item in items.whereType<Map>())
+        _leaderboardEntry(Map<String, dynamic>.from(item)),
+    ];
+  }
+
+  @override
+  Future<List<Memorization>?> cachedMemorizations() async {
+    final json = await cachedMap(ApiEndpoints.meQuran);
+    if (json == null) return null;
+    return [
+      for (final item in asMapList(json['memorizations']))
+        mapMemorization(item),
+    ];
+  }
+
+  @override
+  Future<List<Certificate>?> cachedCertificates() async {
+    final items = await cachedList(ApiEndpoints.meQuranCertificates);
+    if (items == null) return null;
+    return [
+      for (final item in items.whereType<Map>())
+        mapCertificate(Map<String, dynamic>.from(item)),
+    ];
+  }
+
+  @override
+  Future<QuranStats?> cachedQuranStats() async {
+    final json = await cachedMap(ApiEndpoints.meQuran);
+    if (json == null) return null;
+    final stats = asMap(json['stats']);
+    final rate = asDouble(stats['monthlyRate']);
+    final expected = asDateOrNull(stats['expectedCompletion']);
+    if (rate > 0 || expected != null) {
+      return QuranStats(
+        pagesMemorized: asInt(stats['pagesMemorized']),
+        monthlyRate: rate,
+        expectedCompletion: expected,
+      );
+    }
+    return computeQuranStats(await cachedMemorizations() ?? const []);
+  }
+
+  @override
+  Future<List<Matn>?> cachedMatns() async {
+    final json = await cachedMap(ApiEndpoints.meAchievement);
+    if (json == null) return null;
+    return [
+      for (final item in asMapList(json['matns']))
+        Matn(
+          id: asInt(item['matnId']),
+          name: asString(item['name']),
+          pointsPerVerse: asInt(item['pointsPerVerse']),
+          totalVerses: asInt(item['totalVerses']),
+        ),
+    ];
+  }
+
+  @override
+  Future<Map<int, MatnRecitation>?> cachedLatestMatnRecitations() async {
+    final json = await cachedMap(ApiEndpoints.meAchievement);
+    if (json == null) return null;
+    final result = <int, MatnRecitation>{};
+    for (final item in asMapList(json['matns'])) {
+      final id = asInt(item['matnId']);
+      result[id] = MatnRecitation(
+        matnId: id,
+        lastVerse: asInt(item['lastVerse']),
+        teacherName: '',
+      );
+    }
+    return result;
+  }
+
+  @override
+  Future<List<({Exam exam, ExamSubmission? submission})>?>
+  cachedExamsWithSubmissions() async {
+    final items = await cachedList(ApiEndpoints.meExams);
+    if (items == null) return null;
+    return [
+      for (final item in items.whereType<Map>())
+        _examWithSubmission(Map<String, dynamic>.from(item)),
+    ];
+  }
+
+  @override
+  Future<List<Team>?> cachedTeams() async {
+    final items = await cachedList(ApiEndpoints.meTeams);
+    if (items == null) return null;
+    return [
+      for (final item in items.whereType<Map>())
+        mapTeam(Map<String, dynamic>.from(item)),
+    ];
+  }
+
+  @override
+  Future<void> warmCache() async {
+    Future<void> guard(Future<Object?> Function() action) async {
+      try {
+        await action();
+      } catch (_) {
+        // Best-effort; a failed warmer never affects the UI.
+      }
+    }
+
+    await Future.wait([
+      guard(() => profile()),
+      guard(() => courseOverviews()),
+      guard(() => _quran()),
+      guard(() => _achievement()),
+      guard(() => teams()),
+      guard(() => notifications()),
+      guard(() => unreadNotifications()),
+    ]);
   }
 }

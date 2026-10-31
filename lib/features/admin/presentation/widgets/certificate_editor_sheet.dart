@@ -296,13 +296,13 @@ class _CertificateEditorSheetState extends State<CertificateEditorSheet> {
                 IconToggleOption(
                   value: true,
                   icon: Icons.visibility_off_outlined,
-                  label: 'بالغيب',
+                  label: 'عن ظهر قلب',
                   color: Color(0xFF00A572),
                 ),
                 IconToggleOption(
                   value: false,
                   icon: Icons.menu_book_outlined,
-                  label: 'عن ظهر قلب',
+                  label: 'عن حاضر',
                   color: Color(0xFF004C69),
                 ),
               ],

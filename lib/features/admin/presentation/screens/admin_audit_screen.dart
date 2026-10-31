@@ -50,6 +50,7 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
       appBar: AppBar(title: const Text('التدقيق')),
       body: AsyncView<List<_Write>>(
         future: _future,
+        cacheKey: 'admin-audit',
         builder: (context, writes) {
           if (writes.isEmpty) {
             return const EmptyState(

@@ -1,9 +1,8 @@
-import 'dart:io';
-
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+
+import 'app_database_connection.dart'
+    if (dart.library.io) 'app_database_connection_native.dart'
+    if (dart.library.js_interop) 'app_database_connection_web.dart';
 
 part 'app_database.g.dart';
 
@@ -46,18 +45,10 @@ class SyncLogEntries extends Table {
 
 @DriftDatabase(tables: [CacheEntries, ChangeQueueEntries, SyncLogEntries])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
+  AppDatabase() : super(openAppDatabaseConnection());
 
   AppDatabase.forTesting(super.executor);
 
   @override
   int get schemaVersion => 1;
-
-  static QueryExecutor _openConnection() {
-    return LazyDatabase(() async {
-      final dir = await getApplicationSupportDirectory();
-      final file = File(p.join(dir.path, 'raqim.sqlite'));
-      return NativeDatabase(file);
-    });
-  }
 }

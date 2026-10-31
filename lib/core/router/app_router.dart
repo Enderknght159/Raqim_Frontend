@@ -1,5 +1,9 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../features/auth/presentation/cubits/auth_cubit.dart';
+import '../../features/auth/presentation/cubits/auth_state.dart';
 
 import '../../features/admin/presentation/admin_shell.dart';
 import '../../features/admin/presentation/screens/admin_account_screen.dart';
@@ -23,6 +27,7 @@ import '../../features/admin/presentation/screens/admin_system_screen.dart';
 import '../../features/admin/presentation/screens/admin_teacher_screen.dart';
 import '../../features/admin/presentation/screens/admin_teams_screen.dart';
 import '../../features/admin/presentation/screens/admin_tools_screen.dart';
+import '../../features/admin/presentation/screens/admin_user_teaching_screen.dart';
 import '../../features/admin/presentation/screens/admin_users_screen.dart';
 import '../../features/admin/presentation/screens/student_barcode_scan_screen.dart';
 import '../../features/attendance/presentation/screens/session_attendance_screen.dart';
@@ -86,11 +91,19 @@ class AppRouter {
       ),
       ShellRoute(
         builder: (context, state, child) {
+          int? userId;
+          try {
+            final auth = context.watch<AuthCubit>().state;
+            userId = auth is AuthAuthenticated ? auth.profile.id : null;
+          } catch (_) {
+            // Router can be used in isolation (tests) without an AuthCubit.
+          }
+          final key = ValueKey<int?>(userId);
           if (state.uri.path.startsWith('/my-progress')) {
-            return StudentShell(child: child);
+            return StudentShell(key: key, child: child);
           }
           if (state.uri.path.startsWith('/admin')) {
-            return AdminShell(child: child);
+            return AdminShell(key: key, child: child);
           }
           return child;
         },
@@ -207,6 +220,18 @@ class AppRouter {
             builder: (context, state) => const AdminUsersScreen(),
           ),
           GoRoute(
+            path: '/admin/users/:userId/teaching',
+            name: 'adminUserTeaching',
+            builder: (context, state) => AdminUserTeachingScreen(
+              userId: int.parse(state.pathParameters['userId']!),
+              initialName: state.uri.queryParameters['name'],
+              initialUsername: state.uri.queryParameters['username'],
+              initialTeacherId: int.tryParse(
+                state.uri.queryParameters['teacherId'] ?? '',
+              ),
+            ),
+          ),
+          GoRoute(
             path: '/admin/import',
             name: 'adminImport',
             builder: (context, state) => const AdminImportScreen(),
@@ -234,6 +259,7 @@ class AppRouter {
           GoRoute(
             path: '/admin/settings',
             name: 'adminSettings',
+            redirect: adminOnlyRedirect,
             builder: (context, state) => const AdminSettingsScreen(),
           ),
           // ── Student tabs ──

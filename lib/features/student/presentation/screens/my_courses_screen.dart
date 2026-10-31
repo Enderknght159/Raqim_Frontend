@@ -18,11 +18,14 @@ class MyCoursesScreen extends StatefulWidget {
 
 class _MyCoursesScreenState extends State<MyCoursesScreen> {
   late Future<List<CourseOverview>> _future;
+  Future<List<CourseOverview>?>? _cached;
 
   @override
   void initState() {
     super.initState();
-    _future = StudentRepositoryScope.of(context).courseOverviews();
+    final repo = StudentRepositoryScope.of(context);
+    _future = repo.courseOverviews();
+    _cached = repo.cachedCourseOverviews();
   }
 
   Future<void> _refresh() async {
@@ -39,6 +42,9 @@ class _MyCoursesScreenState extends State<MyCoursesScreen> {
     return Scaffold(
       body: AsyncView<List<CourseOverview>>(
         future: _future,
+        cacheKey: 'student-courses',
+        cached: _cached,
+        onRetry: _refresh,
         builder: (context, overviews) {
           if (overviews.isEmpty) {
             return const EmptyState(

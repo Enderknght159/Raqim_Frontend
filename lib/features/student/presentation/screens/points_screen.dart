@@ -17,6 +17,7 @@ class StudentPointsScreen extends StatefulWidget {
 
 class _StudentPointsScreenState extends State<StudentPointsScreen> {
   Future<StudentCourseBundle>? _future;
+  Future<StudentCourseBundle?>? _cached;
 
   @override
   void didChangeDependencies() {
@@ -32,6 +33,8 @@ class _StudentPointsScreenState extends State<StudentPointsScreen> {
       appBar: AppBar(title: const Text('محصلة النقاط')),
       body: AsyncView<StudentCourseBundle>(
         future: _future!,
+        cacheKey: 'student-points-${widget.courseId}',
+        cached: _cached,
         builder: (context, bundle) => PointsBreakdownView(bundle: bundle),
       ),
     );

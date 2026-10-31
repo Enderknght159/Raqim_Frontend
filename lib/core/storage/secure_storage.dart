@@ -17,6 +17,8 @@ class SecureStorage {
   static const _accessTokenKey = 'access_token';
   static const _refreshTokenKey = 'refresh_token';
   static const _pinKey = 'kiosk_pin';
+  static const _accountsKey = 'saved_accounts';
+  static const _activeAccountKey = 'active_account';
 
   final FlutterSecureStorage _storage;
 
@@ -92,6 +94,54 @@ class SecureStorage {
     await _writeFallback({_refreshTokenKey: token});
   }
 
+  Future<String?> readAccountsJson() async {
+    final secure = await _secureRead(_accountsKey);
+    if (secure != null && secure.isNotEmpty) return secure;
+    return (await _readFallback())[_accountsKey];
+  }
+
+  Future<void> writeAccountsJson(String json) async {
+    await _secureWrite(_accountsKey, json);
+    await _writeFallback({_accountsKey: json});
+  }
+
+  Future<String?> readActiveAccountId() async {
+    final secure = await _secureRead(_activeAccountKey);
+    if (secure != null && secure.isNotEmpty) return secure;
+    return (await _readFallback())[_activeAccountKey];
+  }
+
+  Future<void> writeActiveAccountId(String? id) async {
+    if (id == null) {
+      await _secureDelete(_activeAccountKey);
+      try {
+        final file = await _fallbackFile();
+        if (await file.exists()) {
+          final current = await _readFallback();
+          current.remove(_activeAccountKey);
+          await file.writeAsString(jsonEncode(current), flush: true);
+        }
+      } catch (_) {}
+      return;
+    }
+    await _secureWrite(_activeAccountKey, id);
+    await _writeFallback({_activeAccountKey: id});
+  }
+
+  /// Removes only the active access/refresh tokens (keeps saved accounts).
+  Future<void> clearActiveTokens() async {
+    await _secureDelete(_accessTokenKey);
+    await _secureDelete(_refreshTokenKey);
+    try {
+      final file = await _fallbackFile();
+      if (!await file.exists()) return;
+      final current = await _readFallback();
+      current.remove(_accessTokenKey);
+      current.remove(_refreshTokenKey);
+      await file.writeAsString(jsonEncode(current), flush: true);
+    } catch (_) {}
+  }
+
   Future<String?> readPin() async {
     final secure = await _secureRead(_pinKey);
     if (secure != null && secure.isNotEmpty) return secure;
@@ -108,6 +158,8 @@ class SecureStorage {
     await _secureDelete(_accessTokenKey);
     await _secureDelete(_refreshTokenKey);
     await _secureDelete(_pinKey);
+    await _secureDelete(_accountsKey);
+    await _secureDelete(_activeAccountKey);
     try {
       final file = await _fallbackFile();
       if (await file.exists()) await file.delete();

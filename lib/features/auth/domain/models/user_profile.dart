@@ -11,6 +11,7 @@ class UserProfile {
     required this.name,
     this.username,
     this.email,
+    this.phone,
     this.mosqueName,
     this.mosqueCode,
     this.mosqueStatus,
@@ -33,6 +34,7 @@ class UserProfile {
   final String name;
   final String? username;
   final String? email;
+  final String? phone;
   final String? mosqueName;
   final String? mosqueCode;
   final String? mosqueStatus;
@@ -165,6 +167,7 @@ class UserProfile {
           .toString(),
       username: (json['username'] ?? userJson['username']) as String?,
       email: (json['email'] ?? userJson['email']) as String?,
+      phone: (json['phone'] ?? userJson['phone']) as String?,
       mosqueName: mosque['name'] as String?,
       mosqueCode: mosque['code'] as String?,
       mosqueStatus: mosque['status'] as String?,

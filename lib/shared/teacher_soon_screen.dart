@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 import '../features/auth/presentation/cubits/auth_cubit.dart';
 import '../features/auth/presentation/cubits/auth_state.dart';
@@ -21,7 +22,11 @@ class TeacherSoonScreen extends StatelessWidget {
         actions: [
           IconButton(
             tooltip: 'تسجيل الخروج',
-            onPressed: () => context.read<AuthCubit>().logout(),
+            onPressed: () async {
+              final next = await context.read<AuthCubit>().logout();
+              if (!context.mounted) return;
+              context.go(next == null ? '/welcome' : '/');
+            },
             icon: const Icon(Icons.logout),
           ),
         ],

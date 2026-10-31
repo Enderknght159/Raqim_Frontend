@@ -48,6 +48,7 @@ class _AdminStudentCourseScreenState extends State<AdminStudentCourseScreen> {
   Widget build(BuildContext context) {
     return AsyncView<_Data>(
       future: _future,
+      cacheKey: 'admin-student-course-${widget.studentId}-${widget.courseId}',
       builder: (context, data) => Scaffold(
         appBar: AppBar(title: Text(data.bundle.course.name)),
         body: CourseAchievementView(

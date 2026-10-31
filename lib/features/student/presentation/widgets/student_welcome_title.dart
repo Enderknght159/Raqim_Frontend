@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../auth/presentation/cubits/auth_cubit.dart';
+import '../../../auth/presentation/cubits/auth_state.dart';
 import '../../domain/models/student_models.dart';
 import '../student_shell.dart';
 
@@ -15,6 +18,7 @@ class StudentWelcomeTitle extends StatefulWidget {
 
 class _StudentWelcomeTitleState extends State<StudentWelcomeTitle> {
   Future<StudentProfileModel>? _future;
+  int? _userId;
 
   @override
   void didChangeDependencies() {
@@ -25,7 +29,19 @@ class _StudentWelcomeTitleState extends State<StudentWelcomeTitle> {
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
+    int? userId;
+    try {
+      final auth = context.watch<AuthCubit>().state;
+      userId = auth is AuthAuthenticated ? auth.profile.id : null;
+    } catch (_) {
+      // The widget is also used in isolated shell tests without an AuthCubit.
+    }
+    if (userId != _userId) {
+      _userId = userId;
+      _future = StudentRepositoryScope.of(context).profile();
+    }
     return FutureBuilder<StudentProfileModel>(
+      key: ValueKey(userId),
       future: _future,
       builder: (context, snapshot) {
         final profile = snapshot.data;

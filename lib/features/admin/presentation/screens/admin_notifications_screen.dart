@@ -50,6 +50,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
       appBar: AppBar(title: const Text('الإشعارات')),
       body: AsyncView<List<AdminNotification>>(
         future: _future,
+        cacheKey: 'admin-notifications',
         builder: (context, items) {
           if (items.isEmpty) {
             return const EmptyState(

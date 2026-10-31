@@ -27,13 +27,13 @@ abstract class ApiEndpoints {
   static const String meChangeRequests = '/me/change-requests';
 
   static String meCourse(int courseId) => '$meCourses/$courseId';
-  static String meCoursePoints(int courseId) => '$meCourse(courseId)/points';
+  static String meCoursePoints(int courseId) => '${meCourse(courseId)}/points';
   static String meCourseLeaderboard(int courseId) =>
-      '$meCourse(courseId)/leaderboard';
+      '${meCourse(courseId)}/leaderboard';
   static String meCourseAttendance(int courseId) =>
-      '$meCourse(courseId)/attendance';
+      '${meCourse(courseId)}/attendance';
   static String meCourseTransactions(int courseId) =>
-      '$meCourse(courseId)/transactions';
+      '${meCourse(courseId)}/transactions';
   static String meTeamMembers(int teamId) => '$meTeams/$teamId/members';
 
   // ── Students ────────────────────────────────────────────────────────────
@@ -114,6 +114,7 @@ abstract class ApiEndpoints {
   // ── Content / reference data ────────────────────────────────────────────
   static const String teamTypes = '/team-types';
   static const String teachers = '/teachers';
+  static const String teacherCreate = '/teachers';
   static const String teacherCandidates = '/teachers/candidates';
   static const String teams = '/teams';
   static const String subjects = '/subjects';

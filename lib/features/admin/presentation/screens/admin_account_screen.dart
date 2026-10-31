@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/theme/app_theme.dart';
@@ -9,6 +10,7 @@ import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../auth/presentation/cubits/auth_cubit.dart';
 import '../../../auth/presentation/cubits/auth_state.dart';
+import '../../../../shared/account_switcher.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// E18 — Admin "حسابي": profile card + editable fields (like the student
@@ -23,9 +25,9 @@ class AdminAccountScreen extends StatefulWidget {
 class _AdminAccountScreenState extends State<AdminAccountScreen> {
   final _name = TextEditingController();
   final _username = TextEditingController();
-  final _mosque = TextEditingController();
   final _phone = TextEditingController();
   bool _initialized = false;
+  bool _saving = false;
 
   @override
   void didChangeDependencies() {
@@ -42,16 +44,11 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
       final profile = auth.profile;
       _name.text = profile.name;
       _username.text = profile.username ?? '';
-      _mosque.text = [
-        profile.mosqueName,
-        profile.mosqueCode,
-      ].whereType<String>().where((e) => e.isNotEmpty).join(' · ');
-      _phone.text = '';
+      _phone.text = profile.phone ?? '';
     } else {
       // Standalone render (widget tests / no auth scope).
       _name.text = 'مدير المسجد';
       _username.text = 'admin';
-      _mosque.text = 'جامع الفرقان · frq';
     }
   }
 
@@ -59,7 +56,6 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
   void dispose() {
     _name.dispose();
     _username.dispose();
-    _mosque.dispose();
     _phone.dispose();
     super.dispose();
   }
@@ -113,7 +109,10 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _mosque.text,
+                          [profile?.mosqueName, profile?.mosqueCode]
+                              .whereType<String>()
+                              .where((e) => e.isNotEmpty)
+                              .join(' · '),
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(color: tokens.textMuted),
                         ),
@@ -124,7 +123,10 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const SectionHeader(icon: Icons.person_outline, title: 'البيانات'),
+            const SectionHeader(
+              icon: Icons.person_outline,
+              title: 'بيانات الحساب',
+            ),
             const SizedBox(height: 8),
             AppCard(
               child: Column(
@@ -132,37 +134,29 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
                 children: [
                   TextField(
                     controller: _name,
-
                     decoration: const InputDecoration(labelText: 'الاسم'),
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _username,
-
+                    readOnly: true,
                     decoration: const InputDecoration(
                       labelText: 'اسم المستخدم',
+                      helperText: 'لا يمكن تغيير اسم المستخدم من هنا',
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _mosque,
-
-                    decoration: const InputDecoration(labelText: 'المسجد'),
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _phone,
                     keyboardType: TextInputType.phone,
-
                     decoration: const InputDecoration(labelText: 'الهاتف'),
                   ),
                   const SizedBox(height: 10),
                   AppButton(
-                    label: 'حفظ البيانات',
+                    label: _saving ? 'جارٍ الحفظ…' : 'حفظ البيانات',
                     variant: AppButtonVariant.secondary,
-                    onPressed: () {
-                      _save(context);
-                    },
+                    loading: _saving,
+                    onPressed: _saving ? null : () => _save(context),
                   ),
                 ],
               ),
@@ -192,6 +186,30 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
               variant: AppButtonVariant.destructive,
               icon: Icons.logout,
               onPressed: () => _confirmLogout(context),
+            ),
+            const SizedBox(height: 16),
+            const SectionHeader(
+              icon: Icons.mosque_outlined,
+              title: 'بيانات المسجد',
+            ),
+            const SizedBox(height: 8),
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _readOnlyRow(context, 'المسجد', profile?.mosqueName ?? '—'),
+                  _readOnlyRow(context, 'الرمز', profile?.mosqueCode ?? '—'),
+                  const SizedBox(height: 4),
+                  Text(
+                    profile?.isAdmin == true
+                        ? 'تعديل بيانات المسجد من تبويب النظام ← الإعدادات.'
+                        : 'بيانات المسجد للقراءة فقط، وتعديلها من صلاحية المشرف العام.',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
           ],
@@ -223,10 +241,14 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    context.read<AuthCubit>().logout();
+    final next = await context.read<AuthCubit>().logout();
+    if (!context.mounted) return;
+    context.go(next == null ? '/welcome' : '/');
   }
 
   Future<void> _save(BuildContext context) async {
+    if (_saving) return;
+    setState(() => _saving = true);
     try {
       await context.read<AuthCubit>().updateProfile(
         name: _name.text.trim(),
@@ -237,11 +259,13 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
     } catch (e) {
       if (!context.mounted) return;
       _notice(context, 'تعذّر الحفظ: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
   void _switchAccount(BuildContext context) {
-    context.read<AuthCubit>().logout();
+    showAccountSwitcher(context);
   }
 
   Widget _tile(
@@ -276,6 +300,25 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
     );
   }
 
+  Widget _readOnlyRow(BuildContext context, String label, String value) {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      title: Text(
+        label,
+        style: TextStyle(color: tokens.textMuted, fontSize: 13),
+      ),
+      subtitle: Text(
+        value,
+        style: Theme.of(
+          context,
+        ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+      ),
+      trailing: Icon(Icons.lock_outline, size: 18, color: tokens.textMuted),
+    );
+  }
+
   void _notice(BuildContext context, String message) {
     ScaffoldMessenger.of(
       context,
@@ -287,6 +330,7 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
     final newPw = TextEditingController();
     final confirm = TextEditingController();
     var error = '';
+    var busy = false;
     showAppSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -330,29 +374,60 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
               ),
               const SizedBox(height: 16),
               AppButton(
-                label: 'حفظ',
-                onPressed: () async {
-                  if (oldPw.text.isEmpty) {
-                    setSheetState(() => error = 'أدخل كلمة المرور الحالية');
-                    return;
-                  }
-                  if (newPw.text.isEmpty || newPw.text != confirm.text) {
-                    setSheetState(() => error = 'كلمتا المرور غير متطابقتين');
-                    return;
-                  }
-                  try {
-                    await context.read<AuthCubit>().changePassword(
-                      oldPassword: oldPw.text,
-                      newPassword: newPw.text,
-                      newPasswordConfirmation: confirm.text,
-                    );
-                    if (!context.mounted) return;
-                    Navigator.of(context).pop();
-                    _notice(context, 'تم تغيير كلمة المرور');
-                  } catch (e) {
-                    setSheetState(() => error = 'تعذّر التغيير: $e');
-                  }
-                },
+                label: busy ? 'جارٍ الحفظ…' : 'حفظ',
+                loading: busy,
+                onPressed: busy
+                    ? null
+                    : () async {
+                        final oldValue = oldPw.text;
+                        final newValue = newPw.text;
+                        final confirmValue = confirm.text;
+                        if (oldValue.isEmpty) {
+                          setSheetState(
+                            () => error = 'أدخل كلمة المرور الحالية',
+                          );
+                          return;
+                        }
+                        if (newValue.length < 6) {
+                          setSheetState(
+                            () =>
+                                error = 'كلمة المرور الجديدة 6 أحرف على الأقل',
+                          );
+                          return;
+                        }
+                        if (newValue != confirmValue) {
+                          setSheetState(
+                            () => error = 'كلمتا المرور غير متطابقتين',
+                          );
+                          return;
+                        }
+                        if (newValue == oldValue) {
+                          setSheetState(
+                            () => error = 'اختر كلمة مرور مختلفة عن الحالية',
+                          );
+                          return;
+                        }
+                        setSheetState(() {
+                          busy = true;
+                          error = '';
+                        });
+                        try {
+                          await context.read<AuthCubit>().changePassword(
+                            oldPassword: oldValue,
+                            newPassword: newValue,
+                            newPasswordConfirmation: confirmValue,
+                          );
+                          if (!context.mounted) return;
+                          Navigator.of(context).pop();
+                          _notice(context, 'تم تغيير كلمة المرور');
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          setSheetState(() {
+                            busy = false;
+                            error = 'تعذّر التغيير: $e';
+                          });
+                        }
+                      },
               ),
             ],
           ),

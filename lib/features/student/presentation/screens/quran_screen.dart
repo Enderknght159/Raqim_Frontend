@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/progress_bar.dart';
 import '../../../../core/widgets/section_header.dart';
@@ -27,11 +28,14 @@ class QuranScreen extends StatefulWidget {
 
 class _QuranScreenState extends State<QuranScreen> {
   Future<_QuranData>? _future;
+  Future<_QuranData?>? _cached;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _future ??= _load(StudentRepositoryScope.of(context));
+    final repo = StudentRepositoryScope.of(context);
+    _future ??= _load(repo);
+    _cached ??= _cachedData(repo);
   }
 
   Future<_QuranData> _load(StudentRepository repo) async {
@@ -49,6 +53,25 @@ class _QuranScreenState extends State<QuranScreen> {
     );
   }
 
+  Future<_QuranData?> _cachedData(StudentRepository repo) async {
+    final mems = await repo.cachedMemorizations();
+    final stats = await repo.cachedQuranStats();
+    final certs = await repo.cachedCertificates();
+    if (mems == null && stats == null && certs == null) return null;
+    return _QuranData(
+      stats:
+          stats ??
+          const QuranStats(
+            pagesMemorized: 0,
+            monthlyRate: 0,
+            expectedCompletion: null,
+          ),
+      memorizations: mems ?? const [],
+      certificates: certs ?? const [],
+      testedJuz: _testedJuz(certs ?? const []),
+    );
+  }
+
   /// Juz are considered "tested" when a certificate covers their range.
   Set<int> _testedJuz(List<Certificate> certs) {
     final tested = <int>{};
@@ -62,18 +85,15 @@ class _QuranScreenState extends State<QuranScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final repo = StudentRepositoryScope.of(context);
+    final future = _future ??= _load(repo);
     return Scaffold(
-      body: FutureBuilder<_QuranData>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError || !snapshot.hasData) {
-            return const Center(child: Text('تعذر التحميل'));
-          }
-          return _QuranBody(data: snapshot.data!);
-        },
+      body: AsyncView<_QuranData>(
+        future: future,
+        cacheKey: 'student-quran',
+        cached: _cached ??= _cachedData(repo),
+        onRetry: () => setState(() => _future = _load(repo)),
+        builder: (context, data) => _QuranBody(data: data),
       ),
     );
   }
@@ -324,7 +344,7 @@ class _QuranBody extends StatelessWidget {
                       ),
                     ),
                     StatusBadge(
-                      label: c.byHeart ? 'بالغيب' : 'عن ظهر قلب',
+                      label: c.byHeart ? 'عن ظهر قلب' : 'عن حاضر',
                       color: c.byHeart ? tokens.brand : tokens.textMuted,
                     ),
                   ],

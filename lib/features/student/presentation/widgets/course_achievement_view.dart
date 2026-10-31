@@ -24,11 +24,15 @@ class CourseAchievementView extends StatelessWidget {
     required this.bundle,
     required this.leaderboard,
     required this.onPointsTap,
+    this.leaderboardLoading = false,
+    this.leaderboardFailed = false,
     this.padding = const EdgeInsets.all(16),
   });
 
   final StudentCourseBundle bundle;
   final List<StudentLeaderboardEntry> leaderboard;
+  final bool leaderboardLoading;
+  final bool leaderboardFailed;
 
   /// Opens the full-page points breakdown (student route or admin route).
   final VoidCallback onPointsTap;
@@ -91,7 +95,11 @@ class CourseAchievementView extends StatelessWidget {
           const SizedBox(height: 12),
 
           // Leaderboard
-          _LeaderboardCard(entries: leaderboard),
+          _LeaderboardCard(
+            entries: leaderboard,
+            loading: leaderboardLoading,
+            failed: leaderboardFailed,
+          ),
         ],
       ),
     );
@@ -509,13 +517,20 @@ class _MatnCard extends StatelessWidget {
 }
 
 class _LeaderboardCard extends StatelessWidget {
-  const _LeaderboardCard({required this.entries});
+  const _LeaderboardCard({
+    required this.entries,
+    this.loading = false,
+    this.failed = false,
+  });
 
   final List<StudentLeaderboardEntry> entries;
+  final bool loading;
+  final bool failed;
 
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
+    final top = entries.take(5).toList();
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -529,14 +544,71 @@ class _LeaderboardCard extends StatelessWidget {
             ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
           const SizedBox(height: 8),
-          if (entries.isEmpty)
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else if (failed)
+            Text(
+              'تعذّر تحميل الترتيب. اسحب لتحديث الصفحة.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            )
+          else if (entries.isEmpty)
             Text(
               'لا يوجد طلاب بعد',
               style: Theme.of(context).textTheme.bodyMedium,
             )
-          else
-            for (final e in entries) _LeaderboardRow(entry: e),
+          else ...[
+            for (final e in top) _LeaderboardRow(entry: e),
+            if (entries.length > top.length)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  onPressed: () => _showAll(context),
+                  icon: const Icon(Icons.list_alt, size: 18),
+                  label: Text('عرض الكل (${entries.length})'),
+                ),
+              ),
+          ],
         ],
+      ),
+    );
+  }
+
+  void _showAll(BuildContext context) {
+    showAppSheet<void>(
+      context: context,
+      maxWidth: 520,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.7,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Text(
+                  'كل الطلاب في ترتيب الدورة',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: entries.length,
+                  itemBuilder: (context, i) =>
+                      _LeaderboardRow(entry: entries[i]),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

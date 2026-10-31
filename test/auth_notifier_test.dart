@@ -75,6 +75,23 @@ void main() {
       ),
       '/teacher-soon',
     );
+    expect(
+      firstSectionPath(
+        const UserProfile(id: 1, name: 'supervisor', role: AppRole.supervisor),
+      ),
+      '/admin/account',
+    );
+    expect(
+      firstSectionPath(
+        const UserProfile(
+          id: 1,
+          name: 'dual',
+          role: AppRole.supervisor,
+          studentId: 29,
+        ),
+      ),
+      '/my-progress',
+    );
   });
 }
 

@@ -28,6 +28,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       appBar: AppBar(title: const Text('الإشعارات')),
       body: AsyncView<List<StudentNotification>>(
         future: _load(repo),
+        cacheKey: 'student-notifications',
         builder: (context, items) {
           if (items.isEmpty) {
             return const Center(child: Text('لا إشعارات بعد'));

@@ -1,5 +1,6 @@
 import '../../features/student/domain/models/student_models.dart';
 import '../../features/student/domain/student_stats.dart';
+import '../logging/app_logger.dart';
 
 // ── Primitive helpers ─────────────────────────────────────────────────────
 
@@ -174,14 +175,53 @@ StudentProfileModel mapStudentProfile(Map<String, dynamic> json) {
   );
 }
 
-Team mapTeam(Map<String, dynamic> json) => Team(
-  id: asInt(json['id']),
-  name: asString(json['name']),
-  typeName: optionalName(json['type']) == ''
-      ? 'حلقة'
-      : optionalName(json['type']),
-  teacherName: optionalName(json['teacher']),
-);
+final _teamLog = AppLogger.forTag('Teams');
+
+Team mapTeam(Map<String, dynamic> json) {
+  final rawTeacher = json['teacher'];
+  final rawTeacherName = json['teacherName'];
+  var teacherName = '';
+  int? teacherId = json['teacherId'] == null ? null : asInt(json['teacherId']);
+
+  if (rawTeacher is Map) {
+    final teacher = asMap(rawTeacher);
+    teacherName = asString(teacher['name']).trim();
+    if (teacher['id'] != null) teacherId = asInt(teacher['id']);
+  } else if (rawTeacher is num) {
+    // Backend sent only an id; keep it for reference but never display it.
+    teacherId = rawTeacher.toInt();
+  } else if (rawTeacher is String && rawTeacher.trim().isNotEmpty) {
+    final text = rawTeacher.trim();
+    final parsedId = int.tryParse(text);
+    if (parsedId == null) {
+      teacherName = text;
+    } else {
+      teacherId = parsedId;
+    }
+  }
+
+  if (teacherName.isEmpty && rawTeacherName != null) {
+    final text = asString(rawTeacherName).trim();
+    if (Team.isDisplayableTeacherName(text)) teacherName = text;
+  }
+
+  if (teacherName.isEmpty && teacherId != null) {
+    _teamLog.warning(
+      'Team #${asInt(json['id'])}: teacher has no name (id: $teacherId). '
+      'Backend should include teacher.name in /me/teams.',
+    );
+  }
+
+  return Team(
+    id: asInt(json['id']),
+    name: asString(json['name']),
+    typeName: optionalName(json['type']) == ''
+        ? 'حلقة'
+        : optionalName(json['type']),
+    teacherName: teacherName,
+    teacherId: teacherId,
+  );
+}
 
 Memorization mapMemorization(Map<String, dynamic> json) => Memorization(
   sessionId: asInt(json['sessionId']),

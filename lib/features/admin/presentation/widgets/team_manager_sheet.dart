@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/app_loading.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/admin_models.dart';
@@ -39,11 +42,20 @@ class TeamManagerSheet extends StatefulWidget {
 class _TeamManagerSheetState extends State<TeamManagerSheet> {
   final _search = TextEditingController();
   List<AdminStudentRow> _members = const [];
-  List<AdminStudentRow> _all = const [];
-  List<({String name, String role})> _teacherCandidates = const [];
+  List<TeacherCandidate> _teacherCandidates = const [];
   Set<int> _selected = {};
+  final Map<int, AdminStudentRow> _selectedRows = {};
   bool _adding = false;
   bool _loading = true;
+
+  final _searchResults = <AdminStudentRow>[];
+  int _searchPage = 1;
+  int _searchRequestId = 0;
+  bool _searchHasMore = true;
+  bool _searchLoading = false;
+  bool _searchLoadingMore = false;
+  Object? _searchError;
+  Timer? _debounce;
   late String _teacherName = widget.team.teacherName;
 
   @override
@@ -54,31 +66,72 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _search.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
-    final members = await widget.repo.teamStudents(widget.team.id);
-    final all = await widget.repo.students();
-    final candidates = await widget.repo.teacherCandidates();
+    final membersF = widget.repo.teamStudents(widget.team.id);
+    final candidatesF = widget.repo.teacherCandidates();
+    final members = await membersF;
+    final candidates = await candidatesF;
     if (!mounted) return;
     setState(() {
       _members = members;
-      _all = all;
       _teacherCandidates = candidates;
       _loading = false;
     });
   }
 
+  Future<void> _searchStudents({required bool reset}) async {
+    final requestId = ++_searchRequestId;
+    if (reset) {
+      setState(() {
+        _searchLoading = true;
+        _searchError = null;
+        _searchResults.clear();
+        _searchPage = 1;
+        _searchHasMore = true;
+      });
+    } else {
+      if (_searchLoadingMore || !_searchHasMore) return;
+      setState(() => _searchLoadingMore = true);
+    }
+    try {
+      final page = await widget.repo.studentsPage(
+        query: _search.text,
+        page: _searchPage,
+        pageSize: 30,
+      );
+      if (!mounted || requestId != _searchRequestId) return;
+      setState(() {
+        _searchResults.addAll(page.items);
+        _searchHasMore = page.hasMore;
+        _searchPage = page.page + 1;
+        _searchLoading = false;
+        _searchLoadingMore = false;
+      });
+    } catch (error) {
+      if (!mounted || requestId != _searchRequestId) return;
+      setState(() {
+        _searchLoading = false;
+        _searchLoadingMore = false;
+        _searchError = error;
+      });
+    }
+  }
+
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      _searchStudents(reset: true);
+    });
+  }
+
   List<AdminStudentRow> get _candidates {
     final memberIds = _members.map((m) => m.id).toSet();
-    return _all
-        .where(
-          (s) =>
-              !memberIds.contains(s.id) && studentMatchesQuery(s, _search.text),
-        )
-        .toList();
+    return _searchResults.where((s) => !memberIds.contains(s.id)).toList();
   }
 
   Future<void> _removeSelected() async {
@@ -90,23 +143,27 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
     setState(() {
       _members = _members.where((m) => !_selected.contains(m.id)).toList();
       _selected = {};
+      _selectedRows.clear();
     });
   }
 
   Future<void> _addSelected() async {
     await widget.repo.addStudentsToTeam(widget.team.id, _selected.toList());
     if (!mounted) return;
-    final added = _all.where((s) => _selected.contains(s.id)).toList();
+    final added = _selectedRows.values
+        .where((s) => _selected.contains(s.id))
+        .toList();
     setState(() {
       _members = [..._members, ...added]
         ..sort((a, b) => a.name.compareTo(b.name));
       _selected = {};
+      _selectedRows.clear();
     });
   }
 
   /// Change the team teacher at any time (any existing account).
   Future<void> _editTeacher() async {
-    final result = await showAppSheet<String>(
+    final result = await showAppSheet<Object>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -116,23 +173,33 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
       ),
     );
     if (result == null || !mounted) return;
-    if (result.isEmpty) {
-      await widget.repo.removeTeamTeacher(widget.team.id);
-    } else {
-      await widget.repo.setTeamTeacher(widget.team.id, result);
+    try {
+      if (result is String && result.isEmpty) {
+        await widget.repo.removeTeamTeacher(widget.team.id);
+      } else if (result is TeacherCandidate) {
+        await widget.repo.setTeamTeacherById(widget.team.id, result.userId);
+      } else {
+        return;
+      }
+      if (!mounted) return;
+      // The assignment may create a teacher row; refresh the resolved name.
+      final teams = await widget.repo.teams();
+      final updated = teams.where((t) => t.id == widget.team.id).firstOrNull;
+      if (!mounted) return;
+      setState(() => _teacherName = updated?.teacherName ?? '');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('تعذّر تعديل معلم الحلقة: $e')));
     }
-    if (!mounted) return;
-    setState(() => _teacherName = result);
   }
 
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     if (_loading) {
-      return const SizedBox(
-        height: 300,
-        child: Center(child: CircularProgressIndicator()),
-      );
+      return const AppLoadingView();
     }
     return DraggableScrollableSheet(
       expand: false,
@@ -227,6 +294,7 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
                     onSelected: (_) => setState(() {
                       _adding = false;
                       _selected = {};
+                      _selectedRows.clear();
                     }),
                   ),
                 ),
@@ -235,10 +303,14 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
                   child: ChoiceChip(
                     label: const Text('إضافة طلاب'),
                     selected: _adding,
-                    onSelected: (_) => setState(() {
-                      _adding = true;
-                      _selected = {};
-                    }),
+                    onSelected: (_) {
+                      setState(() {
+                        _adding = true;
+                        _selected = {};
+                        _selectedRows.clear();
+                      });
+                      _searchStudents(reset: true);
+                    },
                   ),
                 ),
               ],
@@ -250,7 +322,7 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: TextField(
                 controller: _search,
-                onChanged: (_) => setState(() {}),
+                onChanged: _onSearchChanged,
                 decoration: const InputDecoration(
                   hintText: 'بحث: اسم / معرّف / باركود / حلقة',
                   prefixIcon: Icon(Icons.search),
@@ -259,12 +331,35 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
             ),
           Expanded(
             child: _adding
-                ? _candidates.isEmpty
+                ? _searchLoading && _candidates.isEmpty
+                      ? const AppLoadingView()
+                      : _searchError != null && _candidates.isEmpty
+                      ? AppErrorView(
+                          error: _searchError,
+                          onRetry: () => _searchStudents(reset: true),
+                        )
+                      : _candidates.isEmpty
                       ? const Center(child: Text('لا نتائج'))
                       : ListView.builder(
                           controller: controller,
-                          itemCount: _candidates.length,
+                          itemCount:
+                              _candidates.length + (_searchHasMore ? 1 : 0),
                           itemBuilder: (context, i) {
+                            if (i >= _candidates.length) {
+                              _searchStudents(reset: false);
+                              return const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 16),
+                                child: Center(
+                                  child: SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
                             final s = _candidates[i];
                             return CheckboxListTile(
                               dense: true,
@@ -279,8 +374,10 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
                               onChanged: (v) => setState(() {
                                 if (v == true) {
                                   _selected.add(s.id);
+                                  _selectedRows[s.id] = s;
                                 } else {
                                   _selected.remove(s.id);
+                                  _selectedRows.remove(s.id);
                                 }
                               }),
                             );
@@ -335,7 +432,7 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
 class _TeacherPickerSheet extends StatefulWidget {
   const _TeacherPickerSheet({required this.candidates, required this.selected});
 
-  final List<({String name, String role})> candidates;
+  final List<TeacherCandidate> candidates;
   final String selected;
 
   @override
@@ -344,6 +441,7 @@ class _TeacherPickerSheet extends StatefulWidget {
 
 class _TeacherPickerSheetState extends State<_TeacherPickerSheet> {
   final _search = TextEditingController();
+  bool _teachersOnly = true;
 
   @override
   void dispose() {
@@ -355,12 +453,23 @@ class _TeacherPickerSheetState extends State<_TeacherPickerSheet> {
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final q = _search.text.trim().toLowerCase();
-    final results = q.isEmpty
+    final base = _teachersOnly
         ? widget.candidates
-        : widget.candidates
+              .where(
+                (c) =>
+                    c.role.contains('معلم') ||
+                    c.role.contains('مدير') ||
+                    c.role.contains('إدارة'),
+              )
+              .toList()
+        : widget.candidates;
+    final results = q.isEmpty
+        ? base
+        : base
               .where(
                 (c) =>
                     c.name.toLowerCase().contains(q) ||
+                    c.username.toLowerCase().contains(q) ||
                     c.role.toLowerCase().contains(q),
               )
               .toList();
@@ -393,7 +502,15 @@ class _TeacherPickerSheetState extends State<_TeacherPickerSheet> {
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+            dense: true,
+            title: const Text('المعلمون فقط'),
+            subtitle: const Text('أوقف العرض لإظهار كل الحسابات'),
+            value: _teachersOnly,
+            onChanged: (value) => setState(() => _teachersOnly = value),
+          ),
+          const SizedBox(height: 4),
           Expanded(
             child: ListView.builder(
               controller: controller,
@@ -415,26 +532,34 @@ class _TeacherPickerSheetState extends State<_TeacherPickerSheet> {
                   );
                 }
                 final c = results[i - 1];
-                final isSelected = c.name == widget.selected;
+                final isSelected =
+                    c.name == widget.selected ||
+                    c.username == widget.selected ||
+                    c.displayName == widget.selected;
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: CircleAvatar(
                     radius: 16,
                     backgroundColor: tokens.accentMatn.withValues(alpha: 0.15),
                     child: Text(
-                      c.name.characters.first,
+                      c.displayName.characters.first,
                       style: TextStyle(
                         color: tokens.accentMatn,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
-                  title: Text(c.name),
-                  subtitle: Text(c.role),
+                  title: Text(c.displayName),
+                  subtitle: Text(
+                    [
+                      c.usernameLabel,
+                      c.role,
+                    ].where((v) => v.isNotEmpty).join(' · '),
+                  ),
                   trailing: isSelected
                       ? Icon(Icons.check_circle, color: tokens.brand)
                       : null,
-                  onTap: () => Navigator.of(context).pop(c.name),
+                  onTap: () => Navigator.of(context).pop(c),
                 );
               },
             ),

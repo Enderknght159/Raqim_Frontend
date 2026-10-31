@@ -54,6 +54,9 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
   List<AdminContentItem> _matns = const [];
   List<AdminTeacherRow> _teachers = const [];
   bool _loading = true;
+  bool _saving = false;
+  String? _feedback;
+  bool _feedbackOk = true;
 
   @override
   void initState() {
@@ -148,11 +151,57 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
                   ),
                   const SizedBox(height: 16),
                   ..._fields(context, tokens),
+                  if (_feedback != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _feedbackOk
+                            ? tokens.brandTint
+                            : tokens.danger.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(tokens.radiusSmall),
+                        border: Border.all(
+                          color: _feedbackOk
+                              ? tokens.brandBorder
+                              : tokens.danger.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _feedbackOk
+                                ? Icons.check_circle_outline
+                                : Icons.error_outline,
+                            size: 20,
+                            color: _feedbackOk
+                                ? tokens.brandText
+                                : tokens.dangerText,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _feedback!,
+                              style: TextStyle(
+                                color: _feedbackOk
+                                    ? tokens.brandText
+                                    : tokens.dangerText,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   AppButton(
-                    label: 'إضافة تسجيل',
+                    label: _saving ? 'جارٍ الحفظ…' : 'إضافة تسجيل',
                     icon: Icons.qr_code_scanner,
-                    onPressed: _submit,
+                    loading: _saving,
+                    onPressed: _saving ? null : _submit,
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -288,66 +337,88 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
   }
 
   Future<void> _submit() async {
+    if (_saving) return;
     final repo = AdminRepositoryScope.of(context);
     final student = _student;
     if (student == null) {
       _snack('اختر طالبًا');
       return;
     }
-    switch (_kind) {
-      case _RecordKind.memorization:
-        if (_units.isEmpty) {
-          _snack('اختر صفحة من الخريطة');
-          return;
-        }
-        await repo.addMemorization(
-          studentId: student.id,
-          sessionId: widget.sessionId,
-          units: _units,
-          rating: _rating,
-          reciterName: _reciter,
-        );
-        setState(() {
-          _units = const [];
-          _rating = 3;
-        });
-      case _RecordKind.matn:
-        if (_matnId == null) {
-          _snack('لا متون متاحة');
-          return;
-        }
-        await repo.addMatnRecitation(
-          studentId: student.id,
-          matnId: _matnId!,
-          sessionId: widget.sessionId,
-          lastVerse: int.tryParse(_lastVerse.text) ?? 1,
-          teacherName: _teacher,
-        );
-      case _RecordKind.transaction:
-        final value = int.tryParse(_txValue.text) ?? 0;
-        if (value == 0) {
-          _snack('أدخل قيمة غير صفرية');
-          return;
-        }
-        await repo.addTransaction(
-          studentId: student.id,
-          sessionId: widget.sessionId,
-          type: _txType,
-          value: value,
-          description: _txDesc.text.trim().isEmpty ? null : _txDesc.text.trim(),
-        );
-        _txValue.clear();
-        _txDesc.clear();
+    setState(() {
+      _saving = true;
+      _feedback = null;
+    });
+    try {
+      switch (_kind) {
+        case _RecordKind.memorization:
+          if (_units.isEmpty) {
+            _snack('اختر صفحة من الخريطة');
+            return;
+          }
+          await repo.addMemorization(
+            studentId: student.id,
+            sessionId: widget.sessionId,
+            units: _units,
+            rating: _rating,
+            reciterName: _reciter,
+          );
+          setState(() {
+            _units = const [];
+            _rating = 3;
+          });
+        case _RecordKind.matn:
+          if (_matnId == null) {
+            _snack('لا متون متاحة');
+            return;
+          }
+          await repo.addMatnRecitation(
+            studentId: student.id,
+            matnId: _matnId!,
+            sessionId: widget.sessionId,
+            lastVerse: int.tryParse(_lastVerse.text) ?? 1,
+            teacherName: _teacher,
+          );
+        case _RecordKind.transaction:
+          final value = int.tryParse(_txValue.text) ?? 0;
+          if (value == 0) {
+            _snack('أدخل قيمة غير صفرية');
+            return;
+          }
+          await repo.addTransaction(
+            studentId: student.id,
+            sessionId: widget.sessionId,
+            type: _txType,
+            value: value,
+            description: _txDesc.text.trim().isEmpty
+                ? null
+                : _txDesc.text.trim(),
+          );
+          _txValue.clear();
+          _txDesc.clear();
+      }
+      if (!mounted) return;
+      HapticFeedback.lightImpact();
+      setState(() {
+        _feedback = 'تم حفظ تسجيل ${student.name}';
+        _feedbackOk = true;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _feedback = 'تعذّر الحفظ: $error';
+        _feedbackOk = false;
+      });
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
-    if (!mounted) return;
-    HapticFeedback.lightImpact();
-    _snack('تم حفظ تسجيل ${student.name}');
   }
 
   void _snack(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    if (!mounted) return;
+    setState(() {
+      _feedback = message;
+      _feedbackOk = false;
+    });
   }
 }
 

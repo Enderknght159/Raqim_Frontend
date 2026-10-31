@@ -38,6 +38,7 @@ class _AdminStudentPointsScreenState extends State<AdminStudentPointsScreen> {
       appBar: AppBar(title: const Text('محصلة النقاط')),
       body: AsyncView<StudentCourseBundle>(
         future: _future!,
+        cacheKey: 'admin-student-points-${widget.studentId}-${widget.courseId}',
         builder: (context, bundle) => PointsBreakdownView(bundle: bundle),
       ),
     );

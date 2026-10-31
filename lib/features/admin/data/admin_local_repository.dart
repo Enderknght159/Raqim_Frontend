@@ -46,6 +46,9 @@ class AdminLocalRepository implements AdminRepository {
   }
 
   @override
+  Future<AdminHomeData?> homeCached() async => null;
+
+  @override
   Future<List<AdminCourseSummary>> courses() async {
     final courseRows = await _database.select(_database.courses).get();
     final result = <AdminCourseSummary>[];
@@ -118,6 +121,9 @@ class AdminLocalRepository implements AdminRepository {
     });
     return result;
   }
+
+  @override
+  Future<List<AdminCourseSummary>?> coursesCached() async => null;
 
   @override
   Future<AdminCourseSummary?> courseSummary(int courseId) async {
@@ -265,6 +271,37 @@ class AdminLocalRepository implements AdminRepository {
   }
 
   // ── Students ────────────────────────────────────────────────────────────
+
+  @override
+  Future<PagedResult<AdminStudentRow>> studentsPage({
+    String? query,
+    int? teamId,
+    int page = 1,
+    int pageSize = 30,
+  }) async {
+    final all = await students(query: query, teamId: teamId);
+    final start = (page - 1) * pageSize;
+    final end = start + pageSize > all.length ? all.length : start + pageSize;
+    final items = start >= all.length
+        ? <AdminStudentRow>[]
+        : all.sublist(start, end);
+    return PagedResult(
+      items: items,
+      page: page,
+      hasMore: end < all.length,
+      total: all.length,
+    );
+  }
+
+  @override
+  Future<PagedResult<AdminStudentRow>?> studentsPageCached({
+    String? query,
+    int? teamId,
+    int page = 1,
+    int pageSize = 30,
+  }) async {
+    return null;
+  }
 
   @override
   Future<List<AdminStudentRow>> students({String? query, int? teamId}) async {
@@ -532,13 +569,21 @@ class AdminLocalRepository implements AdminRepository {
   /// يكون معلمًا»): administration + teacher accounts + student accounts.
   /// Names are the local identity key (the trial has no separate account ids).
   @override
-  Future<List<({String name, String role})>> teacherCandidates() async {
-    final out = <({String name, String role})>[];
+  Future<List<TeacherCandidate>> teacherCandidates() async {
+    final out = <TeacherCandidate>[];
     final seen = <String>{};
+    var nextUserId = 1;
     void add(String name, String role) {
       final n = name.trim();
       if (n.isEmpty || !seen.add(n)) return;
-      out.add((name: n, role: role));
+      out.add(
+        TeacherCandidate(
+          userId: nextUserId++,
+          name: n,
+          username: n,
+          role: role,
+        ),
+      );
     }
 
     add('مدير المسجد', 'إدارة');
@@ -553,6 +598,130 @@ class AdminLocalRepository implements AdminRepository {
     }
     return out;
   }
+
+  @override
+  Future<PagedResult<AdminUserRow>> usersPage({
+    String? query,
+    String filter = 'all',
+    int page = 1,
+    int pageSize = 30,
+  }) async {
+    final q = query?.trim() ?? '';
+    final candidates = await teacherCandidates();
+    final studentRows = await students();
+    final rows = <AdminUserRow>[
+      const AdminUserRow(
+        id: 0,
+        name: 'مدير المسجد',
+        username: 'admin',
+        active: true,
+        isAdmin: true,
+        isSupervisor: true,
+        isTeacher: false,
+        isStudent: false,
+      ),
+      for (final c in candidates)
+        if (c.role == 'معلم')
+          AdminUserRow(
+            id: c.userId,
+            name: c.name,
+            username: c.username,
+            active: true,
+            isAdmin: c.role == 'مدير',
+            isSupervisor: c.role == 'مدير',
+            isTeacher: c.role == 'معلم',
+            isStudent: false,
+            teacherId: c.teacherId,
+          ),
+      for (final s in studentRows)
+        AdminUserRow(
+          id: 100000 + s.id,
+          name: s.name,
+          username: s.barcode,
+          active: s.active,
+          isAdmin: false,
+          isSupervisor: false,
+          isTeacher: false,
+          isStudent: true,
+          studentId: s.id,
+          teamNames: s.teamNames.isEmpty ? const [] : [s.teamNames],
+        ),
+    ];
+    var filtered = rows;
+    if (filter == 'student') {
+      filtered = rows.where((r) => r.isStudent).toList();
+    } else if (filter == 'teacher') {
+      filtered = rows.where((r) => r.isTeacher).toList();
+    } else if (filter == 'supervisor') {
+      filtered = rows.where((r) => r.isSupervisor).toList();
+    }
+    if (q.isNotEmpty) {
+      final lower = q.toLowerCase();
+      filtered = filtered
+          .where(
+            (r) =>
+                r.name.toLowerCase().contains(lower) ||
+                r.username.toLowerCase().contains(lower),
+          )
+          .toList();
+    }
+    final start = (page - 1) * pageSize;
+    final end = start + pageSize > filtered.length
+        ? filtered.length
+        : start + pageSize;
+    final items = start >= filtered.length
+        ? <AdminUserRow>[]
+        : filtered.sublist(start, end);
+    return PagedResult(
+      items: items,
+      page: page,
+      hasMore: end < filtered.length,
+      total: filtered.length,
+    );
+  }
+
+  @override
+  Future<PagedResult<AdminUserRow>?> usersPageCached({
+    String? query,
+    String filter = 'all',
+    int page = 1,
+    int pageSize = 30,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<AdminUserRow?> user(int userId) async {
+    final page = await usersPage(pageSize: 1000);
+    return page.items.where((row) => row.id == userId).firstOrNull;
+  }
+
+  @override
+  Future<AdminUserPermissions> userPermissions(int userId) async {
+    return const AdminUserPermissions(
+      isAdmin: false,
+      modules: {},
+      abilities: {},
+    );
+  }
+
+  @override
+  Future<void> updateUserPermissions(
+    int userId,
+    AdminUserPermissions permissions,
+  ) async {}
+
+  @override
+  Future<void> setUserAdmin(int userId, bool isAdmin) async {}
+
+  @override
+  Future<AdminTeacherDetail?> teacherDetail(int teacherId) async => null;
+
+  @override
+  Future<int> createTeacher(String name) async => 0;
+
+  @override
+  Future<void> linkTeacherToUser(int userId, int teacherId) async {}
 
   @override
   Future<List<AdminContentItem>> teamTypes() async {
@@ -856,6 +1025,7 @@ class AdminLocalRepository implements AdminRepository {
         AdminSessionMember(
           studentId: s.id,
           name: s.name,
+          barcode: s.barcode,
           arrivalTime: arrivalById[s.id],
         ),
     ]..sort((a, b) {
@@ -864,9 +1034,12 @@ class AdminLocalRepository implements AdminRepository {
     });
   }
 
-  /// Scans a barcode into a session. Returns the student name or null.
+  /// Scans a barcode into a session.
   @override
-  Future<String?> addAttendanceByBarcode(int sessionId, String barcode) async {
+  Future<AttendanceScanResult?> addAttendanceByBarcode(
+    int sessionId,
+    String barcode,
+  ) async {
     final student = await (_database.select(
       _database.students,
     )..where((t) => t.barcode.equals(barcode.trim()))).getSingleOrNull();
@@ -895,7 +1068,11 @@ class AdminLocalRepository implements AdminRepository {
             ),
           );
     }
-    return student.name;
+    return AttendanceScanResult(
+      studentId: student.id,
+      name: student.name,
+      created: existing == null,
+    );
   }
 
   @override
@@ -1454,6 +1631,17 @@ class AdminLocalRepository implements AdminRepository {
   }
 
   @override
+  Future<void> updatePhone(
+    int phoneId, {
+    required String phone,
+    required String type,
+  }) async {
+    await (_database.update(_database.phones)
+          ..where((t) => t.id.equals(phoneId)))
+        .write(db.PhonesCompanion(phone: Value(phone), type: Value(type)));
+  }
+
+  @override
   Future<void> removePhone(int phoneId) async {
     await (_database.delete(
       _database.phones,
@@ -1569,6 +1757,16 @@ class AdminLocalRepository implements AdminRepository {
   Future<void> setTeamTeacher(int teamId, String teacherName) async {
     await (_database.update(_database.teams)..where((t) => t.id.equals(teamId)))
         .write(db.TeamsCompanion(teacherName: Value(teacherName)));
+  }
+
+  @override
+  Future<void> setTeamTeacherById(int teamId, int userId) async {
+    final candidates = await teacherCandidates();
+    final candidate = candidates.where((c) => c.userId == userId).firstOrNull;
+    if (candidate == null) {
+      throw StateError('TEACHER_NOT_FOUND');
+    }
+    await setTeamTeacher(teamId, candidate.name);
   }
 
   /// Removes the teacher from a team (teacher left the team).
@@ -2132,6 +2330,9 @@ class AdminLocalRepository implements AdminRepository {
 
   @override
   Future<int?> requestFullExport() async => null;
+
+  @override
+  Future<void> warmCache() async {}
 }
 
 /// Snapshot of everything deleted with sessions — handed back to

@@ -828,6 +828,47 @@ class StudentLocalRepository implements StudentRepository {
     }
     return latest;
   }
+
+  @override
+  Future<StudentProfileModel?> cachedProfile() async => profile();
+
+  @override
+  Future<List<CourseOverview>?> cachedCourseOverviews() async =>
+      courseOverviews();
+
+  @override
+  Future<StudentCourseBundle?> cachedCourseBundle(int courseId) async =>
+      courseBundle(courseId);
+
+  @override
+  Future<List<StudentLeaderboardEntry>?> cachedLeaderboard(
+    int courseId,
+  ) async => leaderboard(courseId);
+
+  @override
+  Future<List<Memorization>?> cachedMemorizations() async => allMemorizations();
+
+  @override
+  Future<List<Certificate>?> cachedCertificates() async => certificates();
+
+  @override
+  Future<QuranStats?> cachedQuranStats() async => quranStats();
+
+  @override
+  Future<List<Matn>?> cachedMatns() async => matns();
+
+  @override
+  Future<Map<int, MatnRecitation>?> cachedLatestMatnRecitations() async =>
+      latestMatnRecitations();
+
+  @override
+  Future<List<({Exam exam, ExamSubmission? submission})>?>
+  cachedExamsWithSubmissions() async => examsWithSubmissions();
+
+  @override
+  Future<List<Team>?> cachedTeams() async => teams();
+  @override
+  Future<void> warmCache() async {}
 }
 
 String _txSigned(TransactionType type, int value) {

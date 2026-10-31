@@ -144,7 +144,8 @@ class PageGridCell extends StatelessWidget {
       c.computeLuminance() > 0.5 ? tokens.textPrimary : c;
 }
 
-/// Quran grid: 7 columns × N rows for a juz (default page range per juz).
+/// Quran grid: always 7 columns; cells stay square and the grid height grows
+/// only by the page count (3 rows for juz 1–29, 4 rows for juz 30).
 class QuranGrid extends StatelessWidget {
   const QuranGrid({
     super.key,
@@ -161,32 +162,56 @@ class QuranGrid extends StatelessWidget {
   /// Called when a page cell is tapped (e.g. show its tasmi' details).
   final ValueChanged<int>? onPageTap;
 
+  static const double spacing = 8;
+
   static int startPageOf(int juz) => juzStartPage(juz);
 
   static int pageCountOf(int juz) => juzPageCount(juz);
+
+  static int rowsFor(int juz, {int columns = 7}) =>
+      (pageCountOf(juz) / columns).ceil();
+
+  /// Height that keeps every cell square for a given available width.
+  static double heightFor(int juz, double width, {int columns = 7}) {
+    final side = (width - spacing * (columns - 1)) / columns;
+    final rows = rowsFor(juz, columns: columns);
+    return side * rows + spacing * (rows - 1);
+  }
 
   @override
   Widget build(BuildContext context) {
     final start = startPageOf(juz);
     final count = pageCountOf(juz);
     final pages = [for (var i = 0; i < count; i++) start + i];
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: columns,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
-      ),
-      itemCount: pages.length,
-      itemBuilder: (context, index) {
-        final page = pages[index];
-        final status = pageStatus[page];
-        return PageGridCell(
-          page: page,
-          rating: status?.rating,
-          progress: status?.progress ?? 0,
-          onTap: onPageTap == null ? null : () => onPageTap!(page),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final side = (width - spacing * (columns - 1)) / columns;
+        if (side <= 0) return const SizedBox.shrink();
+        final rows = (pages.length / columns).ceil();
+        return SizedBox(
+          height: side * rows + spacing * (rows - 1),
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              mainAxisSpacing: spacing,
+              crossAxisSpacing: spacing,
+              mainAxisExtent: side,
+            ),
+            itemCount: pages.length,
+            itemBuilder: (context, index) {
+              final page = pages[index];
+              final status = pageStatus[page];
+              return PageGridCell(
+                page: page,
+                rating: status?.rating,
+                progress: status?.progress ?? 0,
+                onTap: onPageTap == null ? null : () => onPageTap!(page),
+              );
+            },
+          ),
         );
       },
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -9,6 +10,7 @@ import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/icon_toggle_group.dart';
 import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
+import '../../../../shared/account_switcher.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../auth/presentation/cubits/auth_cubit.dart';
 import '../../data/student_repository.dart';
@@ -31,12 +33,22 @@ class ProfileScreen extends StatelessWidget {
     return (profile: profile, mosqueName: mosque);
   }
 
+  Future<({StudentProfileModel profile, String mosqueName})?> _cachedLoad(
+    StudentRepository repo,
+  ) async {
+    final profile = await repo.cachedProfile();
+    if (profile == null) return null;
+    return (profile: profile, mosqueName: await repo.mosqueName());
+  }
+
   @override
   Widget build(BuildContext context) {
     final repo = StudentRepositoryScope.of(context);
     return Scaffold(
       body: AsyncView<({StudentProfileModel profile, String mosqueName})>(
         future: _load(repo),
+        cacheKey: 'student-profile',
+        cached: _cachedLoad(repo),
         builder: (context, data) {
           final profile = data.profile;
           return ResponsivePage(
@@ -181,7 +193,9 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    context.read<AuthCubit>().logout();
+    final next = await context.read<AuthCubit>().logout();
+    if (!context.mounted) return;
+    context.go(next == null ? '/welcome' : '/');
   }
 
   Widget _barcodeCard(BuildContext context, StudentProfileModel profile) {
@@ -553,7 +567,7 @@ class ProfileScreen extends StatelessWidget {
   };
 
   void _switchAccount(BuildContext context) {
-    context.read<AuthCubit>().logout();
+    showAccountSwitcher(context);
   }
 }
 

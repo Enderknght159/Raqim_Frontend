@@ -5,6 +5,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/responsive_grid.dart';
+import '../../../../shared/permissions.dart';
 import '../admin_shell.dart';
 
 /// E6 — Content tab: vertical summary cards (students · teams/teachers ·
@@ -25,24 +26,32 @@ class _AdminContentScreenState extends State<AdminContentScreen> {
     _future = _load();
   }
 
+  Future<T?> _safe<T>(Future<T> future) async {
+    try {
+      return await future;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<_Counts> _load() async {
     final repo = AdminRepositoryScope.of(context);
-    final statsF = repo.generalStats();
-    final teamsF = repo.teams();
-    final teachersF = repo.teachers();
-    final matnsF = repo.matns();
-    final subjectsF = repo.subjects();
+    final statsF = _safe(repo.generalStats());
+    final teamsF = _safe(repo.teams());
+    final teachersF = _safe(repo.teachers());
+    final matnsF = _safe(repo.matns());
+    final subjectsF = _safe(repo.subjects());
     final stats = await statsF;
     final teams = await teamsF;
     final teachers = await teachersF;
     final matns = await matnsF;
     final subjects = await subjectsF;
     return _Counts(
-      students: stats.students,
-      teams: teams.length,
-      teachers: teachers.length,
-      matns: matns.length,
-      subjects: subjects.length,
+      students: stats?.students ?? 0,
+      teams: teams?.length ?? 0,
+      teachers: teachers?.length ?? 0,
+      matns: matns?.length ?? 0,
+      subjects: subjects?.length ?? 0,
     );
   }
 
@@ -51,6 +60,7 @@ class _AdminContentScreenState extends State<AdminContentScreen> {
     return Scaffold(
       body: AsyncView<_Counts>(
         future: _future,
+        cacheKey: 'admin-content',
         builder: (context, c) => ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -58,24 +68,27 @@ class _AdminContentScreenState extends State<AdminContentScreen> {
               minItemWidth: 280,
               maxColumns: 3,
               children: [
-                _SectionCard(
-                  icon: Icons.groups_outlined,
-                  title: 'الطلاب',
-                  subtitle: '${c.students} طالب',
-                  onTap: () => context.push('/admin/students'),
-                ),
-                _SectionCard(
-                  icon: Icons.hub_outlined,
-                  title: 'الحلقات والمعلمون',
-                  subtitle: '${c.teams} حلقة · ${c.teachers} معلم',
-                  onTap: () => context.push('/admin/teams'),
-                ),
-                _SectionCard(
-                  icon: Icons.library_books_outlined,
-                  title: 'المحتوى',
-                  subtitle: '${c.matns} متن · ${c.subjects} مادة',
-                  onTap: () => context.push('/admin/assets'),
-                ),
+                if (canViewModule(context, 'students'))
+                  _SectionCard(
+                    icon: Icons.groups_outlined,
+                    title: 'الطلاب',
+                    subtitle: '${c.students} طالب',
+                    onTap: () => context.push('/admin/students'),
+                  ),
+                if (canViewModule(context, 'teams'))
+                  _SectionCard(
+                    icon: Icons.hub_outlined,
+                    title: 'الحلقات والمعلمون',
+                    subtitle: '${c.teams} حلقة · ${c.teachers} معلم',
+                    onTap: () => context.push('/admin/teams'),
+                  ),
+                if (canViewModule(context, 'matn'))
+                  _SectionCard(
+                    icon: Icons.library_books_outlined,
+                    title: 'المحتوى',
+                    subtitle: '${c.matns} متن · ${c.subjects} مادة',
+                    onTap: () => context.push('/admin/assets'),
+                  ),
               ],
             ),
           ],

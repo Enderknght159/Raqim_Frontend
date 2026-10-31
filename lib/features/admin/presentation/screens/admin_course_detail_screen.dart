@@ -12,6 +12,7 @@ import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../student/domain/models/student_models.dart';
 import '../../domain/admin_models.dart';
+import '../../../../shared/permissions.dart';
 import '../admin_shell.dart';
 import '../widgets/certificate_editor_sheet.dart';
 import '../widgets/course_editor_sheet.dart';
@@ -41,19 +42,32 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
     _future = _load();
   }
 
+  Future<T?> _safe<T>(Future<T> future) async {
+    try {
+      return await future;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<_Data> _load() async {
     final repo = AdminRepositoryScope.of(context);
-    final summaryF = repo.courseSummary(widget.courseId);
-    final sessionsF = repo.courseSessions(widget.courseId);
-    final examsF = repo.courseExams(widget.courseId);
-    final leaderboardF = repo.leaderboard(widget.courseId);
-    final certificatesF = repo.courseCertificates(widget.courseId);
+    final summaryF = _safe(repo.courseSummary(widget.courseId));
+    final sessionsF = _safe(repo.courseSessions(widget.courseId));
+    final examsF = _safe(repo.courseExams(widget.courseId));
+    final leaderboardF = _safe(repo.leaderboard(widget.courseId));
+    final certificatesF = _safe(repo.courseCertificates(widget.courseId));
+    final summary = await summaryF;
+    final sessions = await sessionsF;
+    final exams = await examsF;
+    final leaderboard = await leaderboardF;
+    final certificates = await certificatesF;
     return _Data(
-      summary: await summaryF,
-      sessions: await sessionsF,
-      exams: await examsF,
-      leaderboard: (await leaderboardF).entries,
-      certificates: await certificatesF,
+      summary: summary,
+      sessions: sessions ?? const [],
+      exams: exams ?? const [],
+      leaderboard: leaderboard?.entries ?? const [],
+      certificates: certificates ?? const [],
     );
   }
 
@@ -68,13 +82,14 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
   Widget build(BuildContext context) {
     return AsyncView<_Data>(
       future: _future,
+      cacheKey: 'admin-course-${widget.courseId}',
       builder: (context, data) => DefaultTabController(
         length: 5,
         child: Scaffold(
           appBar: AppBar(
             title: Text(data.summary?.name ?? 'الدورة'),
             actions: [
-              if (data.summary != null)
+              if (data.summary != null && canEditModule(context, 'courses'))
                 IconButton(
                   tooltip: 'تعديل الدورة',
                   icon: const Icon(Icons.edit_outlined),
@@ -210,11 +225,12 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        AppButton(
-          label: 'إنشاء جلسة اليوم',
-          icon: Icons.today_outlined,
-          onPressed: () => _createTodaySession(data),
-        ),
+        if (canEditModule(context, 'courses'))
+          AppButton(
+            label: 'إنشاء جلسة اليوم',
+            icon: Icons.today_outlined,
+            onPressed: () => _createTodaySession(data),
+          ),
         const SizedBox(height: 16),
         Row(
           children: [
@@ -224,7 +240,7 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
                 title: 'الجلسات',
               ),
             ),
-            if (data.sessions.isNotEmpty)
+            if (data.sessions.isNotEmpty && canDeleteModule(context, 'courses'))
               TextButton(
                 onPressed: () => setState(() {
                   _selecting = !_selecting;
@@ -681,47 +697,140 @@ class _AdminCourseDetailScreenState extends State<AdminCourseDetailScreen> {
     AdminCertificateRow c,
   ) {
     return AppCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      onTap: () => _editCertificate(c),
-      child: Row(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      onTap: () => _showCertificateDetails(c),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: tokens.reward.withValues(alpha: 0.15),
-            child: Icon(Icons.school_outlined, size: 18, color: tokens.reward),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  c.studentName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: tokens.reward.withValues(alpha: 0.15),
+                child: Icon(
+                  Icons.school_outlined,
+                  size: 22,
+                  color: tokens.reward,
                 ),
-                Text(
-                  'الجزء ${c.startJuz} – ${c.endJuz} · ${formatDate(c.date)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      c.studentName.isEmpty
+                          ? 'طالب #${c.studentId}'
+                          : c.studentName,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'الجزء ${c.startJuz} – ${c.endJuz} • ${formatDate(c.date)}',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_left, color: tokens.borderStructural),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              StatusBadge(label: '${c.mark}/100', color: tokens.reward),
+              StatusBadge(
+                label: c.byHeart ? 'عن ظهر قلب' : 'عن حاضر',
+                color: c.byHeart ? tokens.brand : tokens.textMuted,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showCertificateDetails(AdminCertificateRow c) async {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
+    await showAppSheet<void>(
+      context: context,
+      maxWidth: 560,
+      showDragHandle: true,
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: tokens.reward.withValues(alpha: 0.15),
+                  child: Icon(Icons.school_outlined, color: tokens.reward),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    c.studentName.isEmpty
+                        ? 'طالب #${c.studentId}'
+                        : c.studentName,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
               ],
             ),
-          ),
-          StatusBadge(label: '${c.mark}/100', color: tokens.reward),
-          const SizedBox(width: 6),
-          StatusBadge(
-            label: c.byHeart ? 'بالغيب' : 'عن ظهر قلب',
-            color: c.byHeart ? tokens.brand : tokens.textMuted,
-          ),
-          const SizedBox(width: 6),
-          Icon(Icons.chevron_left, color: tokens.borderStructural),
+            const SizedBox(height: 16),
+            AppCard(
+              child: Column(
+                children: [
+                  _detailRow(
+                    context,
+                    'نطاق الأجزاء',
+                    '${c.startJuz} - ${c.endJuz}',
+                  ),
+                  _detailRow(context, 'الدرجة', '${c.mark}/100'),
+                  _detailRow(
+                    context,
+                    'طريقة الأداء',
+                    c.byHeart ? 'عن ظهر قلب' : 'عن حاضر',
+                  ),
+                  _detailRow(context, 'التاريخ', formatDate(c.date)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            AppButton(
+              label: 'تعديل الشهادة',
+              icon: Icons.edit_outlined,
+              onPressed: () {
+                Navigator.of(sheetContext).pop();
+                _editCertificate(c);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(BuildContext context, String label, String value) {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Text(label, style: TextStyle(color: tokens.textMuted)),
+          const Spacer(),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
         ],
       ),
     );

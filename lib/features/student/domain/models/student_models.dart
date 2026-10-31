@@ -148,12 +148,33 @@ class Team {
     required this.name,
     required this.typeName,
     required this.teacherName,
+    this.teacherId,
   });
+
+  /// Fallback label used when the API only sends a teacher id.
+  static const fallbackTeacherName = 'معلم الحلقة';
 
   final int id;
   final String name;
   final String typeName;
   final String teacherName;
+  final int? teacherId;
+
+  /// A raw id/number is never a displayable teacher name.
+  static bool isDisplayableTeacherName(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return false;
+    return int.tryParse(trimmed) == null;
+  }
+
+  /// Never leaks a bare teacher id to the UI.
+  String get teacherDisplayName {
+    if (isDisplayableTeacherName(teacherName)) return teacherName.trim();
+    if (teacherId != null || teacherName.trim().isNotEmpty) {
+      return fallbackTeacherName;
+    }
+    return '';
+  }
 }
 
 class StudentBrief {

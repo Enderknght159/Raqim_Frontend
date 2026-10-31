@@ -48,6 +48,7 @@ class _AdminTeacherScreenState extends State<AdminTeacherScreen> {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     return AsyncView<_Data>(
       future: _future,
+      cacheKey: 'admin-teacher-${widget.teacherName}',
       builder: (context, data) => Scaffold(
         appBar: AppBar(title: Text(widget.teacherName)),
         body: ResponsivePage(
@@ -206,17 +207,31 @@ class _AdminTeacherScreenState extends State<AdminTeacherScreen> {
       );
       if (confirm != true || !mounted) return;
     }
-    await AdminRepositoryScope.of(
-      context,
-    ).setTeamTeacher(t.id, widget.teacherName);
-    if (!mounted) return;
-    _reload();
+    try {
+      await AdminRepositoryScope.of(
+        context,
+      ).setTeamTeacher(t.id, widget.teacherName);
+      if (!mounted) return;
+      _reload();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('تعذّر تعيين المعلم: $e')));
+    }
   }
 
   Future<void> _unassign(AdminTeamRow t) async {
-    await AdminRepositoryScope.of(context).removeTeamTeacher(t.id);
-    if (!mounted) return;
-    _reload();
+    try {
+      await AdminRepositoryScope.of(context).removeTeamTeacher(t.id);
+      if (!mounted) return;
+      _reload();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('تعذّر إزالة المعلم: $e')));
+    }
   }
 }
 

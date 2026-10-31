@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/date_time_utils.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/icon_tile.dart';
 import '../../../../core/widgets/progress_bar.dart';
 import '../../../../core/widgets/responsive_page.dart';
@@ -13,24 +14,48 @@ import '../student_shell.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// B3 — التحصيل: general average + subjects + matn + recent exams.
-class AchievementScreen extends StatelessWidget {
+class AchievementScreen extends StatefulWidget {
   const AchievementScreen({super.key});
+
+  @override
+  State<AchievementScreen> createState() => _AchievementScreenState();
+}
+
+class _AchievementScreenState extends State<AchievementScreen> {
+  Future<_AchievementData>? _future;
+  Future<_AchievementData?>? _cached;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final repo = StudentRepositoryScope.of(context);
+    _future ??= _load(repo);
+    _cached ??= _cachedData(repo);
+  }
+
+  Future<_AchievementData?> _cachedData(StudentRepository repo) async {
+    final exams = await repo.cachedExamsWithSubmissions();
+    final matns = await repo.cachedMatns();
+    final latest = await repo.cachedLatestMatnRecitations();
+    if (exams == null && matns == null && latest == null) return null;
+    return _AchievementData(
+      examRows: exams ?? const [],
+      matns: matns ?? const [],
+      latestMatn: latest ?? const {},
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final repo = StudentRepositoryScope.of(context);
+    final future = _future ??= _load(repo);
     return Scaffold(
-      body: FutureBuilder(
-        future: _load(repo),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError || !snapshot.hasData) {
-            return const Center(child: Text('تعذر التحميل'));
-          }
-          return _AchievementBody(data: snapshot.data!, repo: repo);
-        },
+      body: AsyncView<_AchievementData>(
+        future: future,
+        cacheKey: 'student-achievement',
+        cached: _cached ??= _cachedData(repo),
+        onRetry: () => setState(() => _future = _load(repo)),
+        builder: (context, data) => _AchievementBody(data: data, repo: repo),
       ),
     );
   }

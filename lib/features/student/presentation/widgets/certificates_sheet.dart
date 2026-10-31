@@ -62,7 +62,7 @@ void showCertificatesSheet(BuildContext context, List<CertificateEntry> certs) {
               'الدرجة: ${c.mark} · ${c.date.day}/${c.date.month}/${c.date.year}',
             ),
             trailing: StatusBadge(
-              label: c.byHeart ? 'بالغيب' : 'عن ظهر قلب',
+              label: c.byHeart ? 'عن ظهر قلب' : 'عن حاضر',
               color: c.byHeart ? tokens.brand : tokens.textMuted,
             ),
           );

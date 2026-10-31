@@ -48,14 +48,10 @@ class QuranMap extends StatefulWidget {
     super.key,
     required this.memorizations,
     required this.testedJuz,
-    this.height = 250,
   });
 
   final List<Memorization> memorizations;
   final Set<int> testedJuz;
-
-  /// Height of the paged grid area.
-  final double height;
 
   @override
   State<QuranMap> createState() => _QuranMapState();
@@ -205,32 +201,60 @@ class _QuranMapState extends State<QuranMap> {
 
   @override
   Widget build(BuildContext context) {
+    // Keep the map at a controlled width so cells never balloon on wide web
+    // windows; the remaining space is unused, never stretched.
+    const maxWidth = 560.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Quick slider: jump instantly between the 30 juz.
-        JuzSlider(selected: _currentJuz, onChanged: _jumpToJuz),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: widget.height,
-          child: PageView.builder(
-            controller: _controller,
-            itemCount: 30 * _loopCount,
-            onPageChanged: (index) {
-              setState(() => _currentJuz = index % 30 + 1);
-            },
-            itemBuilder: (context, index) {
-              final juz = index % 30 + 1;
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: _JuzPage(
-                  juz: juz,
-                  tested: widget.testedJuz.contains(juz),
-                  pageStatus: _pageStatus,
-                  onPageTap: (page) => _showPageTasmi(context, page),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: maxWidth),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Quick slider: jump instantly between the 30 juz.
+                JuzSlider(selected: _currentJuz, onChanged: _jumpToJuz),
+                const SizedBox(height: 10),
+                _JuzHeader(
+                  juz: _currentJuz,
+                  tested: widget.testedJuz.contains(_currentJuz),
                 ),
-              );
-            },
+                const SizedBox(height: 10),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final width = constraints.maxWidth > maxWidth
+                        ? maxWidth
+                        : constraints.maxWidth;
+                    final gridHeight = QuranGrid.heightFor(_currentJuz, width);
+                    return AnimatedSize(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        height: gridHeight,
+                        child: PageView.builder(
+                          controller: _controller,
+                          itemCount: 30 * _loopCount,
+                          onPageChanged: (index) {
+                            setState(() => _currentJuz = index % 30 + 1);
+                          },
+                          itemBuilder: (context, index) {
+                            final juz = index % 30 + 1;
+                            return QuranGrid(
+                              juz: juz,
+                              pageStatus: _pageStatus,
+                              onPageTap: (page) =>
+                                  _showPageTasmi(context, page),
+                            );
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -238,64 +262,34 @@ class _QuranMapState extends State<QuranMap> {
   }
 }
 
-/// One horizontally-paged juz: header (number + test status) + quran grid.
-class _JuzPage extends StatelessWidget {
-  const _JuzPage({
-    required this.juz,
-    required this.tested,
-    required this.pageStatus,
-    required this.onPageTap,
-  });
+/// Header of the currently visible juz (number + test status).
+class _JuzHeader extends StatelessWidget {
+  const _JuzHeader({required this.juz, required this.tested});
 
   final int juz;
   final bool tested;
-  final Map<int, ({int? rating, double progress})> pageStatus;
-  final ValueChanged<int> onPageTap;
 
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Row(
       children: [
-        Row(
-          children: [
-            Flexible(
-              child: Text(
-                'الجزء $juz',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: tokens.info,
-                ),
-              ),
+        Flexible(
+          child: Text(
+            'الجزء $juz',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: tokens.info,
             ),
-            const Spacer(),
-            StatusBadge(
-              label: tested ? 'مختبر' : 'غير مختبَر بعد',
-              color: tested ? tokens.brand : tokens.textMuted,
-              icon: tested ? Icons.check_circle : null,
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 900
-                  ? 10
-                  : constraints.maxWidth >= 550
-                  ? 7
-                  : 5;
-              return QuranGrid(
-                juz: juz,
-                pageStatus: pageStatus,
-                columns: columns,
-                onPageTap: onPageTap,
-              );
-            },
           ),
+        ),
+        const Spacer(),
+        StatusBadge(
+          label: tested ? 'مختبر' : 'غير مختبَر بعد',
+          color: tested ? tokens.brand : tokens.textMuted,
+          icon: tested ? Icons.check_circle : null,
         ),
       ],
     );

@@ -16,6 +16,7 @@ import '../../../auth/presentation/cubits/auth_cubit.dart';
 import '../../../auth/presentation/cubits/auth_state.dart';
 import '../../../student/domain/models/student_models.dart';
 import '../../domain/admin_models.dart';
+import '../../../../shared/permissions.dart';
 import '../admin_shell.dart';
 import '../widgets/absence_notice_sheet.dart';
 import '../widgets/session_records_section.dart';
@@ -36,6 +37,7 @@ class AdminSessionScreen extends StatefulWidget {
 
 class _AdminSessionScreenState extends State<AdminSessionScreen> {
   late Future<_Data> _future;
+  final Set<int> _pendingMembers = {};
 
   @override
   void initState() {
@@ -43,17 +45,25 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
     _future = _load();
   }
 
+  Future<T?> _safe<T>(Future<T> future) async {
+    try {
+      return await future;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<_Data> _load() async {
     final repo = AdminRepositoryScope.of(context);
     final sessionF = repo.sessionRow(widget.sessionId);
     final attendanceF = repo.sessionAttendance(widget.sessionId);
-    final membersF = repo.sessionMembers(widget.sessionId);
-    final recordsF = repo.sessionRecords(widget.sessionId);
+    final membersF = _safe(repo.sessionMembers(widget.sessionId));
+    final recordsF = _safe(repo.sessionRecords(widget.sessionId));
     return _Data(
       session: await sessionF,
       attendance: await attendanceF,
-      members: await membersF,
-      records: await recordsF,
+      members: await membersF ?? const [],
+      records: await recordsF ?? const [],
     );
   }
 
@@ -76,7 +86,7 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
     if (state is! AuthAuthenticated) return false;
     final profile = state.profile;
     if (profile.isDemo) return true;
-    return canView(profile, 'attendance');
+    return canEdit(profile, 'attendance');
   }
 
   @override
@@ -84,15 +94,17 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
     final canSendAbsence = _canSendAbsenceNotice(context);
     return AsyncView<_Data>(
       future: _future,
+      cacheKey: 'admin-session-${widget.sessionId}',
       builder: (context, data) => Scaffold(
         appBar: AppBar(
           title: Text('جلسة #${data.session.index}'),
           actions: [
-            IconButton(
-              tooltip: 'تعديل الجلسة',
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => _editSession(context, data),
-            ),
+            if (canEditModule(context, 'courses'))
+              IconButton(
+                tooltip: 'تعديل الجلسة',
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () => _editSession(context, data),
+              ),
           ],
         ),
         body: ResponsivePage(
@@ -103,7 +115,12 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
               children: [
-                _attendanceBar(context, data, canSendAbsence: canSendAbsence),
+                _attendanceBar(
+                  context,
+                  data,
+                  canSendAbsence: canSendAbsence,
+                  canRegister: canEditModule(context, 'attendance'),
+                ),
                 const SizedBox(height: 16),
                 _attendanceList(context, data),
                 const SizedBox(height: 16),
@@ -126,6 +143,7 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
     BuildContext context,
     _Data data, {
     required bool canSendAbsence,
+    required bool canRegister,
   }) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final early = data.attendance
@@ -184,13 +202,15 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
           AppButton(
             label: 'تسجيل الحضور (مسح + يدوي)',
             icon: Icons.qr_code_scanner,
-            onPressed: () async {
-              await context.push(
-                '/admin/sessions/${widget.sessionId}/attendance',
-              );
-              if (!mounted) return;
-              _reload();
-            },
+            onPressed: !canRegister
+                ? null
+                : () async {
+                    await context.push(
+                      '/admin/sessions/${widget.sessionId}/attendance',
+                    );
+                    if (!mounted) return;
+                    _reload();
+                  },
           ),
           if (canSendAbsence) ...[
             const SizedBox(height: 8),
@@ -339,10 +359,12 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final category = _categoryOf(m, data);
     final absent = !m.present;
+    final canEdit = canEditModule(context, 'attendance');
+    final pending = _pendingMembers.contains(m.studentId);
     return InkWell(
       key: ValueKey('session-member-${m.studentId}'),
       borderRadius: BorderRadius.circular(tokens.radiusSmall),
-      onTap: () => _editAttendance(data, m),
+      onTap: canEdit && !pending ? () => _editAttendance(data, m) : null,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
@@ -363,25 +385,38 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
                 ),
               ),
             ),
-            if (m.arrivalTime != null)
-              Text(
-                formatTime(m.arrivalTime!),
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+            if (pending) ...[
+              const SizedBox(width: 8),
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
-            const SizedBox(width: 8),
-            StatusBadge(
-              label: _categoryLabel(category ?? AttendanceCategory.absent),
-              color: switch (category) {
-                AttendanceCategory.early => tokens.brand,
-                AttendanceCategory.onTime => tokens.infoLight,
-                AttendanceCategory.late => tokens.danger,
-                _ => tokens.textMuted,
-              },
-            ),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_left, size: 16, color: tokens.borderStructural),
+            ] else ...[
+              if (m.arrivalTime != null)
+                Text(
+                  formatTime(m.arrivalTime!),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                ),
+              const SizedBox(width: 8),
+              StatusBadge(
+                label: _categoryLabel(category ?? AttendanceCategory.absent),
+                color: switch (category) {
+                  AttendanceCategory.early => tokens.brand,
+                  AttendanceCategory.onTime => tokens.infoLight,
+                  AttendanceCategory.late => tokens.danger,
+                  _ => tokens.textMuted,
+                },
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.chevron_left,
+                size: 16,
+                color: tokens.borderStructural,
+              ),
+            ],
           ],
         ),
       ),
@@ -391,6 +426,10 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
   /// Quick attendance actions from the day list: add / adjust time / remove
   /// (with an undo window) — saves the supervisor a trip to the scan page.
   Future<void> _editAttendance(_Data data, AdminSessionMember m) async {
+    if (!canEditModule(context, 'attendance') ||
+        _pendingMembers.contains(m.studentId)) {
+      return;
+    }
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final present = m.present;
     final action = await showAppSheet<String>(
@@ -467,56 +506,67 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
     if (action == null || !mounted) return;
     final repo = AdminRepositoryScope.of(context);
     final messenger = ScaffoldMessenger.of(context);
-
-    switch (action) {
-      case 'add':
-        await repo.addManualAttendance(widget.sessionId, m.studentId);
-        if (!mounted) return;
-        _reload();
-        messenger
-          ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(content: Text('سُجّل حضور ${m.name}')));
-      case 'time':
-        final base = m.arrivalTime ?? data.session.date;
-        final picked = await showTimePicker(
-          context: context,
-          initialTime: TimeOfDay.fromDateTime(base),
-        );
-        if (picked == null || !mounted) return;
-        final at = DateTime(
-          data.session.date.year,
-          data.session.date.month,
-          data.session.date.day,
-          picked.hour,
-          picked.minute,
-        );
-        await repo.updateAttendanceTime(widget.sessionId, m.studentId, at);
-        if (!mounted) return;
-        _reload();
-      case 'remove':
-        final oldTime = m.arrivalTime;
-        await repo.removeAttendance(widget.sessionId, m.studentId);
-        if (!mounted) return;
-        _reload();
-        messenger
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text('أُزيل حضور ${m.name}'),
-              duration: const Duration(seconds: 6),
-              action: SnackBarAction(
-                label: 'تراجع',
-                onPressed: () async {
-                  await repo.addManualAttendance(
-                    widget.sessionId,
-                    m.studentId,
-                    time: oldTime,
-                  );
-                  _reload();
-                },
-              ),
-            ),
+    setState(() => _pendingMembers.add(m.studentId));
+    try {
+      switch (action) {
+        case 'add':
+          await repo.addManualAttendance(widget.sessionId, m.studentId);
+          if (!mounted) return;
+          _reload();
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(content: Text('سُجّل حضور ${m.name}')));
+        case 'time':
+          final base = m.arrivalTime ?? data.session.date;
+          final picked = await showTimePicker(
+            context: context,
+            initialTime: TimeOfDay.fromDateTime(base),
           );
+          if (picked == null || !mounted) return;
+          final at = DateTime(
+            data.session.date.year,
+            data.session.date.month,
+            data.session.date.day,
+            picked.hour,
+            picked.minute,
+          );
+          await repo.updateAttendanceTime(widget.sessionId, m.studentId, at);
+          if (!mounted) return;
+          _reload();
+        case 'remove':
+          final oldTime = m.arrivalTime;
+          await repo.removeAttendance(widget.sessionId, m.studentId);
+          if (!mounted) return;
+          _reload();
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                content: Text('أُزيل حضور ${m.name}'),
+                duration: const Duration(seconds: 6),
+                action: SnackBarAction(
+                  label: 'تراجع',
+                  onPressed: () async {
+                    await repo.addManualAttendance(
+                      widget.sessionId,
+                      m.studentId,
+                      time: oldTime,
+                    );
+                    _reload();
+                  },
+                ),
+              ),
+            );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('تعذر تحديث الحضور: $error')));
+    } finally {
+      if (mounted) {
+        setState(() => _pendingMembers.remove(m.studentId));
+      }
     }
   }
 
@@ -562,6 +612,11 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
   }
 
   Widget _recordSection(BuildContext context) {
+    if (!canEditModule(context, 'memorization') &&
+        !canEditModule(context, 'points') &&
+        !canEditModule(context, 'matn')) {
+      return const SizedBox.shrink();
+    }
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

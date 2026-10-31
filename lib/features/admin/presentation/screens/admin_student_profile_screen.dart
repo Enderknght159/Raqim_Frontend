@@ -12,6 +12,7 @@ import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/stat_tile.dart';
 import '../../../../core/widgets/status_badge.dart';
+import '../../../../shared/permissions.dart';
 import '../../../student/domain/models/student_models.dart';
 import '../../../student/presentation/widgets/certificates_sheet.dart';
 import '../../../student/presentation/widgets/qr_code_view.dart';
@@ -46,18 +47,26 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
     _future = _load();
   }
 
+  Future<T?> _safe<T>(Future<T> future) async {
+    try {
+      return await future;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<_Data> _load() async {
     final repo = AdminRepositoryScope.of(context);
     final profileF = repo.studentProfile(widget.studentId);
     final recordsF = repo.studentCourseRecords(widget.studentId);
-    final requestsF = repo.changeRequests();
-    final teamsF = repo.teams();
+    final requestsF = _safe(repo.changeRequests());
+    final teamsF = _safe(repo.teams());
     final profile = await profileF;
     final records = await recordsF;
-    final requests = (await requestsF)
+    final requests = (await requestsF ?? const [])
         .where((r) => r.studentId == widget.studentId)
         .toList();
-    final allTeams = await teamsF;
+    final allTeams = await teamsF ?? const [];
     return _Data(
       profile: profile,
       records: records,
@@ -76,6 +85,7 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
   Widget build(BuildContext context) {
     return AsyncView<_Data>(
       future: _future,
+      cacheKey: 'admin-student-${widget.studentId}',
       builder: (context, data) => Scaffold(
         appBar: AppBar(title: Text(data.profile.profile.name)),
         body: ResponsivePage(
@@ -315,11 +325,7 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
               ),
             )
           else
-            QuranMap(
-              memorizations: p.memorizations,
-              testedJuz: tested,
-              height: 230,
-            ),
+            QuranMap(memorizations: p.memorizations, testedJuz: tested),
           const SizedBox(height: 8),
           const Divider(height: 1),
           _TapRow(
@@ -639,6 +645,7 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
 
   Widget _dataCard(BuildContext context, AdminStudentProfile p) {
     final profile = p.profile;
+    final canEdit = canEditModule(context, 'students');
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -649,53 +656,62 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
             context,
             'الاسم',
             profile.name,
-            () => _editField(
-              context,
-              profile,
-              label: 'الاسم',
-              initial: profile.name,
-              onSave: (v) => AdminRepositoryScope.of(context).updateStudent(
-                profile.id,
-                name: v,
-                fatherName: profile.fatherName,
-                yearOfBirth: profile.yearOfBirth,
-              ),
-            ),
+            !canEdit
+                ? null
+                : () => _editField(
+                    context,
+                    profile,
+                    label: 'الاسم',
+                    initial: profile.name,
+                    onSave: (v) =>
+                        AdminRepositoryScope.of(context).updateStudent(
+                          profile.id,
+                          name: v,
+                          fatherName: profile.fatherName,
+                          yearOfBirth: profile.yearOfBirth,
+                        ),
+                  ),
           ),
           _dataRow(
             context,
             'اسم الأب',
             profile.fatherName ?? '—',
-            () => _editField(
-              context,
-              profile,
-              label: 'اسم الأب',
-              initial: profile.fatherName ?? '',
-              onSave: (v) => AdminRepositoryScope.of(context).updateStudent(
-                profile.id,
-                name: profile.name,
-                fatherName: v.isEmpty ? null : v,
-                yearOfBirth: profile.yearOfBirth,
-              ),
-            ),
+            !canEdit
+                ? null
+                : () => _editField(
+                    context,
+                    profile,
+                    label: 'اسم الأب',
+                    initial: profile.fatherName ?? '',
+                    onSave: (v) =>
+                        AdminRepositoryScope.of(context).updateStudent(
+                          profile.id,
+                          name: profile.name,
+                          fatherName: v.isEmpty ? null : v,
+                          yearOfBirth: profile.yearOfBirth,
+                        ),
+                  ),
           ),
           _dataRow(
             context,
             'سنة الميلاد',
             profile.yearOfBirth?.toString() ?? '—',
-            () => _editField(
-              context,
-              profile,
-              label: 'سنة الميلاد',
-              initial: profile.yearOfBirth?.toString() ?? '',
-              numeric: true,
-              onSave: (v) => AdminRepositoryScope.of(context).updateStudent(
-                profile.id,
-                name: profile.name,
-                fatherName: profile.fatherName,
-                yearOfBirth: int.tryParse(v),
-              ),
-            ),
+            !canEdit
+                ? null
+                : () => _editField(
+                    context,
+                    profile,
+                    label: 'سنة الميلاد',
+                    initial: profile.yearOfBirth?.toString() ?? '',
+                    numeric: true,
+                    onSave: (v) =>
+                        AdminRepositoryScope.of(context).updateStudent(
+                          profile.id,
+                          name: profile.name,
+                          fatherName: profile.fatherName,
+                          yearOfBirth: int.tryParse(v),
+                        ),
+                  ),
           ),
           _dataRow(
             context,
@@ -797,6 +813,7 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
 
   Widget _phonesCard(BuildContext context, AdminStudentProfile p) {
     final phones = p.profile.phones;
+    final canEdit = canEditModule(context, 'students');
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -804,11 +821,13 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
           SectionHeader(
             icon: Icons.phone_outlined,
             title: 'أرقام الهاتف',
-            trailing: TextButton.icon(
-              onPressed: () => _addPhone(context, p),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('إضافة'),
-            ),
+            trailing: canEdit
+                ? TextButton.icon(
+                    onPressed: () => _phoneSheet(context, p),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('إضافة'),
+                  )
+                : null,
           ),
           const SizedBox(height: 4),
           if (phones.isEmpty)
@@ -824,11 +843,24 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
                 leading: const Icon(Icons.phone_outlined),
                 title: Text(phone.phone, textDirection: TextDirection.ltr),
                 subtitle: Text(phone.typeLabel),
-                trailing: IconButton(
-                  tooltip: 'إزالة',
-                  icon: const Icon(Icons.delete_outline, size: 20),
-                  onPressed: () => _removePhone(p, phone),
-                ),
+                trailing: canEdit
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'تعديل',
+                            icon: const Icon(Icons.edit_outlined, size: 20),
+                            onPressed: () =>
+                                _phoneSheet(context, p, editing: phone),
+                          ),
+                          IconButton(
+                            tooltip: 'إزالة',
+                            icon: const Icon(Icons.delete_outline, size: 20),
+                            onPressed: () => _removePhone(p, phone),
+                          ),
+                        ],
+                      )
+                    : null,
               ),
         ],
       ),
@@ -837,6 +869,7 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
 
   /// Removes a phone with confirmation + undo window.
   Future<void> _removePhone(AdminStudentProfile p, Phone phone) async {
+    if (!canEditModule(context, 'students')) return;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -877,15 +910,22 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
       );
   }
 
-  Future<void> _addPhone(BuildContext context, AdminStudentProfile p) async {
+  Future<void> _phoneSheet(
+    BuildContext context,
+    AdminStudentProfile p, {
+    Phone? editing,
+  }) async {
+    if (!canEditModule(context, 'students')) return;
     final repo = AdminRepositoryScope.of(context);
-    final number = TextEditingController();
-    var type = 'parent';
+    final number = TextEditingController(text: editing?.phone ?? '');
+    var type = editing?.type ?? 'parent';
+    var saving = false;
+    String? error;
     await showAppSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) => StatefulBuilder(
+      builder: (sheetContext) => StatefulBuilder(
         builder: (context, setSheetState) => Padding(
           padding: EdgeInsets.only(
             left: 20,
@@ -898,19 +938,22 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'إضافة رقم هاتف',
+                editing == null ? 'إضافة رقم هاتف' : 'تعديل رقم الهاتف',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: number,
                 keyboardType: TextInputType.phone,
+                enabled: !saving,
                 decoration: const InputDecoration(labelText: 'رقم الهاتف'),
               ),
               const SizedBox(height: 12),
               IconToggleGroup<String>(
                 value: type,
-                onChanged: (v) => setSheetState(() => type = v),
+                onChanged: saving
+                    ? (_) {}
+                    : (v) => setSheetState(() => type = v),
                 options: const [
                   IconToggleOption(
                     value: 'parent',
@@ -929,14 +972,54 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
                   ),
                 ],
               ),
+              if (error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  error!,
+                  style: TextStyle(
+                    color: Theme.of(context).extension<AppTokens>()!.dangerText,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               AppButton(
-                label: 'حفظ',
-                onPressed: () async {
-                  if (number.text.trim().isEmpty) return;
-                  await repo.addPhone(p.profile.id, number.text.trim(), type);
-                  if (context.mounted) Navigator.of(context).pop();
-                },
+                label: saving ? 'جارٍ الحفظ…' : 'حفظ',
+                loading: saving,
+                onPressed: saving
+                    ? null
+                    : () async {
+                        final value = number.text.trim();
+                        if (value.isEmpty) {
+                          setSheetState(() => error = 'أدخل رقم الهاتف');
+                          return;
+                        }
+                        setSheetState(() {
+                          saving = true;
+                          error = null;
+                        });
+                        try {
+                          if (editing == null) {
+                            await repo.addPhone(p.profile.id, value, type);
+                          } else {
+                            await repo.updatePhone(
+                              editing.id,
+                              phone: value,
+                              type: type,
+                            );
+                          }
+                          if (sheetContext.mounted) {
+                            Navigator.of(sheetContext).pop();
+                          }
+                        } catch (e) {
+                          if (sheetContext.mounted) {
+                            setSheetState(() {
+                              saving = false;
+                              error = 'تعذر الحفظ: $e';
+                            });
+                          }
+                        }
+                      },
               ),
             ],
           ),

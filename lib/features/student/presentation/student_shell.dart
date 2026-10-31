@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/config/app_breakpoints.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/responsive_scope.dart';
+import '../../../core/widgets/connectivity_banner.dart';
 import '../../../core/widgets/responsive_shell.dart';
 import '../../../shared/notifications_bell.dart';
-import '../../../shared/role_switch_button.dart';
+import '../../../shared/mode_switcher.dart';
 import '../data/student_repository.dart';
 import 'widgets/student_welcome_title.dart';
 
@@ -123,12 +123,9 @@ class StudentShell extends StatelessWidget {
             onDestinationSelected: (i) => context.go(_tabs[i].path),
             appBar: AppBar(
               title: const StudentWelcomeTitle(),
-              actions: const [
-                RoleSwitchButton(toAdmin: true),
-                NotificationsBell(),
-              ],
+              actions: const [ModeSwitcher(), NotificationsBell()],
             ),
-            banner: const _DemoBanner(),
+            banner: const ConnectivityBanner(),
             body: Column(
               children: [
                 Padding(
@@ -180,38 +177,5 @@ class StudentShell extends StatelessWidget {
     if (path.startsWith('/my-progress/teams')) return 'حلقاتي';
     if (path.startsWith('/my-progress/profile')) return 'الملف';
     return 'دوراتي';
-  }
-}
-
-class _DemoBanner extends StatelessWidget {
-  const _DemoBanner();
-
-  static const _color = Color(0xFF007A55);
-
-  @override
-  Widget build(BuildContext context) {
-    final dense = AppBreakpoints.denseFor(MediaQuery.sizeOf(context));
-    return Container(
-      width: double.infinity,
-      color: const Color(0xFFE6F6F1),
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: dense ? 3 : 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.science_outlined, size: 16, color: _color),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              'متصل بالخادم — بيانات المسجد المباشرة',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: _color),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

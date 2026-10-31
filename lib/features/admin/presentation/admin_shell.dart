@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/config/app_breakpoints.dart';
+import '../../../core/widgets/connectivity_banner.dart';
 import '../../../core/widgets/responsive_scope.dart';
 import '../../../core/widgets/responsive_shell.dart';
 import '../../../shared/notifications_bell.dart';
-import '../../../shared/role_switch_button.dart';
+import '../../../shared/mode_switcher.dart';
+import '../../auth/domain/models/user_profile.dart';
+import '../../auth/presentation/cubits/auth_cubit.dart';
+import '../../auth/presentation/cubits/auth_state.dart';
 import '../data/admin_repository.dart';
 
 /// Provides the [AdminRepository] to all admin screens.
@@ -29,7 +33,15 @@ class AdminRepositoryScope extends InheritedWidget {
       old.repository != repository;
 }
 
-/// Admin/supervision shell: 4 tabs (الدورات · المحتوى · النظام · حسابي).
+typedef _AdminTab = ({
+  IconData icon,
+  IconData selectedIcon,
+  String label,
+  String path,
+});
+
+/// Admin/supervision shell: tabs filtered by the account's server capabilities
+/// (a scoped supervisor sees only the sections they may access).
 ///
 /// On compact windows it uses the bottom navigation. On landscape/tablet/web
 /// it uses a RTL-aware rail that remains visible while a detail page is open.
@@ -38,7 +50,7 @@ class AdminShell extends StatelessWidget {
 
   final Widget child;
 
-  static const _tabs = [
+  static const List<_AdminTab> _tabs = [
     (
       icon: Icons.grid_view_outlined,
       selectedIcon: Icons.grid_view,
@@ -65,8 +77,48 @@ class AdminShell extends StatelessWidget {
     ),
   ];
 
+  List<_AdminTab> _visibleTabs(UserProfile? profile) {
+    if (profile == null) return _tabs;
+    return _tabs.where((tab) {
+      switch (tab.path) {
+        case '/admin/courses':
+          return profile.isAdmin || profile.canView('courses');
+        case '/admin/content':
+          return profile.isAdmin ||
+              profile.canView('students') ||
+              profile.canView('teams') ||
+              profile.canView('matn') ||
+              profile.canView('courses');
+        case '/admin/system':
+          return profile.isAdmin ||
+              profile.specialAbilities.any(
+                (ability) => const {
+                  'auditView',
+                  'userManagement',
+                  'permissionManagement',
+                  'messagesExport',
+                  'barcodeExport',
+                  'phoneSearch',
+                  'dataChangeApproval',
+                }.contains(ability),
+              );
+        default:
+          return true; // account
+      }
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
+    AuthState? auth;
+    try {
+      auth = context.watch<AuthCubit>().state;
+    } catch (_) {
+      // Standalone widget tests may mount the shell without an AuthCubit.
+      auth = null;
+    }
+    final profile = auth is AuthAuthenticated ? auth.profile : null;
+    final tabs = _visibleTabs(profile);
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = Size(
@@ -79,8 +131,8 @@ class AdminShell extends StatelessWidget {
         );
         final data = ResponsiveData.fromSize(size);
         final path = GoRouterState.of(context).uri.path;
-        final isDetail = !_tabs.any((t) => path == t.path);
-        final index = isDetail ? null : _indexFor(path);
+        final isDetail = !tabs.any((t) => path == t.path);
+        final index = isDetail ? null : _indexFor(path, tabs);
 
         if (isDetail && data.isCompact) {
           return ResponsiveScope(data: data, child: child);
@@ -90,9 +142,9 @@ class AdminShell extends StatelessWidget {
           return ResponsiveScope(
             data: data,
             child: ResponsiveShell(
-              destinations: _destinations,
+              destinations: _destinations(tabs),
               selectedIndex: index,
-              onDestinationSelected: (i) => context.go(_tabs[i].path),
+              onDestinationSelected: (i) => context.go(tabs[i].path),
               body: child,
             ),
           );
@@ -101,17 +153,17 @@ class AdminShell extends StatelessWidget {
         return ResponsiveScope(
           data: data,
           child: ResponsiveShell(
-            destinations: _destinations,
+            destinations: _destinations(tabs),
             selectedIndex: index,
-            onDestinationSelected: (i) => context.go(_tabs[i].path),
+            onDestinationSelected: (i) => context.go(tabs[i].path),
             appBar: AppBar(
-              title: Text(_titleFor(path)),
+              title: Text(_titleFor(path, tabs)),
               actions: const [
-                RoleSwitchButton(toAdmin: false),
+                ModeSwitcher(),
                 NotificationsBell(adminMode: true),
               ],
             ),
-            banner: const _AdminDemoBanner(),
+            banner: const ConnectivityBanner(),
             body: child,
           ),
         );
@@ -119,8 +171,8 @@ class AdminShell extends StatelessWidget {
     );
   }
 
-  static List<ResponsiveDestination> get _destinations => [
-    for (final t in _tabs)
+  static List<ResponsiveDestination> _destinations(List<_AdminTab> tabs) => [
+    for (final t in tabs)
       ResponsiveDestination(
         icon: t.icon,
         selectedIcon: t.selectedIcon,
@@ -129,54 +181,17 @@ class AdminShell extends StatelessWidget {
       ),
   ];
 
-  int _indexFor(String path) {
-    for (var i = 0; i < _tabs.length; i++) {
-      if (path == _tabs[i].path) return i;
+  int _indexFor(String path, List<_AdminTab> tabs) {
+    for (var i = 0; i < tabs.length; i++) {
+      if (path == tabs[i].path) return i;
     }
     return 0;
   }
 
-  String _titleFor(String path) {
-    if (path == '/admin/content') return 'المحتوى';
-    if (path == '/admin/system') return 'النظام';
-    if (path == '/admin/account') return 'حسابي';
-    return 'الدورات';
-  }
-}
-
-class _AdminDemoBanner extends StatelessWidget {
-  const _AdminDemoBanner();
-
-  static const _color = Color(0xFF004C69);
-
-  @override
-  Widget build(BuildContext context) {
-    final dense = AppBreakpoints.denseFor(MediaQuery.sizeOf(context));
-    return Container(
-      width: double.infinity,
-      color: const Color(0xFFE5F1F6),
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: dense ? 3 : 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.admin_panel_settings_outlined,
-            size: 16,
-            color: _color,
-          ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              'وضع الإشراف — بيانات المسجد المباشرة',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: _color),
-            ),
-          ),
-        ],
-      ),
-    );
+  String _titleFor(String path, List<_AdminTab> tabs) {
+    for (final tab in tabs) {
+      if (tab.path == path) return tab.label;
+    }
+    return tabs.isEmpty ? '' : tabs.first.label;
   }
 }

@@ -19,6 +19,15 @@ class GeneralStats {
   final int memorizedPages;
 }
 
+/// Admin landing data (stats + courses + last session).
+class AdminHomeData {
+  const AdminHomeData({required this.stats, required this.courses, this.last});
+
+  final GeneralStats stats;
+  final List<AdminCourseSummary> courses;
+  final AdminSessionRow? last;
+}
+
 /// A course summary for the admin home (E1) and list.
 class AdminCourseSummary {
   const AdminCourseSummary({
@@ -242,17 +251,35 @@ class AdminAttendanceRow {
   final AttendanceCategory category;
 }
 
+/// Result of scanning a barcode into a session.
+class AttendanceScanResult {
+  const AttendanceScanResult({
+    required this.studentId,
+    required this.name,
+    required this.created,
+  });
+
+  final int studentId;
+  final String name;
+
+  /// False when the server ignored the scan because the student was already
+  /// present (BR-102), true when a new attendance row was created.
+  final bool created;
+}
+
 /// A roster entry of a session: every student of the session's course with
 /// their attendance status for that session (absent → arrivalTime null).
 class AdminSessionMember {
   const AdminSessionMember({
     required this.studentId,
     required this.name,
+    this.barcode = '',
     this.arrivalTime,
   });
 
   final int studentId;
   final String name;
+  final String barcode;
   final DateTime? arrivalTime;
 
   bool get present => arrivalTime != null;
@@ -457,4 +484,287 @@ class MosqueDeletionState {
   final String? exportDownloadToken;
 
   bool get isDeleting => status == 'pendingDeletion' || status == 'pending';
+}
+
+/// One account row from `GET /admin/users` (E11).
+class AdminUserRow {
+  const AdminUserRow({
+    required this.id,
+    required this.name,
+    required this.username,
+    required this.active,
+    required this.isAdmin,
+    required this.isSupervisor,
+    required this.isTeacher,
+    required this.isStudent,
+    this.studentId,
+    this.teacherId,
+    this.teamNames = const [],
+  });
+
+  /// Account id (used by the permissions endpoints), not the student id.
+  final int id;
+  final String name;
+  final String username;
+  final bool active;
+  final bool isAdmin;
+  final bool isSupervisor;
+  final bool isTeacher;
+  final bool isStudent;
+  final int? studentId;
+  final int? teacherId;
+  final List<String> teamNames;
+
+  String get displayName {
+    final n = name.trim();
+    if (n.isNotEmpty && n != username.trim()) return n;
+    final u = username.trim();
+    if (u.isNotEmpty) return u;
+    return 'حساب بدون اسم';
+  }
+
+  String get usernameLabel {
+    final u = username.trim();
+    if (u.isEmpty) return '';
+    return '@$u';
+  }
+
+  String get roleLabel {
+    if (isAdmin) return 'مدير';
+    if (isSupervisor) return 'مشرف';
+    if (isTeacher) return 'معلم';
+    if (isStudent) return 'طالب';
+    return 'حساب';
+  }
+}
+
+/// One module entry of `GET /admin/users/{id}/permissions`.
+///
+/// The server stores five independent action flags plus a scope (courses and
+/// teams). A module is only effective when at least one action is granted.
+class AdminModuleGrant {
+  const AdminModuleGrant({
+    this.view = false,
+    this.create = false,
+    this.update = false,
+    this.delete = false,
+    this.export = false,
+    this.courseIds = const [],
+    this.teamIds = const [],
+  });
+
+  factory AdminModuleGrant.fromJson(Map<String, dynamic> json) {
+    final scope = _adminStringMap(json['scope']);
+    return AdminModuleGrant(
+      view: json['view'] == true,
+      create: json['create'] == true,
+      update: json['update'] == true,
+      delete: json['delete'] == true,
+      export: json['export'] == true,
+      courseIds: _adminIntList(scope['courseIds']),
+      teamIds: _adminIntList(scope['teamIds']),
+    );
+  }
+
+  static const none = AdminModuleGrant();
+
+  final bool view;
+  final bool create;
+  final bool update;
+  final bool delete;
+  final bool export;
+  final List<int> courseIds;
+  final List<int> teamIds;
+
+  bool get hasAnyAction => view || create || update || delete || export;
+  bool get hasAnyScope => courseIds.isNotEmpty || teamIds.isNotEmpty;
+
+  /// All actions granted on every scope.
+  bool get isFull => view && create && update && delete && export;
+
+  AdminModuleGrant copyWith({
+    bool? view,
+    bool? create,
+    bool? update,
+    bool? delete,
+    bool? export,
+    List<int>? courseIds,
+    List<int>? teamIds,
+  }) {
+    return AdminModuleGrant(
+      view: view ?? this.view,
+      create: create ?? this.create,
+      update: update ?? this.update,
+      delete: delete ?? this.delete,
+      export: export ?? this.export,
+      courseIds: courseIds ?? this.courseIds,
+      teamIds: teamIds ?? this.teamIds,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'view': view,
+    'create': create,
+    'update': update,
+    'delete': delete,
+    'export': export,
+    'scope': {'courseIds': courseIds, 'teamIds': teamIds},
+  };
+}
+
+/// Supervisor grants loaded from `GET /admin/users/{id}/permissions`.
+///
+/// Keeps the full module × action × scope payload so the editor can round-trip
+/// permissions without losing actions or scopes.
+class AdminUserPermissions {
+  const AdminUserPermissions({
+    required this.isAdmin,
+    this.modules = const {},
+    this.abilities = const {},
+  });
+
+  factory AdminUserPermissions.fromJson(Map<String, dynamic> json) {
+    final modulesJson = _adminStringMap(json['modules']);
+    final rawAbilities = json['specialAbilities'] ?? json['abilities'];
+    return AdminUserPermissions(
+      isAdmin: json['isAdmin'] == true,
+      modules: {
+        for (final entry in modulesJson.entries)
+          if (entry.value is Map)
+            entry.key: AdminModuleGrant.fromJson(_adminStringMap(entry.value)),
+      },
+      abilities: {
+        for (final item in (rawAbilities is List ? rawAbilities : const []))
+          '$item',
+      },
+    );
+  }
+
+  /// The twelve permission-matrix modules (plus Quran certificates).
+  static const moduleKeys = [
+    'students',
+    'attendance',
+    'memorization',
+    'recitation',
+    'matn',
+    'points',
+    'exams',
+    'distributions',
+    'teams',
+    'courses',
+    'reports',
+    'imports',
+    'quranCertificates',
+  ];
+
+  final bool isAdmin;
+  final Map<String, AdminModuleGrant> modules;
+  final Set<String> abilities;
+
+  bool get isSupervisor =>
+      isAdmin ||
+      modules.values.any((grant) => grant.hasAnyAction) ||
+      abilities.isNotEmpty;
+
+  bool viewEnabled(String module) =>
+      isAdmin || (modules[module]?.view ?? false);
+
+  AdminModuleGrant actionsFor(String module) =>
+      modules[module] ?? AdminModuleGrant.none;
+
+  AdminUserPermissions copyWith({
+    bool? isAdmin,
+    Map<String, AdminModuleGrant>? modules,
+    Set<String>? abilities,
+  }) {
+    return AdminUserPermissions(
+      isAdmin: isAdmin ?? this.isAdmin,
+      modules: modules ?? this.modules,
+      abilities: abilities ?? this.abilities,
+    );
+  }
+}
+
+Map<String, dynamic> _adminStringMap(dynamic value) {
+  if (value is Map<String, dynamic>) return value;
+  if (value is Map) return Map<String, dynamic>.from(value);
+  return const {};
+}
+
+List<int> _adminIntList(dynamic value) {
+  if (value is! List) return const [];
+  return [
+    for (final item in value)
+      if (item is num) item.toInt(),
+  ];
+}
+
+/// A team link of a teacher (`GET /teachers/{id}`).
+class AdminTeamRef {
+  const AdminTeamRef({required this.id, required this.name});
+
+  final int id;
+  final String name;
+}
+
+/// Teacher identity + linked teams (`GET /teachers/{id}`).
+class AdminTeacherDetail {
+  const AdminTeacherDetail({
+    required this.id,
+    required this.name,
+    this.userId,
+    this.teams = const [],
+  });
+
+  final int id;
+  final String name;
+  final int? userId;
+  final List<AdminTeamRef> teams;
+}
+
+/// One page of a server-paginated list.
+class PagedResult<T> {
+  const PagedResult({
+    required this.items,
+    required this.page,
+    required this.hasMore,
+    required this.total,
+  });
+
+  final List<T> items;
+  final int page;
+  final bool hasMore;
+  final int total;
+}
+
+/// An active account that can be assigned as a team teacher.
+class TeacherCandidate {
+  const TeacherCandidate({
+    required this.userId,
+    required this.name,
+    required this.username,
+    required this.role,
+    this.teacherId,
+  });
+
+  final int userId;
+  final String name;
+  final String username;
+  final String role;
+  final int? teacherId;
+
+  String get displayName {
+    final n = name.trim();
+    final u = username.trim();
+    if (n.isNotEmpty && n != u) return n;
+    if (u.isNotEmpty) return '@$u';
+    if (n.isNotEmpty) return n;
+    return 'حساب بدون اسم';
+  }
+
+  String get usernameLabel {
+    final value = username.trim();
+    if (value.isEmpty || value == name.trim()) return '';
+    return '@$value';
+  }
 }

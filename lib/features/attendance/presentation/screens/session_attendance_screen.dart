@@ -1,50 +1,57 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/date_time_utils.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_loading.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/responsive_scope.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../admin/domain/admin_models.dart';
 import '../../../admin/presentation/admin_shell.dart';
+import '../cubits/session_attendance_cubit.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// Unified session attendance: camera scan + tolerant auto-search in the same
 /// page. Tap a name = register attendance; the undo snackbar offers «تراجع»
 /// and «ضبط الزمن»; long-press opens time adjust / remove with undo window.
-class SessionAttendanceScreen extends StatefulWidget {
+class SessionAttendanceScreen extends StatelessWidget {
   const SessionAttendanceScreen({super.key, required this.sessionId});
 
   final int sessionId;
 
   @override
-  State<SessionAttendanceScreen> createState() =>
-      _SessionAttendanceScreenState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => SessionAttendanceCubit(
+        AdminRepositoryScope.of(context),
+        sessionId: sessionId,
+      )..load(),
+      child: const _SessionAttendanceView(),
+    );
+  }
 }
 
-class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
+class _SessionAttendanceView extends StatefulWidget {
+  const _SessionAttendanceView();
+
+  @override
+  State<_SessionAttendanceView> createState() => _SessionAttendanceViewState();
+}
+
+class _SessionAttendanceViewState extends State<_SessionAttendanceView> {
   final MobileScannerController _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
   );
   final _search = TextEditingController();
-  List<AdminStudentRow> _students = const [];
-  Map<int, DateTime> _registered = {};
-  String _sessionTitle = '';
-  bool _loading = true;
-  bool _busy = false;
-  String? _lastScan;
-  bool _lastScanOk = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
+  Timer? _bannerTimer;
+  String? _bannerMessage;
+  List<({String label, VoidCallback onTap})> _bannerActions = const [];
+  int _lastEventId = 0;
 
   @override
   void dispose() {
@@ -54,259 +61,62 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    final repo = AdminRepositoryScope.of(context);
-    final studentsF = repo.students();
-    final attendanceF = repo.sessionAttendance(widget.sessionId);
-    final sessionF = repo.sessionRow(widget.sessionId);
-    final students = await studentsF;
-    final attendance = await attendanceF;
-    final session = await sessionF;
-    if (!mounted) return;
-    setState(() {
-      _students = students;
-      _registered = {
-        for (final a in attendance)
-          if (a.arrivalTime != null) a.studentId: a.arrivalTime!,
-      };
-      _sessionTitle = 'جلسة #${session.index} — ${formatDate(session.date)}';
-      _loading = false;
-    });
-  }
+  SessionAttendanceCubit get _cubit => context.read<SessionAttendanceCubit>();
 
-  List<AdminStudentRow> get _results {
-    final q = _search.text;
-    if (q.trim().isEmpty) return _students;
-    return _students.where((s) => studentMatchesQuery(s, q)).toList();
-  }
-
-  Future<void> _register(AdminStudentRow student, {DateTime? at}) async {
-    final repo = AdminRepositoryScope.of(context);
-    final prev = _registered[student.id];
-    final time = at ?? DateTime.now();
-    await repo.addManualAttendance(widget.sessionId, student.id);
-    if (prev != null) {
-      await repo.updateAttendanceTime(widget.sessionId, student.id, time);
+  void _onEvent(SessionAttendanceState state) {
+    final event = state.event;
+    if (event == null || state.eventId == _lastEventId) return;
+    _lastEventId = state.eventId;
+    final member = _memberFor(state, event);
+    switch (event.kind) {
+      case AttendanceEventKind.registered:
+        _showBanner('سُجّل حضور ${event.studentName}', [
+          (
+            label: 'تراجع',
+            onTap: () => _cubit.undo(event.studentId, previousTime: event.time),
+          ),
+          (
+            label: 'ضبط الزمن',
+            onTap: () => _pickTime(state, member, current: event.time),
+          ),
+        ]);
+      case AttendanceEventKind.duplicate:
+        _showBanner('${event.studentName} مسجّل مسبقًا', [
+          (
+            label: 'ضبط الزمن',
+            onTap: () => _pickTime(state, member, current: event.time),
+          ),
+        ]);
+      case AttendanceEventKind.removed:
+        _showBanner('أُزيل حضور ${event.studentName}', [
+          (
+            label: 'تراجع',
+            onTap: () => _cubit.register(member, at: event.time),
+          ),
+        ]);
+      case AttendanceEventKind.failed:
+        _hideBanner();
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(content: Text(event.message ?? 'تعذر تسجيل الحضور')),
+          );
     }
-    if (!mounted) return;
-    setState(() => _registered = {..._registered, student.id: time});
-    HapticFeedback.lightImpact();
-    _snack(
-      'سُجّل حضور ${student.name}',
-      undoable: true,
-      student: student,
-      onAdjust: () => _adjustTime(student),
-    );
   }
 
-  Future<void> _handleCode(String code) async {
-    final value = code.trim();
-    if (_busy || value.isEmpty || !mounted) return;
-    _busy = true;
-    final student = _students
-        .where((s) => s.barcode.toLowerCase() == value.toLowerCase())
-        .firstOrNull;
-    if (student == null) {
-      setState(() {
-        _lastScan = value;
-        _lastScanOk = false;
-      });
-      HapticFeedback.heavyImpact();
-      SystemSound.play(SystemSoundType.alert);
-      _snack('لا يوجد طالب بالباركود $value');
-      _busy = false;
-      return;
-    }
-    await _register(student);
-    if (!mounted) return;
-    setState(() {
-      _lastScan = student.name;
-      _lastScanOk = true;
-      _busy = false;
-    });
-  }
-
-  Future<void> _undo(AdminStudentRow student) async {
-    final prev = _registered[student.id];
-    await AdminRepositoryScope.of(
-      context,
-    ).removeAttendance(widget.sessionId, student.id);
-    if (!mounted) return;
-    setState(() {
-      final next = {..._registered}..remove(student.id);
-      _registered = next;
-    });
-    HapticFeedback.selectionClick();
-    _snack(
-      'أُلغي تسجيل ${student.name}',
-      restore: () => _register(student, at: prev),
-    );
-  }
-
-  Future<void> _adjustTime(AdminStudentRow student) async {
-    final current = _registered[student.id];
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: current == null
-          ? TimeOfDay.now()
-          : TimeOfDay.fromDateTime(current),
-    );
-    if (picked == null || !mounted) return;
-    final repo = AdminRepositoryScope.of(context);
-    final session = await repo.sessionRow(widget.sessionId);
-    final newTime = DateTime(
-      session.date.year,
-      session.date.month,
-      session.date.day,
-      picked.hour,
-      picked.minute,
-    );
-    await repo.updateAttendanceTime(widget.sessionId, student.id, newTime);
-    if (!mounted) return;
-    setState(() => _registered = {..._registered, student.id: newTime});
-    _snack(
-      'حُدّث زمن ${student.name} إلى ${formatTime(newTime)}',
-      restore: () => _register(student, at: current),
-    );
-  }
-
-  Future<void> _remove(AdminStudentRow student) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('إزالة الحضور'),
-        content: Text('إزالة تسجيل حضور ${student.name} من هذه الجلسة؟'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('إلغاء'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('إزالة'),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true || !mounted) return;
-    final prev = _registered[student.id];
-    await AdminRepositoryScope.of(
-      context,
-    ).removeAttendance(widget.sessionId, student.id);
-    if (!mounted) return;
-    setState(() {
-      final next = {..._registered}..remove(student.id);
-      _registered = next;
-    });
-    _snack(
-      'أُزيل حضور ${student.name}',
-      restore: () => _register(student, at: prev),
-    );
-  }
-
-  /// Long-press actions: adjust time / remove attendance.
-  Future<void> _longPress(AdminStudentRow student) async {
-    final registered = _registered.containsKey(student.id);
-    await showAppSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: Text(student.name),
-              subtitle: Text(
-                registered
-                    ? 'مسجّل ${formatTime(_registered[student.id]!)}'
-                    : 'غير مسجّل',
-              ),
-            ),
-            const Divider(height: 1),
-            if (registered) ...[
-              ListTile(
-                leading: const Icon(Icons.schedule),
-                title: const Text('ضبط زمن التسجيل'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _adjustTime(student);
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  Icons.delete_outline,
-                  color: Theme.of(context).extension<AppTokens>()!.dangerText,
-                ),
-                title: const Text('إزالة الحضور'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _remove(student);
-                },
-              ),
-            ] else
-              ListTile(
-                leading: const Icon(Icons.add_circle_outline),
-                title: const Text('تسجيل حضور بزمن مخصّص'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _adjustTime(student);
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _snack(
-    String message, {
-    bool undoable = false,
-    AdminStudentRow? student,
-    void Function()? restore,
-    void Function()? onAdjust,
-  }) {
-    final actions = <({String label, VoidCallback onTap})>[
-      if (undoable || restore != null)
-        (
-          label: 'تراجع',
-          onTap: () {
-            _hideBanner();
-            if (restore != null) {
-              restore();
-            } else if (student != null) {
-              _undo(student);
-            }
-          },
-        ),
-      if (onAdjust != null)
-        (
-          label: 'ضبط الزمن',
-          onTap: () {
-            _hideBanner();
-            onAdjust();
-          },
-        ),
-    ];
-    if (actions.isEmpty) {
-      // Plain transient feedback via the snack bar.
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(message),
-            duration: const Duration(seconds: 3),
-          ),
+  AdminSessionMember _memberFor(
+    SessionAttendanceState state,
+    AttendanceEvent event,
+  ) {
+    return state.roster
+            .where((m) => m.studentId == event.studentId)
+            .firstOrNull ??
+        AdminSessionMember(
+          studentId: event.studentId,
+          name: event.studentName,
+          arrivalTime: event.time,
         );
-      return;
-    }
-    _showBanner(message, actions);
   }
-
-  // ── Temporary in-page bar with two actions (undo + adjust time) ──────────
-
-  String? _bannerMessage;
-  List<({String label, VoidCallback onTap})> _bannerActions = const [];
-  Timer? _bannerTimer;
 
   void _showBanner(
     String message,
@@ -333,26 +143,37 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = Theme.of(context).extension<AppTokens>()!;
-    return Scaffold(
-      appBar: AppBar(title: Text(_loading ? 'الحضور' : _sessionTitle)),
-      body: Stack(
-        children: [
-          _body(context, tokens),
-          if (_bannerMessage != null)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 16,
-              child: _banner(context, tokens),
+    return BlocListener<SessionAttendanceCubit, SessionAttendanceState>(
+      listener: (context, state) => _onEvent(state),
+      child: BlocBuilder<SessionAttendanceCubit, SessionAttendanceState>(
+        builder: (context, state) => Scaffold(
+          appBar: AppBar(
+            title: Text(
+              state.session == null
+                  ? 'الحضور'
+                  : 'جلسة #${state.session!.index} — '
+                        '${formatDate(state.session!.date)}',
             ),
-        ],
+          ),
+          body: Stack(
+            children: [
+              _body(context, state),
+              if (_bannerMessage != null)
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: 16,
+                  child: _banner(context),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  /// Temporary bar with «تراجع» / «ضبط الزمن» actions.
-  Widget _banner(BuildContext context, AppTokens tokens) {
+  Widget _banner(BuildContext context) {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
     return AppCard(
       color: tokens.infoTint,
       borderColor: tokens.infoLight,
@@ -374,10 +195,15 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
     );
   }
 
-  Widget _body(BuildContext context, AppTokens tokens) {
+  Widget _body(BuildContext context, SessionAttendanceState state) {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
+    if (state.loading) return const AppLoadingView();
+    if (state.error != null) {
+      return AppErrorView(error: state.error, onRetry: _cubit.load);
+    }
     final data = ResponsiveScope.of(context);
-    final camera = _cameraPanel(tokens);
-    final list = _listPane(context, tokens);
+    final camera = _cameraPanel(tokens, state);
+    final list = _listPane(context, tokens, state);
 
     if (data.isCompact) {
       return Column(
@@ -397,7 +223,7 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
     );
   }
 
-  Widget _cameraPanel(AppTokens tokens) {
+  Widget _cameraPanel(AppTokens tokens, SessionAttendanceState state) {
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -406,7 +232,7 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
           onDetect: (capture) {
             final barcode = capture.barcodes.firstOrNull;
             final value = barcode?.rawValue;
-            if (value != null) _handleCode(value);
+            if (value != null) _cubit.handleScan(value);
           },
           errorBuilder: (context, error) => Container(
             color: tokens.surfaceSubtle,
@@ -418,7 +244,7 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
             ),
           ),
         ),
-        if (_lastScan != null)
+        if (state.lastScan != null && state.lastScan!.isNotEmpty)
           Positioned(
             bottom: 10,
             left: 10,
@@ -426,17 +252,19 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               child: Container(
-                key: ValueKey('$_lastScan-$_lastScanOk'),
+                key: ValueKey('${state.lastScan}-${state.lastScanOk}'),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: _lastScanOk ? tokens.brand : tokens.danger,
+                  color: state.lastScanOk ? tokens.brand : tokens.danger,
                   borderRadius: BorderRadius.circular(tokens.radiusSmall),
                 ),
                 child: Text(
-                  _lastScanOk ? 'سُجّل: $_lastScan' : 'غير موجود: $_lastScan',
+                  state.lastScanOk
+                      ? 'سُجّل: ${state.lastScan}'
+                      : 'غير موجود: ${state.lastScan}',
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -452,25 +280,35 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
     );
   }
 
-  Widget _listPane(BuildContext context, AppTokens tokens) {
+  Widget _listPane(
+    BuildContext context,
+    AppTokens tokens,
+    SessionAttendanceState state,
+  ) {
     final compact = ResponsiveScope.of(context).isCompact;
+    final results = state.visible;
     return Column(
       children: [
-        // Search (always visible — no separate manual mode).
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
           child: TextField(
             controller: _search,
-            onChanged: (_) => setState(() {}),
+            onChanged: (value) {
+              setState(() {});
+              _cubit.setQuery(value);
+            },
             decoration: InputDecoration(
-              hintText: 'بحث: اسم / معرّف / باركود / حلقة',
+              hintText: 'بحث: اسم / معرّف',
               prefixIcon: const Icon(Icons.search),
               suffixIcon: _search.text.isEmpty
                   ? null
                   : IconButton(
                       tooltip: 'مسح',
                       icon: const Icon(Icons.close),
-                      onPressed: () => setState(_search.clear),
+                      onPressed: () {
+                        _search.clear();
+                        _cubit.setQuery('');
+                      },
                     ),
             ),
           ),
@@ -481,7 +319,7 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
             children: [
               Flexible(
                 child: Text(
-                  '${_results.length} طالب · سُجّل ${_registered.length}',
+                  '${results.length} طالب · سُجّل ${state.registered.length}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(
@@ -508,9 +346,7 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
         ),
         const SizedBox(height: 6),
         Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _results.isEmpty
+          child: results.isEmpty
               ? const EmptyState(
                   title: 'لا نتائج',
                   icon: Icons.person_search_outlined,
@@ -518,35 +354,49 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
                 )
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  itemCount: _results.length,
-                  itemBuilder: (context, i) => _row(tokens, _results[i]),
+                  itemCount: results.length,
+                  itemBuilder: (context, i) => _row(tokens, state, results[i]),
                 ),
         ),
       ],
     );
   }
 
-  Widget _row(AppTokens tokens, AdminStudentRow student) {
-    final time = _registered[student.id];
+  Widget _row(
+    AppTokens tokens,
+    SessionAttendanceState state,
+    AdminSessionMember member,
+  ) {
+    final time = state.registered[member.studentId];
     final registered = time != null;
+    final pending = state.pending.contains(member.studentId);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: AppCard(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         color: registered ? tokens.brandTint : null,
         borderColor: registered ? tokens.brandBorder : null,
-        onTap: registered ? null : () => _register(student),
-        onLongPress: () => _longPress(student),
+        onTap: registered || pending ? null : () => _cubit.register(member),
+        onLongPress: pending ? null : () => _longPress(member),
         child: Row(
           children: [
             CircleAvatar(
               radius: 18,
               backgroundColor: registered ? tokens.brand : tokens.brandTint,
-              child: Icon(
-                registered ? Icons.check : Icons.person,
-                size: 18,
-                color: registered ? Colors.white : tokens.brandText,
-              ),
+              child: pending
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Icon(
+                      registered ? Icons.check : Icons.person,
+                      size: 18,
+                      color: registered ? Colors.white : tokens.brandText,
+                    ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -554,16 +404,13 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    student.name,
+                    member.name,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   Text(
-                    [
-                      if (student.teamNames.isNotEmpty) student.teamNames,
-                      student.barcode,
-                    ].join(' · '),
+                    member.studentId.toString(),
                     style: Theme.of(
                       context,
                     ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
@@ -571,7 +418,14 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
                 ],
               ),
             ),
-            if (registered) ...[
+            if (pending)
+              Text(
+                'جارٍ التسجيل…',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+              )
+            else if (registered) ...[
               Text(
                 formatTime(time),
                 style: Theme.of(
@@ -586,5 +440,109 @@ class _SessionAttendanceScreenState extends State<SessionAttendanceScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _longPress(AdminSessionMember member) async {
+    final state = context.read<SessionAttendanceCubit>().state;
+    final registered = state.registered.containsKey(member.studentId);
+    await showAppSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(member.name),
+              subtitle: Text(
+                registered
+                    ? 'مسجّل ${formatTime(state.registered[member.studentId]!)}'
+                    : 'غير مسجّل',
+              ),
+            ),
+            const Divider(height: 1),
+            if (registered) ...[
+              ListTile(
+                leading: const Icon(Icons.schedule),
+                title: const Text('ضبط زمن التسجيل'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _pickTime(
+                    state,
+                    member,
+                    current: state.registered[member.studentId],
+                  );
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  Icons.delete_outline,
+                  color: Theme.of(context).extension<AppTokens>()!.dangerText,
+                ),
+                title: const Text('إزالة الحضور'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _remove(member);
+                },
+              ),
+            ] else
+              ListTile(
+                leading: const Icon(Icons.add_circle_outline),
+                title: const Text('تسجيل حضور بزمن مخصّص'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _pickTime(state, member);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickTime(
+    SessionAttendanceState state,
+    AdminSessionMember member, {
+    DateTime? current,
+  }) async {
+    final session = state.session;
+    if (session == null) return;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: current == null
+          ? TimeOfDay.now()
+          : TimeOfDay.fromDateTime(current),
+    );
+    if (picked == null || !mounted) return;
+    final at = DateTime(
+      session.date.year,
+      session.date.month,
+      session.date.day,
+      picked.hour,
+      picked.minute,
+    );
+    await _cubit.adjustTime(member, at);
+  }
+
+  Future<void> _remove(AdminSessionMember member) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('إزالة الحضور'),
+        content: Text('إزالة تسجيل حضور ${member.name} من هذه الجلسة؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('إزالة'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    await _cubit.remove(member);
   }
 }

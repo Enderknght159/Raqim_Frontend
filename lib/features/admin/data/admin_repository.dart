@@ -7,7 +7,9 @@ import '../domain/admin_models.dart';
 abstract class AdminRepository {
   // ── Dashboard / courses ─────────────────────────────────────────────────
   Future<GeneralStats> generalStats();
+  Future<AdminHomeData?> homeCached();
   Future<List<AdminCourseSummary>> courses();
+  Future<List<AdminCourseSummary>?> coursesCached();
   Future<AdminCourseSummary?> courseSummary(int courseId);
   Future<LeaderboardResult> leaderboard(int courseId);
   Future<AdminSessionRow?> lastSession();
@@ -17,10 +19,44 @@ abstract class AdminRepository {
 
   // ── Students / reference data ───────────────────────────────────────────
   Future<List<AdminStudentRow>> students({String? query, int? teamId});
+  Future<PagedResult<AdminStudentRow>> studentsPage({
+    String? query,
+    int? teamId,
+    int page = 1,
+    int pageSize = 30,
+  });
+  Future<PagedResult<AdminStudentRow>?> studentsPageCached({
+    String? query,
+    int? teamId,
+    int page = 1,
+    int pageSize = 30,
+  });
   Future<AdminStudentProfile> studentProfile(int id);
   Future<List<AdminTeamRow>> teams();
   Future<List<AdminTeacherRow>> teachers();
-  Future<List<({String name, String role})>> teacherCandidates();
+  Future<List<TeacherCandidate>> teacherCandidates();
+  Future<PagedResult<AdminUserRow>> usersPage({
+    String? query,
+    String filter = 'all',
+    int page = 1,
+    int pageSize = 30,
+  });
+  Future<PagedResult<AdminUserRow>?> usersPageCached({
+    String? query,
+    String filter = 'all',
+    int page = 1,
+    int pageSize = 30,
+  });
+  Future<AdminUserRow?> user(int userId);
+  Future<AdminUserPermissions> userPermissions(int userId);
+  Future<void> updateUserPermissions(
+    int userId,
+    AdminUserPermissions permissions,
+  );
+  Future<void> setUserAdmin(int userId, bool isAdmin);
+  Future<AdminTeacherDetail?> teacherDetail(int teacherId);
+  Future<int> createTeacher(String name);
+  Future<void> linkTeacherToUser(int userId, int teacherId);
   Future<List<AdminContentItem>> teamTypes();
   Future<List<AdminContentItem>> subjects();
   Future<List<AdminContentItem>> distributables();
@@ -49,7 +85,10 @@ abstract class AdminRepository {
   // ── Sessions / attendance ───────────────────────────────────────────────
   Future<List<AdminAttendanceRow>> sessionAttendance(int sessionId);
   Future<List<AdminSessionMember>> sessionMembers(int sessionId);
-  Future<String?> addAttendanceByBarcode(int sessionId, String barcode);
+  Future<AttendanceScanResult?> addAttendanceByBarcode(
+    int sessionId,
+    String barcode,
+  );
   Future<void> addManualAttendance(
     int sessionId,
     int studentId, {
@@ -131,6 +170,11 @@ abstract class AdminRepository {
     int? yearOfBirth,
   });
   Future<void> addPhone(int studentId, String phone, String type);
+  Future<void> updatePhone(
+    int phoneId, {
+    required String phone,
+    required String type,
+  });
   Future<void> removePhone(int phoneId);
 
   // ── Teams / teachers ────────────────────────────────────────────────────
@@ -146,6 +190,7 @@ abstract class AdminRepository {
   Future<void> deleteTeamType(int id);
   Future<List<AdminTeamRow>> teacherTeams(String teacherName);
   Future<void> setTeamTeacher(int teamId, String teacherName);
+  Future<void> setTeamTeacherById(int teamId, int userId);
   Future<void> removeTeamTeacher(int teamId);
 
   // ── Content writes ──────────────────────────────────────────────────────
@@ -228,6 +273,9 @@ abstract class AdminRepository {
   Future<void> cancelMosqueDeletion();
   Future<void> updateMosqueDeletionMessage(String message);
   Future<int?> requestFullExport();
+
+  /// Warms the read-only cache after a successful login (best-effort).
+  Future<void> warmCache();
 }
 
 /// Wrapper so screens can pass the leaderboard list around.

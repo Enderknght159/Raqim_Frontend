@@ -47,6 +47,7 @@ class _AdminAssetsScreenState extends State<AdminAssetsScreen> {
   Widget build(BuildContext context) {
     return AsyncView<List<List<AdminContentItem>>>(
       future: _future,
+      cacheKey: 'admin-assets',
       builder: (context, lists) => Scaffold(
         appBar: AppBar(title: const Text('المحتوى')),
         body: ResponsivePage(

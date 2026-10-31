@@ -22,6 +22,8 @@ class MyTeamsScreen extends StatelessWidget {
     return Scaffold(
       body: AsyncView<List<Team>>(
         future: repo.teams(),
+        cacheKey: 'student-teams',
+        cached: repo.cachedTeams(),
         builder: (context, teams) {
           if (teams.isEmpty) {
             return const EmptyState(
@@ -111,9 +113,9 @@ class _TeamCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      team.teacherName.isEmpty
+                      team.teacherDisplayName.isEmpty
                           ? 'لا معلم بعد'
-                          : team.teacherName,
+                          : team.teacherDisplayName,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: tokens.textSecondary,
                       ),
@@ -201,9 +203,9 @@ class _TeamCard extends StatelessWidget {
                 backgroundColor: tokens.surfaceSubtle,
                 child: Icon(Icons.person, color: tokens.textMuted),
               ),
-              title: team.teacherName.isEmpty
+              title: team.teacherDisplayName.isEmpty
                   ? 'المعلم غير محدد'
-                  : team.teacherName,
+                  : team.teacherDisplayName,
               subtitle: 'معلم الحلقة',
             ),
             const SizedBox(height: 8),
