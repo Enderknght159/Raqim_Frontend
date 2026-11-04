@@ -1155,6 +1155,7 @@ class AdminLocalRepository implements AdminRepository {
         AdminSessionRecord(
           id: m.id,
           kind: 'memorization',
+          studentId: m.studentId,
           studentName: nameById[m.studentId] ?? '#${m.studentId}',
           title: 'حفظ صفحة ${m.page} — ${quranSurahOf(m.page, m.partIndex)}',
           subtitle: 'تقييم ${m.rating} · المسمِّع: ${m.reciterName}',
@@ -1173,6 +1174,7 @@ class AdminLocalRepository implements AdminRepository {
         AdminSessionRecord(
           id: r.id,
           kind: 'matn',
+          studentId: r.studentId,
           studentName: nameById[r.studentId] ?? '#${r.studentId}',
           title: '${matnById[r.matnId] ?? 'متن'} — البيت الأخير ${r.lastVerse}',
           subtitle: 'المعلم: ${r.teacherName}',
@@ -1190,6 +1192,7 @@ class AdminLocalRepository implements AdminRepository {
         AdminSessionRecord(
           id: t.id,
           kind: 'transaction',
+          studentId: t.studentId,
           studentName: nameById[t.studentId] ?? '#${t.studentId}',
           title: '${type.arabic} · ${t.pointsValue.abs()} نقطة',
           subtitle: (t.description == null || t.description!.isEmpty)
@@ -1339,8 +1342,9 @@ class AdminLocalRepository implements AdminRepository {
     required int sessionId,
     required List<QuranUnit> units,
     required int rating,
-    required String reciterName,
+    required int reciterId,
   }) async {
+    final reciterName = 'معلم #$reciterId';
     for (final unit in units) {
       await _database
           .into(_database.memorizations)
@@ -1390,7 +1394,7 @@ class AdminLocalRepository implements AdminRepository {
     required int matnId,
     required int sessionId,
     required int lastVerse,
-    required String teacherName,
+    required int teacherId,
   }) async {
     await _database
         .into(_database.matnRecitations)
@@ -1400,7 +1404,7 @@ class AdminLocalRepository implements AdminRepository {
             studentId: studentId,
             matnId: matnId,
             lastVerse: lastVerse,
-            teacherName: Value(teacherName),
+            teacherName: Value('معلم #$teacherId'),
             sessionId: sessionId,
           ),
         );
@@ -1705,24 +1709,38 @@ class AdminLocalRepository implements AdminRepository {
   @override
   Future<void> addTeam({
     required String name,
-    required String typeName,
+    int? teamTypeId,
+    String typeName = '',
     String teacherName = '',
   }) async {
     final existing = await _database.select(_database.teams).get();
+    var resolvedTypeName = typeName;
+    if (resolvedTypeName.isEmpty && teamTypeId != null) {
+      final types = await _database.select(_database.teamTypes).get();
+      resolvedTypeName =
+          types
+              .where((t) => t.id == teamTypeId)
+              .map((t) => t.name)
+              .firstOrNull ??
+          '';
+    }
     await _database
         .into(_database.teams)
         .insert(
           db.TeamsCompanion.insert(
             id: Value(await _nextId(existing.length, base: 100)),
             name: name,
-            typeName: typeName,
+            typeName: resolvedTypeName,
             teacherName: Value(teacherName),
           ),
         );
   }
 
   @override
-  Future<void> addTeamType(String name) async {
+  Future<void> addTeamType(
+    String name, {
+    TeamTypePermissions permissions = const TeamTypePermissions.none(),
+  }) async {
     final existing = await _database.select(_database.teamTypes).get();
     await _database
         .into(_database.teamTypes)
@@ -1732,6 +1750,17 @@ class AdminLocalRepository implements AdminRepository {
             name: name,
           ),
         );
+  }
+
+  @override
+  Future<void> updateTeamType(
+    int id, {
+    String? name,
+    TeamTypePermissions? permissions,
+  }) async {
+    if (name == null || name.trim().isEmpty) return;
+    await (_database.update(_database.teamTypes)..where((t) => t.id.equals(id)))
+        .write(db.TeamTypesCompanion(name: Value(name.trim())));
   }
 
   /// Deletes a team type (BR-601: admin-managed). Fails silently when the

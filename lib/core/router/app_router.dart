@@ -43,6 +43,10 @@ import '../../features/student/presentation/screens/points_screen.dart';
 import '../../features/student/presentation/screens/profile_screen.dart';
 import '../../features/student/presentation/screens/quran_screen.dart';
 import '../../features/student/presentation/student_shell.dart';
+import '../../features/teacher/presentation/screens/teacher_account_screen.dart';
+import '../../features/teacher/presentation/screens/teacher_students_screen.dart';
+import '../../features/teacher/presentation/screens/teacher_today_screen.dart';
+import '../../features/teacher/presentation/teacher_shell.dart';
 import '../../shared/no_access_screen.dart';
 import '../../shared/splash_screen.dart';
 import '../../shared/teacher_soon_screen.dart';
@@ -88,6 +92,7 @@ class AppRouter {
       GoRoute(
         path: '/teacher-soon',
         name: 'teacherSoon',
+        redirect: (context, state) => '/teacher/today',
         builder: (context, state) => const TeacherSoonScreen(),
       ),
       ShellRoute(
@@ -105,6 +110,9 @@ class AppRouter {
           }
           if (state.uri.path.startsWith('/admin')) {
             return AdminShell(key: key, child: child);
+          }
+          if (state.uri.path.startsWith('/teacher')) {
+            return TeacherShell(key: key, child: child);
           }
           return child;
         },
@@ -189,9 +197,8 @@ class AppRouter {
           GoRoute(
             path: '/admin/teams/:id',
             name: 'adminTeam',
-            builder: (context, state) => AdminTeamScreen(
-              teamId: int.parse(state.pathParameters['id']!),
-            ),
+            builder: (context, state) =>
+                AdminTeamScreen(teamId: int.parse(state.pathParameters['id']!)),
           ),
           GoRoute(
             path: '/admin/teachers/:name',
@@ -295,6 +302,39 @@ class AppRouter {
             path: '/my-progress/profile',
             name: 'profile',
             builder: (context, state) => const ProfileScreen(),
+          ),
+          // ── Teacher tabs ──
+          GoRoute(
+            path: '/teacher',
+            redirect: (context, state) => '/teacher/today',
+            builder: (context, state) => const TeacherTodayScreen(),
+          ),
+          GoRoute(
+            path: '/teacher/today',
+            name: 'teacherToday',
+            redirect: teacherOnlyRedirect,
+            builder: (context, state) => const TeacherTodayScreen(),
+          ),
+          GoRoute(
+            path: '/teacher/students',
+            name: 'teacherStudents',
+            redirect: teacherOnlyRedirect,
+            builder: (context, state) => const TeacherStudentsScreen(),
+          ),
+          GoRoute(
+            path: '/teacher/students/:id',
+            name: 'teacherStudentProfile',
+            redirect: teacherOnlyRedirect,
+            builder: (context, state) => AdminStudentProfileScreen(
+              studentId: int.parse(state.pathParameters['id']!),
+              teacherMode: true,
+            ),
+          ),
+          GoRoute(
+            path: '/teacher/account',
+            name: 'teacherAccount',
+            redirect: teacherOnlyRedirect,
+            builder: (context, state) => const TeacherAccountScreen(),
           ),
           // ── Admin tabs ──
           GoRoute(

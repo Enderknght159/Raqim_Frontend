@@ -766,8 +766,8 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
     final teams = await _allTeams();
     final types = await _allTeamTypes();
     final teachers = await _allTeachers();
-    final typeNames = {
-      for (final t in types) asInt(t['id']): asString(t['name']),
+    final typeById = {
+      for (final t in types) asInt(t['id']): Map<String, dynamic>.from(t),
     };
     final teacherNames = {
       for (final t in teachers) asInt(t['id']): asString(t['name']),
@@ -781,19 +781,56 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
     );
     final result = <AdminTeamRow>[
       for (var index = 0; index < teams.length; index++)
-        AdminTeamRow(
-          id: asInt(teams[index]['id']),
-          name: asString(teams[index]['name']),
-          typeName: typeNames[asInt(teams[index]['teamTypeId'])] ?? 'حلقة',
-          teacherName: teacherNames[asInt(teams[index]['teacherId'])] ?? '',
-          teacherId: asInt(teams[index]['teacherId']) == 0
-              ? null
-              : asInt(teams[index]['teacherId']),
+        _teamRow(
+          teams[index],
+          typeById: typeById,
+          teacherNames: teacherNames,
           studentsCount: counts[index],
         ),
     ];
     result.sort((a, b) => a.name.compareTo(b.name));
     return result;
+  }
+
+  AdminTeamRow _teamRow(
+    Map<String, dynamic> team, {
+    required Map<int, Map<String, dynamic>> typeById,
+    required Map<int, String> teacherNames,
+    required int studentsCount,
+  }) {
+    final rawType = team['type'];
+    final type = rawType is Map
+        ? Map<String, dynamic>.from(rawType)
+        : typeById[asInt(team['teamTypeId'] ?? team['typeId'])] ??
+              const <String, dynamic>{};
+    final rawPermissions = type['permissions'];
+    final permissions = rawPermissions is Map
+        ? Map<String, dynamic>.from(rawPermissions)
+        : type;
+    final teacherIdRaw = asInt(team['teacherId']);
+    return AdminTeamRow(
+      id: asInt(team['id']),
+      name: asString(team['name']),
+      typeId: asInt(type['id'] ?? team['teamTypeId'] ?? team['typeId']) == 0
+          ? null
+          : asInt(type['id'] ?? team['teamTypeId'] ?? team['typeId']),
+      typeName: asString(type['name']).isEmpty
+          ? 'حلقة'
+          : asString(type['name']),
+      typeKind: asString(type['kind']).isEmpty
+          ? 'custom'
+          : asString(type['kind']),
+      typeIsSystem: type['isSystem'] == true,
+      typePermissions: TeamTypePermissions(
+        quranTasmi: permissions['quranTasmi'] == true,
+        matn: permissions['matn'] == true,
+        attendance: permissions['attendance'] == true,
+        points: permissions['points'] == true,
+      ),
+      teacherName: teacherNames[teacherIdRaw] ?? '',
+      teacherId: teacherIdRaw == 0 ? null : teacherIdRaw,
+      studentsCount: studentsCount,
+    );
   }
 
   @override
@@ -1039,6 +1076,15 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
           id: asInt(item['id']),
           name: asString(item['name']),
           subtitle: item['note'] == null ? null : asString(item['note']),
+          teamTypeKind: asString(item['kind']).isEmpty
+              ? 'custom'
+              : asString(item['kind']),
+          teamTypeIsSystem: item['isSystem'] == true,
+          teamTypePermissions: TeamTypePermissions.fromJson(
+            item['permissions'] is Map
+                ? Map<String, dynamic>.from(item['permissions'] as Map)
+                : null,
+          ),
         ),
     ];
   }
@@ -1315,6 +1361,7 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
         AdminSessionRecord(
           id: asInt(item['id']),
           kind: asString(item['kind']),
+          studentId: asInt(item['studentId']),
           studentName: asString(item['studentName']),
           title: asString(item['title']),
           subtitle: asString(item['subtitle']),
@@ -1398,9 +1445,8 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
     required int sessionId,
     required List<QuranUnit> units,
     required int rating,
-    required String reciterName,
+    required int reciterId,
   }) async {
-    final reciterId = await _teacherIdByName(reciterName);
     await postMap(
       ApiEndpoints.studentMemorizations(studentId),
       data: {
@@ -1410,7 +1456,7 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
             {'page': unit.page, 'partIndex': unit.partIndex},
         ],
         'rating': rating,
-        'reciterId': ?reciterId,
+        'reciterId': reciterId,
       },
     );
   }
@@ -1441,16 +1487,15 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
     required int matnId,
     required int sessionId,
     required int lastVerse,
-    required String teacherName,
+    required int teacherId,
   }) async {
-    final teacherId = await _teacherIdByName(teacherName);
     await postMap(
       ApiEndpoints.studentMatnRecitations(studentId),
       data: {
         'matnId': matnId,
         'lastVerse': lastVerse,
         'sessionId': sessionId,
-        'teacherId': ?teacherId,
+        'teacherId': teacherId,
       },
     );
   }
@@ -1624,24 +1669,57 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
   @override
   Future<void> addTeam({
     required String name,
-    required String typeName,
+    int? teamTypeId,
+    String typeName = '',
     String teacherName = '',
   }) async {
-    final typeId = await _teamTypeIdByName(typeName);
+    final typeId =
+        teamTypeId ??
+        (typeName.trim().isEmpty ? null : await _teamTypeIdByName(typeName));
+    if (typeId == null) {
+      throw const ApiException(
+        code: 'TEAM_TYPE_REQUIRED',
+        messageAr: 'نوع الحلقة مطلوب',
+        messageEn: 'Team type is required',
+      );
+    }
     final teacherId = teacherName.trim().isEmpty
         ? null
         : await _teacherIdByName(teacherName);
     await postMap(
       ApiEndpoints.teams,
-      data: {'name': name, 'teamTypeId': ?typeId, 'teacherId': ?teacherId},
+      data: {'name': name, 'teamTypeId': typeId, 'teacherId': ?teacherId},
     );
     _teamsRaw = null;
   }
 
   @override
-  Future<void> addTeamType(String name) async {
-    await postMap(ApiEndpoints.teamTypes, data: {'name': name});
+  Future<void> addTeamType(
+    String name, {
+    TeamTypePermissions permissions = const TeamTypePermissions.none(),
+  }) async {
+    await postMap(
+      ApiEndpoints.teamTypes,
+      data: {'name': name, 'permissions': permissions.toJson()},
+    );
     _teamTypesRaw = null;
+  }
+
+  @override
+  Future<void> updateTeamType(
+    int id, {
+    String? name,
+    TeamTypePermissions? permissions,
+  }) async {
+    await patchMap(
+      ApiEndpoints.teamType(id),
+      data: {
+        if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+        if (permissions != null) 'permissions': permissions.toJson(),
+      },
+    );
+    _teamTypesRaw = null;
+    _teamsRaw = null;
   }
 
   @override
@@ -1655,8 +1733,8 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
     final teacherId = await _teacherIdByName(teacherName);
     final teams = await _allTeams();
     final types = await _allTeamTypes();
-    final typeNames = {
-      for (final t in types) asInt(t['id']): asString(t['name']),
+    final typeById = {
+      for (final t in types) asInt(t['id']): Map<String, dynamic>.from(t),
     };
     final mine = teams
         .where((team) => asInt(team['teacherId']) == teacherId)
@@ -1668,14 +1746,15 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
         ).then((members) => members.length),
       ),
     );
+    final teacherNames = teacherId == null
+        ? <int, String>{}
+        : <int, String>{teacherId: teacherName};
     final result = <AdminTeamRow>[
       for (var index = 0; index < mine.length; index++)
-        AdminTeamRow(
-          id: asInt(mine[index]['id']),
-          name: asString(mine[index]['name']),
-          typeName: typeNames[asInt(mine[index]['teamTypeId'])] ?? 'حلقة',
-          teacherName: teacherName,
-          teacherId: teacherId,
+        _teamRow(
+          mine[index],
+          typeById: typeById,
+          teacherNames: teacherNames,
           studentsCount: counts[index],
         ),
     ];

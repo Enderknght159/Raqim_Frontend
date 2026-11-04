@@ -52,9 +52,23 @@ String firstSectionPath(UserProfile profile) {
   if (profile.isAdmin) return '/admin/courses';
   if (profile.hasStudentSection) return '/my-progress';
   if (profile.isSupervisor) return adminLandingPath(profile);
-  if (profile.isTeacher) return '/teacher-soon';
+  if (profile.hasTeacherSection || profile.isTeacher) return '/teacher/today';
   if (profile.isStudent || profile.isDemo) return '/my-progress';
   return '/my-progress';
+}
+
+/// UI-only guard for the teacher surface. The server still enforces scopes.
+FutureOr<String?> teacherOnlyRedirect(
+  BuildContext context,
+  GoRouterState state,
+) {
+  final auth = context.read<AuthCubit>().state;
+  if (auth is AuthAuthenticated &&
+      !auth.profile.hasTeacherSection &&
+      !auth.profile.isTeacher) {
+    return '/not-allowed';
+  }
+  return null;
 }
 
 /// Role-section redirect used per-route-group. Returns a redirect location or

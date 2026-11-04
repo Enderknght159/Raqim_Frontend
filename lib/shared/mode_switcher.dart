@@ -127,7 +127,7 @@ class ModeSwitcher extends StatelessWidget {
       case _Mode.supervisor:
         context.go(adminLandingPath(profile));
       case _Mode.teacher:
-        context.go('/teacher-soon');
+        context.go('/teacher/today');
     }
   }
 }

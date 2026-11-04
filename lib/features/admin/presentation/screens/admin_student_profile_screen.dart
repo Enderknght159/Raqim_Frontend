@@ -27,10 +27,22 @@ import 'package:raqim/core/widgets/adaptive_sheet.dart';
 /// sheets, academic output with show-more (exams + matn log), editable data,
 /// phones, QR, course records (each opens the student's course achievement)
 /// and change requests.
+///
+/// With [teacherMode] the same page is read-only: phones are visible but not
+/// editable, personal data is locked, and change requests / QR / admin links
+/// are hidden.
 class AdminStudentProfileScreen extends StatefulWidget {
-  const AdminStudentProfileScreen({super.key, required this.studentId});
+  const AdminStudentProfileScreen({
+    super.key,
+    required this.studentId,
+    this.teacherMode = false,
+  });
 
   final int studentId;
+
+  /// Teacher mode: read-only personal data, phones visible, no change requests,
+  /// no QR/admin links.
+  final bool teacherMode;
 
   @override
   State<AdminStudentProfileScreen> createState() =>
@@ -58,7 +70,9 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
     final repo = AdminRepositoryScope.of(context);
     final profileF = repo.studentProfile(widget.studentId);
     final recordsF = repo.studentCourseRecords(widget.studentId);
-    final requestsF = _safe(repo.changeRequests());
+    final requestsF = widget.teacherMode
+        ? Future.value(const <AdminChangeRequest>[])
+        : _safe(repo.changeRequests());
     final teamsF = _safe(repo.teams());
     final profile = await profileF;
     final records = await recordsF;
@@ -74,6 +88,13 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
     );
   }
 
+  bool _canEditStudents(BuildContext context) {
+    if (widget.teacherMode) {
+      return currentProfile(context)?.teacherCanEdit('students') ?? false;
+    }
+    return canEditModule(context, 'students');
+  }
+
   void _reload() {
     setState(() {
       _future = _load();
@@ -84,7 +105,8 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
   Widget build(BuildContext context) {
     return AsyncView<_Data>(
       future: _future,
-      cacheKey: 'admin-student-${widget.studentId}',
+      cacheKey:
+          '${widget.teacherMode ? 'teacher' : 'admin'}-student-${widget.studentId}',
       frame: (context, child) => Scaffold(
         appBar: AppBar(title: const Text('ملف الطالب')),
         body: child,
@@ -109,12 +131,16 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
               _dataCard(context, data.profile),
               const SizedBox(height: 12),
               _phonesCard(context, data.profile),
-              const SizedBox(height: 12),
-              _qr(context, data.profile),
+              if (!widget.teacherMode) ...[
+                const SizedBox(height: 12),
+                _qr(context, data.profile),
+              ],
               const SizedBox(height: 12),
               _records(context, data),
-              const SizedBox(height: 12),
-              _changeRequests(context, data),
+              if (!widget.teacherMode) ...[
+                const SizedBox(height: 12),
+                _changeRequests(context, data),
+              ],
             ],
           ),
         ),
@@ -216,11 +242,10 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                trailing: Icon(
-                  Icons.chevron_left,
-                  color: tokens.borderStructural,
-                ),
-                onTap: () => _openTeam(data, team),
+                trailing: widget.teacherMode
+                    ? null
+                    : Icon(Icons.chevron_left, color: tokens.borderStructural),
+                onTap: widget.teacherMode ? null : () => _openTeam(data, team),
               ),
         ],
       ),
@@ -645,7 +670,7 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
 
   Widget _dataCard(BuildContext context, AdminStudentProfile p) {
     final profile = p.profile;
-    final canEdit = canEditModule(context, 'students');
+    final canEdit = _canEditStudents(context);
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -813,7 +838,7 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
 
   Widget _phonesCard(BuildContext context, AdminStudentProfile p) {
     final phones = p.profile.phones;
-    final canEdit = canEditModule(context, 'students');
+    final canEdit = _canEditStudents(context);
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -869,7 +894,7 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
 
   /// Removes a phone with confirmation + undo window.
   Future<void> _removePhone(AdminStudentProfile p, Phone phone) async {
-    if (!canEditModule(context, 'students')) return;
+    if (!_canEditStudents(context)) return;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -915,7 +940,7 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
     AdminStudentProfile p, {
     Phone? editing,
   }) async {
-    if (!canEditModule(context, 'students')) return;
+    if (!_canEditStudents(context)) return;
     final repo = AdminRepositoryScope.of(context);
     final number = TextEditingController(text: editing?.phone ?? '');
     var type = editing?.type ?? 'parent';
@@ -1094,9 +1119,11 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
                     Icon(Icons.chevron_left, color: tokens.borderStructural),
                   ],
                 ),
-                onTap: () => context.push(
-                  '/admin/students/${widget.studentId}/courses/${r.courseId}',
-                ),
+                onTap: widget.teacherMode
+                    ? null
+                    : () => context.push(
+                        '/admin/students/${widget.studentId}/courses/${r.courseId}',
+                      ),
               ),
         ],
       ),

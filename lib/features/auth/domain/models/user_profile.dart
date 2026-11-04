@@ -18,6 +18,8 @@ class UserProfile {
     this.role = AppRole.student,
     this.sections = const [],
     this.permissions = const {},
+    this.teacherCapabilities = const {},
+    this.supervisorCapabilities = const {},
     this.scopes,
     this.scopesByModule = const {},
     this.specialAbilities = const [],
@@ -43,8 +45,14 @@ class UserProfile {
   /// Ordered nav sections returned by the backend (`student`, `teacher`, ...).
   final List<AppSection> sections;
 
-  /// Module → permission grant map.
+  /// Module → permission grant map (effective union).
   final Map<String, ModulePermission> permissions;
+
+  /// Teacher-mode capabilities only (`/me.teacherCapabilities`).
+  final Map<String, ModulePermission> teacherCapabilities;
+
+  /// Supervisor-mode capabilities only (`/me.supervisorCapabilities`).
+  final Map<String, ModulePermission> supervisorCapabilities;
 
   /// Object-level scopes (legacy list shape).
   final List<int>? scopes;
@@ -101,6 +109,29 @@ class UserProfile {
 
   bool canExport(String module) => permissions[module]?.canExport ?? false;
 
+  /// Capability map for the selected surface. Teacher mode must never read
+  /// supervisor grants (and vice versa) — the two UIs are separate.
+  Map<String, ModulePermission> capabilitiesForMode({required bool teacher}) {
+    if (teacher) {
+      if (teacherCapabilities.isNotEmpty) return teacherCapabilities;
+      // Legacy /me (before teacherCapabilities) may only expose the union.
+      // Never leak supervisor grants into teacher mode on a dual account.
+      if (isSupervisor || isAdmin) return const {};
+      return permissions;
+    }
+    if (supervisorCapabilities.isNotEmpty) return supervisorCapabilities;
+    return permissions;
+  }
+
+  bool teacherCanView(String module) =>
+      capabilitiesForMode(teacher: true)[module]?.canView ?? false;
+
+  bool teacherCanEdit(String module) =>
+      capabilitiesForMode(teacher: true)[module]?.canEdit ?? false;
+
+  bool teacherCanDelete(String module) =>
+      capabilitiesForMode(teacher: true)[module]?.canDelete ?? false;
+
   /// Local demo profile used by tests / offline fallback.
   factory UserProfile.demo({String? username}) {
     return UserProfile(
@@ -142,18 +173,36 @@ class UserProfile {
         : const <String, dynamic>{};
 
     final sectionsJson = json['sections'] as List<dynamic>? ?? const [];
-    final permsJson = json['permissions'] is Map
-        ? Map<String, dynamic>.from(json['permissions'] as Map)
+    final capsRaw = json['capabilities'] ?? json['permissions'];
+    final permsJson = capsRaw is Map
+        ? Map<String, dynamic>.from(capsRaw)
         : const <String, dynamic>{};
     final scopesRaw = json['scopes'];
     final scopesJson = scopesRaw is List ? scopesRaw : null;
     final scopesByModule = scopesRaw is Map
         ? Map<String, dynamic>.from(scopesRaw)
-        : const <String, dynamic>{};
+        : {
+            for (final entry in permsJson.entries)
+              if (entry.value is Map && entry.value['scope'] is Map)
+                entry.key: Map<String, dynamic>.from(
+                  entry.value['scope'] as Map,
+                ),
+          };
     final abilitiesJson =
         (json['specialAbilities'] ?? json['special_abilities'])
             as List<dynamic>? ??
         const [];
+
+    Map<String, ModulePermission> parseCaps(Object? raw) {
+      if (raw is! Map) return const {};
+      return {
+        for (final entry in raw.entries)
+          if (entry.value is Map)
+            '${entry.key}': ModulePermission.fromJson(
+              Map<String, dynamic>.from(entry.value as Map),
+            ),
+      };
+    }
 
     final id = json['id'] is int
         ? json['id'] as int
@@ -177,10 +226,13 @@ class UserProfile {
           .toList(),
       permissions: {
         for (final entry in permsJson.entries)
-          entry.key: ModulePermission.fromJson(
-            Map<String, dynamic>.from(entry.value as Map),
-          ),
+          if (entry.value is Map)
+            entry.key: ModulePermission.fromJson(
+              Map<String, dynamic>.from(entry.value as Map),
+            ),
       },
+      teacherCapabilities: parseCaps(json['teacherCapabilities']),
+      supervisorCapabilities: parseCaps(json['supervisorCapabilities']),
       scopes: scopesJson?.cast<int>(),
       scopesByModule: scopesByModule,
       specialAbilities: abilitiesJson.map((e) => '$e').toList(),

@@ -98,6 +98,43 @@ bool studentMatchesQuery(AdminStudentRow row, String query) {
       row.id.toString() == q;
 }
 
+/// Four write switches that belong to a team type (BR-607 v0.2).
+class TeamTypePermissions {
+  const TeamTypePermissions({
+    this.quranTasmi = false,
+    this.matn = false,
+    this.attendance = false,
+    this.points = false,
+  });
+
+  const TeamTypePermissions.none() : this();
+
+  final bool quranTasmi;
+  final bool matn;
+  final bool attendance;
+  final bool points;
+
+  bool get any => quranTasmi || matn || attendance || points;
+
+  factory TeamTypePermissions.fromJson(Map<String, dynamic>? json) {
+    if (json == null) return const TeamTypePermissions.none();
+    bool flag(String key) => json[key] == true;
+    return TeamTypePermissions(
+      quranTasmi: flag('quranTasmi'),
+      matn: flag('matn'),
+      attendance: flag('attendance'),
+      points: flag('points'),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'quranTasmi': quranTasmi,
+    'matn': matn,
+    'attendance': attendance,
+    'points': points,
+  };
+}
+
 class AdminTeamRow {
   const AdminTeamRow({
     required this.id,
@@ -106,6 +143,10 @@ class AdminTeamRow {
     required this.teacherName,
     required this.studentsCount,
     this.teacherId,
+    this.typeId,
+    this.typeKind = 'custom',
+    this.typeIsSystem = false,
+    this.typePermissions = const TeamTypePermissions.none(),
   });
 
   final int id;
@@ -116,6 +157,12 @@ class AdminTeamRow {
 
   /// Linked teacher row id (`teacher.id`) when a teacher is assigned.
   final int? teacherId;
+
+  /// Team type identity + write switches (BR-607 v0.2).
+  final int? typeId;
+  final String typeKind;
+  final bool typeIsSystem;
+  final TeamTypePermissions typePermissions;
 }
 
 class AdminTeacherRow {
@@ -134,11 +181,23 @@ class AdminTeacherRow {
 }
 
 class AdminContentItem {
-  const AdminContentItem({required this.id, required this.name, this.subtitle});
+  const AdminContentItem({
+    required this.id,
+    required this.name,
+    this.subtitle,
+    this.teamTypeKind,
+    this.teamTypeIsSystem = false,
+    this.teamTypePermissions = const TeamTypePermissions.none(),
+  });
 
   final int id;
   final String name;
   final String? subtitle;
+
+  /// Filled only when this item is a team type.
+  final String? teamTypeKind;
+  final bool teamTypeIsSystem;
+  final TeamTypePermissions teamTypePermissions;
 }
 
 /// Full exam row for the detail/edit sheet (E2 exams tab, BR-802).
@@ -186,6 +245,7 @@ class AdminSessionRecord {
   const AdminSessionRecord({
     required this.id,
     required this.kind,
+    required this.studentId,
     required this.studentName,
     required this.title,
     required this.subtitle,
@@ -195,6 +255,7 @@ class AdminSessionRecord {
   /// memorization | matn | transaction
   final String kind;
   final int id;
+  final int studentId;
   final String studentName;
   final String title;
   final String subtitle;

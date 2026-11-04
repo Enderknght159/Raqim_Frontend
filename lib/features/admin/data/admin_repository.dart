@@ -128,7 +128,7 @@ abstract class AdminRepository {
     required int sessionId,
     required List<QuranUnit> units,
     required int rating,
-    required String reciterName,
+    required int reciterId,
   });
   Future<void> addTransaction({
     required int studentId,
@@ -142,7 +142,7 @@ abstract class AdminRepository {
     required int matnId,
     required int sessionId,
     required int lastVerse,
-    required String teacherName,
+    required int teacherId,
   });
 
   // ── Courses ─────────────────────────────────────────────────────────────
@@ -188,10 +188,19 @@ abstract class AdminRepository {
   Future<void> removeStudentsFromTeam(int teamId, List<int> studentIds);
   Future<void> addTeam({
     required String name,
-    required String typeName,
+    int? teamTypeId,
+    String typeName = '',
     String teacherName = '',
   });
-  Future<void> addTeamType(String name);
+  Future<void> addTeamType(
+    String name, {
+    TeamTypePermissions permissions = const TeamTypePermissions.none(),
+  });
+  Future<void> updateTeamType(
+    int id, {
+    String? name,
+    TeamTypePermissions? permissions,
+  });
   Future<void> deleteTeamType(int id);
   Future<List<AdminTeamRow>> teacherTeams(String teacherName);
   Future<void> setTeamTeacher(int teamId, String teacherName);

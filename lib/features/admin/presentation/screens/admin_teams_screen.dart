@@ -298,7 +298,8 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
     final types = await repo.teamTypes();
     final candidates = await repo.teacherCandidates();
     final roles = {for (final c in candidates) c.name: c.role};
-    var type = types.isEmpty ? 'عام' : types.first.name;
+    var typeId = types.isEmpty ? null : types.first.id;
+    var typeName = types.isEmpty ? '' : types.first.name;
     var teacherName = '';
     if (!mounted) return;
     await showAppSheet<void>(
@@ -329,14 +330,30 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  initialValue: type,
-                  decoration: const InputDecoration(labelText: 'النوع'),
+                  initialValue: typeName.isEmpty ? null : typeName,
+                  decoration: const InputDecoration(
+                    labelText: 'النوع (إلزامي)',
+                  ),
                   items: [
                     for (final t in types)
                       DropdownMenuItem(value: t.name, child: Text(t.name)),
                   ],
-                  onChanged: (v) => setState(() => type = v ?? type),
+                  onChanged: (v) => setState(() {
+                    final picked = types.where((t) => t.name == v).firstOrNull;
+                    typeName = picked?.name ?? typeName;
+                    typeId = picked?.id ?? typeId;
+                  }),
                 ),
+                if (types.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      'أضف نوع حلقة أولًا — لا تُنشأ حلقة بلا نوع.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 // Teacher: any existing account can be picked (searchable).
                 SearchPickerField<String>(
@@ -350,15 +367,18 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
                 const SizedBox(height: 16),
                 AppButton(
                   label: 'إضافة',
-                  onPressed: () async {
-                    if (name.text.trim().isEmpty) return;
-                    await repo.addTeam(
-                      name: name.text.trim(),
-                      typeName: type,
-                      teacherName: teacherName,
-                    );
-                    if (context.mounted) Navigator.of(context).pop();
-                  },
+                  onPressed: types.isEmpty || typeId == null
+                      ? null
+                      : () async {
+                          if (name.text.trim().isEmpty) return;
+                          await repo.addTeam(
+                            name: name.text.trim(),
+                            teamTypeId: typeId,
+                            typeName: typeName,
+                            teacherName: teacherName,
+                          );
+                          if (context.mounted) Navigator.of(context).pop();
+                        },
                 ),
               ],
             ),

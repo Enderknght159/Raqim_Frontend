@@ -73,7 +73,7 @@ void main() {
       firstSectionPath(
         const UserProfile(id: 1, name: 'teacher', role: AppRole.teacher),
       ),
-      '/teacher-soon',
+      '/teacher/today',
     );
     expect(
       firstSectionPath(

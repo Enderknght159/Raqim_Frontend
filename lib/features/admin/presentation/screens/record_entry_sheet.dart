@@ -18,35 +18,61 @@ import '../widgets/student_picker_field.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// E5 — quick (multi) record-entry sheet: حفظ · متون · معاملة.
-Future<void> showRecordEntrySheet(BuildContext context, int sessionId) {
+///
+/// Teacher mode may pass [initialStudent], a restricted [allowedKinds] set and
+/// an [onSaved] callback so the roster can refresh after each save.
+Future<void> showRecordEntrySheet(
+  BuildContext context,
+  int sessionId, {
+  AdminStudentRow? initialStudent,
+  List<RecordEntryKind>? allowedKinds,
+  bool teacherMode = false,
+  VoidCallback? onSaved,
+}) {
   return showAppSheet<void>(
     context: context,
     maxWidth: 720,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (context) => _RecordEntrySheet(sessionId: sessionId),
+    builder: (context) => _RecordEntrySheet(
+      sessionId: sessionId,
+      initialStudent: initialStudent,
+      allowedKinds: allowedKinds,
+      teacherMode: teacherMode,
+      onSaved: onSaved,
+    ),
   );
 }
 
-enum _RecordKind { memorization, matn, transaction }
+enum RecordEntryKind { memorization, matn, transaction }
 
 class _RecordEntrySheet extends StatefulWidget {
-  const _RecordEntrySheet({required this.sessionId});
+  const _RecordEntrySheet({
+    required this.sessionId,
+    this.initialStudent,
+    this.allowedKinds,
+    this.teacherMode = false,
+    this.onSaved,
+  });
 
   final int sessionId;
+  final AdminStudentRow? initialStudent;
+  final List<RecordEntryKind>? allowedKinds;
+  final bool teacherMode;
+  final VoidCallback? onSaved;
 
   @override
   State<_RecordEntrySheet> createState() => _RecordEntrySheetState();
 }
 
 class _RecordEntrySheetState extends State<_RecordEntrySheet> {
-  late _RecordKind _kind;
+  late RecordEntryKind _kind;
   AdminStudentRow? _student;
   int _rating = 3;
   List<QuranUnit> _units = const [];
-  String _reciter = '';
+  AdminTeacherRow? _reciter;
   final _lastVerse = TextEditingController();
-  String _teacher = '';
+  AdminTeacherRow? _teacher;
   final _txValue = TextEditingController();
   final _txDesc = TextEditingController();
   String _txType = 'reward';
@@ -60,26 +86,29 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
   bool _feedbackOk = true;
   String? _loadError;
 
-  List<_RecordKind> _allowedKinds() {
+  List<RecordEntryKind> _allowedKinds() {
+    final explicit = widget.allowedKinds;
+    if (explicit != null) return explicit;
     return [
-      if (canEditModule(context, 'memorization')) _RecordKind.memorization,
-      if (canEditModule(context, 'matn')) _RecordKind.matn,
-      if (canEditModule(context, 'points')) _RecordKind.transaction,
+      if (canEditModule(context, 'memorization')) RecordEntryKind.memorization,
+      if (canEditModule(context, 'matn')) RecordEntryKind.matn,
+      if (canEditModule(context, 'points')) RecordEntryKind.transaction,
     ];
   }
 
   @override
   void initState() {
     super.initState();
+    _student = widget.initialStudent;
     final allowed = _allowedKinds();
-    _kind = allowed.isEmpty ? _RecordKind.memorization : allowed.first;
+    _kind = allowed.isEmpty ? RecordEntryKind.memorization : allowed.first;
     _load();
   }
 
   bool get _needsTeachers =>
-      _kind == _RecordKind.memorization || _kind == _RecordKind.matn;
+      _kind == RecordEntryKind.memorization || _kind == RecordEntryKind.matn;
 
-  bool get _needsMatns => _kind == _RecordKind.matn;
+  bool get _needsMatns => _kind == RecordEntryKind.matn;
 
   Future<void> _load() async {
     if (!mounted) return;
@@ -97,13 +126,13 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
       setState(() {
         _teachers = teachers;
         _matns = matns;
-        if (_needsTeachers && _reciter.isEmpty && teachers.isNotEmpty) {
-          _reciter = teachers.first.name;
+        if (_needsTeachers && _reciter == null && teachers.isNotEmpty) {
+          _reciter = teachers.first;
         }
         if (_needsMatns) {
           _matnId ??= matns.isEmpty ? null : matns.first.id;
-          if (_teacher.isEmpty && teachers.isNotEmpty) {
-            _teacher = teachers.first.name;
+          if (_teacher == null && teachers.isNotEmpty) {
+            _teacher = teachers.first;
           }
         }
         _loading = false;
@@ -117,7 +146,7 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
     }
   }
 
-  void _changeKind(_RecordKind kind) {
+  void _changeKind(RecordEntryKind kind) {
     if (kind == _kind) return;
     setState(() => _kind = kind);
     _load();
@@ -167,26 +196,26 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
                   // on the side. Only the record types the account can write
                   // are shown, so opening the sheet never depends on an
                   // unrelated module.
-                  IconToggleGroup<_RecordKind>(
+                  IconToggleGroup<RecordEntryKind>(
                     value: _kind,
                     onChanged: _changeKind,
                     options: [
-                      if (allowed.contains(_RecordKind.memorization))
+                      if (allowed.contains(RecordEntryKind.memorization))
                         const IconToggleOption(
-                          value: _RecordKind.memorization,
+                          value: RecordEntryKind.memorization,
                           icon: Icons.menu_book_outlined,
                           label: 'حفظ',
                         ),
-                      if (allowed.contains(_RecordKind.matn))
+                      if (allowed.contains(RecordEntryKind.matn))
                         const IconToggleOption(
-                          value: _RecordKind.matn,
+                          value: RecordEntryKind.matn,
                           icon: Icons.format_quote_outlined,
                           label: 'متون',
                           color: Color(0xFF7C3AED),
                         ),
-                      if (allowed.contains(_RecordKind.transaction))
+                      if (allowed.contains(RecordEntryKind.transaction))
                         const IconToggleOption(
-                          value: _RecordKind.transaction,
+                          value: RecordEntryKind.transaction,
                           icon: Icons.payments_outlined,
                           label: 'معاملة',
                           color: Color(0xFFF59E0B),
@@ -291,7 +320,7 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
 
   List<Widget> _fields(BuildContext context, AppTokens tokens) {
     switch (_kind) {
-      case _RecordKind.memorization:
+      case RecordEntryKind.memorization:
         return [
           Text(
             'الصفحة من خريطة الحفظ',
@@ -325,16 +354,16 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
             ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
           const SizedBox(height: 6),
-          SearchPickerField<String>(
+          SearchPickerField<AdminTeacherRow>(
             label: 'اختر المسمِّع',
-            items: _teachers.map((t) => t.name).toList(),
-            titleBuilder: (name) => name,
+            items: _teachers,
+            titleBuilder: (teacher) => teacher.name,
             subtitleBuilder: null,
-            value: _reciter.isEmpty ? null : _reciter,
-            onChanged: (name) => setState(() => _reciter = name),
+            value: _reciter,
+            onChanged: (teacher) => setState(() => _reciter = teacher),
           ),
         ];
-      case _RecordKind.matn:
+      case RecordEntryKind.matn:
         return [
           Text(
             'المتن',
@@ -369,16 +398,16 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
             ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
           const SizedBox(height: 6),
-          SearchPickerField<String>(
+          SearchPickerField<AdminTeacherRow>(
             label: 'اختر المعلم',
-            items: _teachers.map((t) => t.name).toList(),
-            titleBuilder: (name) => name,
+            items: _teachers,
+            titleBuilder: (teacher) => teacher.name,
             subtitleBuilder: null,
-            value: _teacher.isEmpty ? null : _teacher,
-            onChanged: (name) => setState(() => _teacher = name),
+            value: _teacher,
+            onChanged: (teacher) => setState(() => _teacher = teacher),
           ),
         ];
-      case _RecordKind.transaction:
+      case RecordEntryKind.transaction:
         return [
           IconToggleGroup<String>(
             value: _txType,
@@ -422,12 +451,12 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
     });
     try {
       switch (_kind) {
-        case _RecordKind.memorization:
+        case RecordEntryKind.memorization:
           if (_units.isEmpty) {
             _snack('اختر صفحة من الخريطة');
             return;
           }
-          if (_reciter.isEmpty) {
+          if (_reciter == null) {
             _snack('اختر المسمّع');
             return;
           }
@@ -436,18 +465,18 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
             sessionId: widget.sessionId,
             units: _units,
             rating: _rating,
-            reciterName: _reciter,
+            reciterId: _reciter!.id,
           );
           setState(() {
             _units = const [];
             _rating = 3;
           });
-        case _RecordKind.matn:
+        case RecordEntryKind.matn:
           if (_matnId == null) {
             _snack('لا متون متاحة');
             return;
           }
-          if (_teacher.isEmpty) {
+          if (_teacher == null) {
             _snack('اختر المعلم');
             return;
           }
@@ -456,9 +485,9 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
             matnId: _matnId!,
             sessionId: widget.sessionId,
             lastVerse: int.tryParse(_lastVerse.text) ?? 1,
-            teacherName: _teacher,
+            teacherId: _teacher!.id,
           );
-        case _RecordKind.transaction:
+        case RecordEntryKind.transaction:
           final value = int.tryParse(_txValue.text) ?? 0;
           if (value == 0) {
             _snack('أدخل قيمة غير صفرية');
@@ -478,6 +507,7 @@ class _RecordEntrySheetState extends State<_RecordEntrySheet> {
       }
       if (!mounted) return;
       HapticFeedback.lightImpact();
+      widget.onSaved?.call();
       setState(() {
         _feedback = 'تم حفظ تسجيل ${student.name}';
         _feedbackOk = true;
