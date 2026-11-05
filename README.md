@@ -1,26 +1,42 @@
-# raqim
+# Raqim — Flutter client
 
-A new Flutter project.
+The Flutter front end for Raqim, a mosque management system. It talks to a Laravel API (kept in a separate, private repository).
 
-## ⚠️ قاعدة إلزامية (Governance)
+Screens cover sign-in, the student list and student file, attendance, courses, and the teacher's own view. The app is built for a weak or missing connection: reads are cached locally, and changes made offline go into a queue that is sent when the connection comes back.
+
+## Structure
+
+```text
+lib/
+  core/       config, network, storage, router, theme, shared widgets
+  features/   auth, students, student, attendance, courses, teacher, admin
+  shared/
+```
+
+Each feature keeps `data/`, `domain/` and `presentation/` apart.
+
+## Running
+
+```sh
+flutter pub get
+flutter run
+```
+
+The API address comes from a `--dart-define` flag and defaults to the live backend:
+
+```sh
+flutter run --dart-define=API_BASE_URL=https://example.com/api/v1 --dart-define=ENV=dev
+```
+
+`ENV` accepts `dev`, `staging` or `prod`; `LOGGING_ENABLED=false` turns off request logging for a release build.
+
+## قاعدة إلزامية (Governance)
+
 **أي تعديل على الكود — من أي شخص (بشري أو مساعد) — يستلزم تحديث `../plan/0-overview/feature-status.md` في نفس الالتزام (commit):**
 - من **يضيف** ميزة → يُضيف صفًّا بحالتها.
 - من **يُعدّل** ميزة → يُحدّث حالتها وملاحظاتها.
 - من **يحذف/يؤرشف** ميزة → ينقل صفّها إلى «مؤرشف» بدل حذفه.
+
 > لا يُقبل أي تغيير في الكود دون تحديث الجدول المقابل له.
 
 **قاعدة إعادة الاستخدام (إلزامية):** كل ويدجت يُبنى كلاسًا مستقلاً قابلاً لإعادة الاستخدام في `lib/core/widgets/` أو `lib/features/<feature>/presentation/widgets/` قبل استخدامه؛ لا تُنشأ ويدجتات داخليّة مكرّرة (`plan/README.md`).
-
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
