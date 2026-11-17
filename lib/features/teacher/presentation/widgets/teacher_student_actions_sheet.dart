@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/date_time_utils.dart';
 import '../../../../core/widgets/adaptive_sheet.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -17,6 +18,8 @@ Future<void> showTeacherStudentActionsSheet(
   required List<AdminSessionRecord> records,
   required Future<void> Function() onToggleAttendance,
   required ValueChanged<TeacherRecordKind> onRecord,
+  required VoidCallback onShowRecords,
+  required ValueChanged<DateTime?> onAdjustAttendanceTime,
   required VoidCallback onOpenProfile,
 }) {
   return showAppSheet<void>(
@@ -30,6 +33,8 @@ Future<void> showTeacherStudentActionsSheet(
       records: records,
       onToggleAttendance: onToggleAttendance,
       onRecord: onRecord,
+      onShowRecords: onShowRecords,
+      onAdjustAttendanceTime: onAdjustAttendanceTime,
       onOpenProfile: onOpenProfile,
     ),
   );
@@ -42,6 +47,8 @@ class _TeacherStudentActionsSheet extends StatefulWidget {
     required this.records,
     required this.onToggleAttendance,
     required this.onRecord,
+    required this.onShowRecords,
+    required this.onAdjustAttendanceTime,
     required this.onOpenProfile,
   });
 
@@ -50,6 +57,8 @@ class _TeacherStudentActionsSheet extends StatefulWidget {
   final List<AdminSessionRecord> records;
   final Future<void> Function() onToggleAttendance;
   final ValueChanged<TeacherRecordKind> onRecord;
+  final VoidCallback onShowRecords;
+  final ValueChanged<DateTime?> onAdjustAttendanceTime;
   final VoidCallback onOpenProfile;
 
   @override
@@ -66,6 +75,7 @@ class _TeacherStudentActionsSheetState
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final entry = widget.entry;
+    final summary = TeacherSessionSummary.fromRecords(widget.records);
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
 
     return Padding(
@@ -116,7 +126,11 @@ class _TeacherStudentActionsSheetState
                 ),
                 if (entry.attendanceAllowed)
                   StatusBadge(
-                    label: _present ? 'حاضر' : 'غائب',
+                    label: _present
+                        ? (widget.attendance?.arrivalTime == null
+                              ? 'حاضر'
+                              : 'حاضر · ${formatTime(widget.attendance!.arrivalTime!)}')
+                        : 'غائب',
                     color: _present ? tokens.brand : tokens.textMuted,
                   ),
               ],
@@ -149,7 +163,20 @@ class _TeacherStudentActionsSheetState
                         }
                       },
               ),
-              const SizedBox(height: 12),
+              if (_present)
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () => widget.onAdjustAttendanceTime(
+                            widget.attendance?.arrivalTime,
+                          ),
+                    icon: const Icon(Icons.schedule, size: 18),
+                    label: const Text('تعديل وقت الحضور'),
+                  ),
+                ),
+              const SizedBox(height: 8),
             ],
             if (entry.recordKinds.isNotEmpty) ...[
               Text(
@@ -159,18 +186,23 @@ class _TeacherStudentActionsSheetState
                 ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 8),
-              for (final kind in entry.recordKinds) ...[
-                AppButton(
-                  label: kind.longLabel,
-                  icon: _icon(kind),
-                  variant: AppButtonVariant.secondary,
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    widget.onRecord(kind);
-                  },
-                ),
-                const SizedBox(height: 8),
-              ],
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final kind in entry.recordKinds)
+                    _KindActionChip(
+                      label: 'إضافة ${kind.label}',
+                      icon: _icon(kind),
+                      color: _colorFor(kind, tokens),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        widget.onRecord(kind);
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
             ],
             if (!entry.canWriteAnything)
               AppCard(
@@ -192,31 +224,64 @@ class _TeacherStudentActionsSheetState
               ),
             if (widget.records.isNotEmpty) ...[
               const SizedBox(height: 16),
-              Text(
-                'سجلات هذه الجلسة',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'سجلات هذه الجلسة',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      widget.onShowRecords();
+                    },
+                    child: const Text('عرض الكل'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  if (summary.pages > 0)
+                    _SummaryChip(
+                      icon: Icons.auto_stories_outlined,
+                      label: summary.pagesLabel,
+                      color: tokens.brand,
+                    ),
+                  if (summary.matnLabel != null)
+                    _SummaryChip(
+                      icon: Icons.menu_book_outlined,
+                      label: summary.matnLabel!,
+                      color: tokens.accentMatn,
+                    ),
+                  if (summary.pointsLabel != null)
+                    _SummaryChip(
+                      icon: Icons.stars_outlined,
+                      label: summary.pointsLabel!,
+                      color: tokens.reward,
+                    ),
+                ],
               ),
               const SizedBox(height: 6),
-              for (final record in widget.records)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      Icon(
-                        _icon(_kindFromRecord(record.kind)),
-                        size: 16,
-                        color: tokens.textMuted,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          record.title,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                    ],
+              for (final record in widget.records.take(6))
+                _RecordLine(record: record, tokens: tokens),
+              if (widget.records.length > 6)
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      widget.onShowRecords();
+                    },
+                    child: Text(
+                      'عرض بقية السجلات (${widget.records.length - 6})',
+                    ),
                   ),
                 ),
             ],
@@ -236,17 +301,171 @@ class _TeacherStudentActionsSheetState
     );
   }
 
-  TeacherRecordKind _kindFromRecord(String kind) => switch (kind) {
-    'memorization' => TeacherRecordKind.quranTasmi,
-    'matn' => TeacherRecordKind.matn,
-    'transaction' => TeacherRecordKind.points,
-    _ => TeacherRecordKind.attendance,
-  };
-
   IconData _icon(TeacherRecordKind kind) => switch (kind) {
     TeacherRecordKind.attendance => Icons.how_to_reg_outlined,
     TeacherRecordKind.quranTasmi => Icons.auto_stories_outlined,
     TeacherRecordKind.matn => Icons.menu_book_outlined,
     TeacherRecordKind.points => Icons.stars_outlined,
   };
+
+  Color _colorFor(TeacherRecordKind kind, AppTokens tokens) => switch (kind) {
+    TeacherRecordKind.attendance => tokens.info,
+    TeacherRecordKind.quranTasmi => tokens.brand,
+    TeacherRecordKind.matn => tokens.accentMatn,
+    TeacherRecordKind.points => tokens.reward,
+  };
+}
+
+/// Compact tinted action with an explicit plus icon, replacing the old
+/// full-width secondary buttons.
+class _KindActionChip extends StatelessWidget {
+  const _KindActionChip({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.32)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.add, size: 16, color: color),
+            const SizedBox(width: 4),
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryChip extends StatelessWidget {
+  const _SummaryChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 190),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecordLine extends StatelessWidget {
+  const _RecordLine({required this.record, required this.tokens});
+
+  final AdminSessionRecord record;
+  final AppTokens tokens;
+
+  IconData get _icon => switch (record.kind) {
+    'memorization' => Icons.auto_stories_outlined,
+    'matn' => Icons.menu_book_outlined,
+    'transaction' => Icons.stars_outlined,
+    _ => Icons.receipt_long_outlined,
+  };
+
+  Color get _color => switch (record.kind) {
+    'memorization' => tokens.brand,
+    'matn' => tokens.accentMatn,
+    'transaction' => tokens.reward,
+    _ => tokens.info,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(_icon, size: 16, color: _color),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  record.title,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                if (record.subtitle.isNotEmpty)
+                  Text(
+                    record.subtitle,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: tokens.textSecondary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            formatTime(record.when),
+            textDirection: TextDirection.ltr,
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: tokens.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
 }

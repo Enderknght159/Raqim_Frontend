@@ -7,6 +7,7 @@ import '../../../../core/widgets/app_chip.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../admin/data/admin_repository.dart';
 import '../../../admin/domain/admin_models.dart';
+import '../../../admin/presentation/widgets/course_metrics_panel.dart';
 import '../../domain/teacher_models.dart';
 
 /// Course-first, session-second picker. The teacher must pick the course
@@ -156,14 +157,23 @@ class _TeacherSessionPickerSheetState
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 2),
-                        Text(
-                          '${course.sessionsCount} جلسة · ${course.studentsCount} طالب',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).extension<AppTokens>()!.textMuted,
-                              ),
+                        // Icon + number instead of repeating «جلسة»/«طالب» in
+                        // every row; the words live in the tooltips.
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 2,
+                          children: [
+                            IconCount(
+                              icon: Icons.event_note_outlined,
+                              value: course.sessionsCount,
+                              tooltip: 'عدد الجلسات',
+                            ),
+                            IconCount(
+                              icon: Icons.groups_outlined,
+                              value: course.studentsCount,
+                              tooltip: 'عدد الطلاب',
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -201,7 +211,12 @@ class _TeacherSessionPickerSheetState
             }),
           );
         }
-        final sessions = snapshot.data ?? const <AdminSessionRow>[];
+        // Teacher-facing order: newest first, then the highest session index.
+        final sessions = [...(snapshot.data ?? const <AdminSessionRow>[])]
+          ..sort((a, b) {
+            final byDate = b.date.compareTo(a.date);
+            return byDate != 0 ? byDate : b.index.compareTo(a.index);
+          });
         if (sessions.isEmpty) {
           return const EmptyState(
             title: 'لا جلسات في هذه الدورة',

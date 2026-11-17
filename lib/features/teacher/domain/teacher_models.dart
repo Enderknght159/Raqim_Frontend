@@ -1,3 +1,4 @@
+import '../../../core/utils/numeral_utils.dart';
 import '../../admin/domain/admin_models.dart';
 
 /// The four record types a team type can grant (BR-607 v0.2).
@@ -77,6 +78,100 @@ class TeacherRosterEntry {
         student.barcode.toLowerCase().contains(q) ||
         student.id.toString() == q ||
         teamNames.toLowerCase().contains(q);
+  }
+}
+
+/// Compact, teacher-facing summary of what a student already recorded in the
+/// open session. The API returns human titles/subtitles for [AdminSessionRecord],
+/// so the numbers are derived from those labels (pages, last matn, points).
+class TeacherSessionSummary {
+  const TeacherSessionSummary({
+    required this.records,
+    required this.pages,
+    required this.lastMatn,
+    required this.lastVerse,
+    required this.points,
+    required this.pointsCount,
+    required this.otherCount,
+  });
+
+  factory TeacherSessionSummary.fromRecords(List<AdminSessionRecord> records) {
+    final pageKeys = <String>{};
+    AdminSessionRecord? newestMatn;
+    var points = 0;
+    var pointsCount = 0;
+    var otherCount = 0;
+
+    for (final record in records) {
+      switch (record.kind) {
+        case 'memorization':
+          final page = RegExp(r'صفحة\s*(\d+)').firstMatch(record.title);
+          pageKeys.add(page?.group(1) ?? '#${record.id}');
+          break;
+        case 'matn':
+          newestMatn ??= record;
+          break;
+        case 'transaction':
+          final value =
+              int.tryParse(
+                RegExp(r'([+-]?\d+)').firstMatch(record.title)?.group(1) ?? '',
+              ) ??
+              0;
+          final negative =
+              record.title.contains('عقوبة') || record.title.contains('خصم');
+          points += negative ? -value.abs() : value.abs();
+          pointsCount++;
+          break;
+        default:
+          otherCount++;
+          break;
+      }
+    }
+
+    var lastMatn = '';
+    var lastVerse = 0;
+    if (newestMatn != null) {
+      final title = newestMatn.title;
+      lastMatn = title.split('—').first.trim();
+      lastVerse =
+          int.tryParse(
+            RegExp(r'البيت الأخير\s*(\d+)').firstMatch(title)?.group(1) ?? '',
+          ) ??
+          0;
+    }
+
+    return TeacherSessionSummary(
+      records: records,
+      pages: pageKeys.length,
+      lastMatn: lastMatn,
+      lastVerse: lastVerse,
+      points: points,
+      pointsCount: pointsCount,
+      otherCount: otherCount,
+    );
+  }
+
+  final List<AdminSessionRecord> records;
+  final int pages;
+  final String lastMatn;
+  final int lastVerse;
+  final int points;
+  final int pointsCount;
+  final int otherCount;
+
+  bool get isEmpty => records.isEmpty;
+
+  String get pagesLabel => '$pages صفحة';
+
+  String? get matnLabel {
+    if (lastMatn.isEmpty) return null;
+    return lastVerse > 0 ? '$lastMatn · $lastVerse' : lastMatn;
+  }
+
+  String? get pointsLabel {
+    if (pointsCount == 0) return null;
+    final formatted = formatNumber(points);
+    return points > 0 ? '+$formatted نقطة' : '$formatted نقطة';
   }
 }
 

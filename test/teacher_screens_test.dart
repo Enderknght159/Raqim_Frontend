@@ -3,6 +3,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:raqim/core/storage/screen_cache.dart';
 import 'package:raqim/core/theme/app_theme.dart';
 import 'package:raqim/features/admin/data/admin_local_repository.dart';
 import 'package:raqim/features/admin/domain/admin_models.dart';
@@ -59,6 +60,41 @@ void main() {
 
     expect(find.text('ابدأ باختيار الدورة والجلسة'), findsOneWidget);
     expect(find.text('اختر الدورة والجلسة'), findsWidgets);
+  });
+
+  testWidgets('Teacher session picker is newest-first and remembered', (
+    tester,
+  ) async {
+    ScreenCache.instance.clear();
+    addTearDown(ScreenCache.instance.clear);
+    final repos = await _repos();
+    await tester.pumpWidget(_wrap(repos, const TeacherTodayScreen()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('الدورة أولًا، ثم الجلسة'));
+    await tester.pumpAndSettle();
+    expect(find.text('اختر الدورة'), findsOneWidget);
+    await tester.tap(find.text('دورة الحفظ الصيفية'));
+    await tester.pumpAndSettle();
+
+    // Sessions are ordered from newest (14) to oldest.
+    final newest = tester.getTopLeft(find.text('الجلسة 14')).dy;
+    final older = tester.getTopLeft(find.text('الجلسة 13')).dy;
+    expect(newest, lessThan(older));
+
+    await tester.tap(find.text('الجلسة 14'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('الجلسة 14'), findsWidgets);
+
+    // Leaving the tab disposes the screen; coming back must restore the last
+    // selected session instead of forgetting it.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(_wrap(repos, const TeacherTodayScreen()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ابدأ باختيار الدورة والجلسة'), findsNothing);
+    expect(find.textContaining('الجلسة 14'), findsWidgets);
   });
 
   testWidgets('Teacher students screen renders search + roster', (
