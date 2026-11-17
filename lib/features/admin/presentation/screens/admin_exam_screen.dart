@@ -1,18 +1,22 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
+import '../../../../core/state/section_loader.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/date_time_utils.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/icon_toggle_group.dart';
-import '../../../../core/widgets/progress_bar.dart';
+import '../../../../core/widgets/metric_charts.dart';
 import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/search_picker_field.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
+import '../widgets/course_metrics_panel.dart';
 import '../widgets/student_picker_field.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
@@ -33,48 +37,40 @@ class AdminExamScreen extends StatefulWidget {
 }
 
 class _AdminExamScreenState extends State<AdminExamScreen> {
-  late Future<_ExamData> _future;
+  /// Bumped after any write so every section refetches its own data.
+  int _revision = 0;
+  late Future<AdminExamDetail?> _detailFuture;
   bool _showAllSubmissions = false;
 
   @override
   void initState() {
     super.initState();
-    _future = _load();
+    _detailFuture = _loadDetail();
   }
 
-  Future<_ExamData> _load() async {
-    final repo = AdminRepositoryScope.of(context);
-    final detailF = repo.examDetail(widget.examId);
-    final submissionsF = repo.examSubmissions(widget.examId);
-    final subjectsF = repo.subjects();
-    final detail = await detailF;
-    final submissions = await submissionsF;
-    final subjects = await subjectsF;
-    return _ExamData(
-      detail: detail,
-      submissions: submissions,
-      subjects: subjects,
-    );
-  }
+  /// Only the page shell (AppBar identity) waits on this. Submissions and
+  /// subjects load in their own [AsyncSection] blocks below.
+  Future<AdminExamDetail?> _loadDetail() =>
+      AdminRepositoryScope.of(context).examDetail(widget.examId);
 
   void _reload() {
     if (!mounted) return;
     setState(() {
-      _future = _load();
+      _detailFuture = _loadDetail();
+      _revision++;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return AsyncView<_ExamData>(
-      future: _future,
+    return AsyncView<AdminExamDetail?>(
+      future: _detailFuture,
       cacheKey: 'admin-exam-${widget.examId}',
       frame: (context, child) => Scaffold(
         appBar: AppBar(title: const Text('الامتحان')),
         body: child,
       ),
-      builder: (context, data) {
-        final detail = data.detail;
+      builder: (context, detail) {
         if (detail == null) {
           return Scaffold(
             appBar: AppBar(title: const Text('الامتحان')),
@@ -102,21 +98,50 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                _statsCard(context, detail, data.submissions),
+                // Stats and the submissions list share one request.
+                AsyncSection<List<AdminSubmissionRow>>(
+                  cacheKey: 'admin-exam-submissions-${widget.examId}',
+                  revision: _revision,
+                  skeleton: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SectionSkeleton(height: 88, lines: 2),
+                      SizedBox(height: 12),
+                      SectionSkeleton(height: 120, lines: 3),
+                    ],
+                  ),
+                  load: () => AdminRepositoryScope.of(
+                    context,
+                  ).examSubmissions(widget.examId),
+                  builder: (context, submissions) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _statsCard(context, detail, submissions),
+                      const SizedBox(height: 12),
+                      _submissionsCard(context, detail, submissions),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 12),
-                _submissionsCard(context, detail, data.submissions),
-                const SizedBox(height: 12),
-                _ExamEditorCard(
-                  key: ValueKey(detail.id),
-                  detail: detail,
-                  subjects: data.subjects,
-                  onSaved: () {
-                    _reload();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('تم حفظ تعديلات الامتحان')),
-                    );
-                  },
-                  onDeleted: () => Navigator.of(context).pop(true),
+                AsyncSection<List<AdminContentItem>>(
+                  cacheKey: 'admin-exam-subjects',
+                  revision: _revision,
+                  // Below the fold: let the stats section win the first frame.
+                  delay: const Duration(milliseconds: 120),
+                  skeleton: const SectionSkeleton(height: 96, lines: 4),
+                  load: () => AdminRepositoryScope.of(context).subjects(),
+                  builder: (context, subjects) => _ExamEditorCard(
+                    key: ValueKey(detail.id),
+                    detail: detail,
+                    subjects: subjects,
+                    onSaved: () {
+                      _reload();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('تم حفظ تعديلات الامتحان')),
+                      );
+                    },
+                    onDeleted: () => Navigator.of(context).pop(true),
+                  ),
                 ),
               ],
             ),
@@ -135,17 +160,36 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
   ) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final count = submissions.length;
+
+    // Empty submissions must never reach a division.
+    final maxMark = detail.maxMark > 0 ? detail.maxMark : 1;
     final average = count == 0
         ? 0.0
-        : submissions.map((s) => s.mark).reduce((a, b) => a + b) / count;
+        : submissions.fold<double>(0, (sum, s) => sum + s.mark) / count;
     final passed = submissions
         .where((s) => s.mark >= detail.minSuccessMark)
         .length;
-    final passPercent = count == 0 ? 0 : ((passed / count) * 100).round();
-    final highest = count == 0 ? 0.0 : submissions.first.mark; // sorted desc
+    final passPercent = count == 0 ? 0.0 : (passed / count) * 100;
+    final highest = count == 0
+        ? 0.0
+        : submissions.map((s) => s.mark).reduce(math.max);
     final lowest = count == 0
         ? 0.0
-        : submissions.map((s) => s.mark).reduce((a, b) => a < b ? a : b);
+        : submissions.map((s) => s.mark).reduce(math.min);
+
+    // Five buckets across 0..maxMark; the top mark falls in the last bucket.
+    final buckets = List<int>.filled(5, 0);
+    final lastBucket = buckets.length - 1;
+    for (final s in submissions) {
+      final ratio = s.mark / maxMark;
+      final index = (ratio * buckets.length).floor().clamp(0, lastBucket);
+      buckets[index]++;
+    }
+    final bucketLabels = <String>[
+      for (var i = 0; i < buckets.length; i++)
+        '${_fmtMark(maxMark * i / buckets.length)}–'
+            '${_fmtMark(maxMark * (i + 1) / buckets.length)}: ${buckets[i]}',
+    ];
 
     return AppCard(
       child: Column(
@@ -155,81 +199,87 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
             icon: Icons.insights_outlined,
             title: 'إحصاءات الامتحان',
           ),
+          const SizedBox(height: 8),
+          // Wide side: mark distribution. Narrow side: pass-rate ring.
+          SizedBox(
+            height: 88,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Tooltip(
+                    message: 'توزيع العلامات (${bucketLabels.join(' · ')})',
+                    triggerMode: TooltipTriggerMode.longPress,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: DistributionBars(
+                        values: [
+                          for (final bucket in buckets) bucket.toDouble(),
+                        ],
+                        height: 72,
+                        color: tokens.accentMatn,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Center(
+                  child: Tooltip(
+                    message: count == 0
+                        ? 'نسبة النجاح'
+                        : 'نسبة النجاح: $passed من $count',
+                    triggerMode: TooltipTriggerMode.longPress,
+                    child: PercentDonut(
+                      percent: passPercent,
+                      size: 84,
+                      color: tokens.brand,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 10),
-          Row(
+          Wrap(
+            spacing: 16,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              _stat(context, 'عدد التقديمات', '$count', tokens.info),
-              _stat(
-                context,
-                'المتوسط',
-                _fmtMark(double.parse(average.toStringAsFixed(1))),
-                tokens.accentMatn,
+              IconCount(
+                icon: Icons.fact_check_outlined,
+                value: count,
+                tooltip: 'عدد التقديمات',
+                color: tokens.info,
               ),
-              _stat(
-                context,
-                'النجاح',
-                '$passPercent%',
-                passed == count && count > 0 ? tokens.brand : tokens.info,
+              IconCount(
+                icon: Icons.analytics_outlined,
+                value: average.round(),
+                valueText: '${_fmtAverage(average)}/${detail.maxMark}',
+                tooltip: 'المتوسط',
+                color: tokens.accentMatn,
+              ),
+              IconCount(
+                icon: Icons.trending_up,
+                value: highest.round(),
+                fraction: detail.maxMark,
+                tooltip: 'أعلى علامة',
+                color: tokens.brandText,
+              ),
+              IconCount(
+                icon: Icons.trending_down,
+                value: lowest.round(),
+                fraction: detail.maxMark,
+                tooltip: 'أدنى علامة',
+                color: tokens.dangerText,
+              ),
+              IconCount(
+                icon: Icons.flag_outlined,
+                value: detail.minSuccessMark,
+                fraction: detail.maxMark,
+                tooltip: 'درجة النجاح',
+                color: tokens.textSecondary,
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _stat(
-                context,
-                'أعلى علامة',
-                '${_fmtMark(highest)}/${detail.maxMark}',
-                tokens.brand,
-              ),
-              _stat(
-                context,
-                'أدنى علامة',
-                '${_fmtMark(lowest)}/${detail.maxMark}',
-                tokens.danger,
-              ),
-              _stat(
-                context,
-                'درجة النجاح',
-                '${detail.minSuccessMark}',
-                tokens.textSecondary,
-              ),
-            ],
-          ),
-          if (count > 0) ...[
-            const SizedBox(height: 12),
-            ProgressBar(
-              value: passPercent / 100,
-              color: tokens.brand,
-              height: 8,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _stat(BuildContext context, String label, String value, Color color) {
-    final tokens = Theme.of(context).extension<AppTokens>()!;
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: color,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
         ],
       ),
@@ -552,24 +602,20 @@ class _AdminExamScreenState extends State<AdminExamScreen> {
   String _fmtMark(double mark) =>
       mark == mark.roundToDouble() ? '${mark.toInt()}' : '$mark';
 
+  /// One decimal at most: 12.3456 → 12.3, 44.0 → 44.
+  String _fmtAverage(double value) {
+    final rounded = (value * 10).round() / 10;
+    return rounded == rounded.roundToDouble()
+        ? '${rounded.toInt()}'
+        : rounded.toStringAsFixed(1);
+  }
+
   static String _typeLabel(String type) => switch (type) {
     'oral' => 'شفهي',
     'writtenProbe' => 'سبر كتابي',
     'final' => 'اختبار نهائي',
     _ => type,
   };
-}
-
-class _ExamData {
-  const _ExamData({
-    required this.detail,
-    required this.submissions,
-    required this.subjects,
-  });
-
-  final AdminExamDetail? detail;
-  final List<AdminSubmissionRow> submissions;
-  final List<AdminContentItem> subjects;
 }
 
 /// Exam editor: identity + grading fields, save and (danger) delete.

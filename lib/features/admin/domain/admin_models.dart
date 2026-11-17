@@ -296,6 +296,8 @@ class AdminSessionRow {
     this.latePoints = 1,
     this.earlyUntil = '16:00',
     this.lateFrom = '16:30',
+    this.courseId = 0,
+    this.courseName = '',
   });
 
   final int id;
@@ -308,6 +310,10 @@ class AdminSessionRow {
   final int latePoints;
   final String earlyUntil;
   final String lateFrom;
+  final int courseId;
+
+  /// Filled when the server (or a caller) knows the owning course name.
+  final String courseName;
 }
 
 class AdminAttendanceRow {

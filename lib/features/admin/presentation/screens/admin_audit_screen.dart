@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/state/section_loader.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/date_time_utils.dart';
 import '../../../../core/widgets/app_card.dart';
-import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/date_grouped_list.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/icon_tile.dart';
@@ -27,15 +28,8 @@ typedef _Write = ({
 });
 
 class _AdminAuditScreenState extends State<AdminAuditScreen> {
-  late Future<List<_Write>> _future;
   final _search = TextEditingController();
   String? _modelFilter;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = AdminRepositoryScope.of(context).recentWrites();
-  }
 
   @override
   void dispose() {
@@ -48,9 +42,17 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     return Scaffold(
       appBar: AppBar(title: const Text('التدقيق')),
-      body: AsyncView<List<_Write>>(
-        future: _future,
+      body: AsyncSection<List<_Write>>(
         cacheKey: 'admin-audit',
+        load: () => AdminRepositoryScope.of(context).recentWrites(),
+        skeleton: const _AuditSkeleton(),
+        errorBuilder: (context, retry) => Padding(
+          padding: const EdgeInsets.all(16),
+          child: SectionError(
+            onRetry: retry,
+            message: 'تعذر تحميل سجل التدقيق',
+          ),
+        ),
         builder: (context, writes) {
           if (writes.isEmpty) {
             return const EmptyState(
@@ -127,17 +129,22 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
   }
 
   Widget _row(BuildContext context, _Write w, AppTokens tokens) {
+    final meta = '${_modelLabel(w.model)} · ${_actionLabel(w.action)}';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: AppCard(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
           children: [
-            IconTile(
-              icon: _icon(w.model),
-              color: tokens.info,
-              size: 40,
-              iconSize: 20,
+            Tooltip(
+              message: meta,
+              triggerMode: TooltipTriggerMode.longPress,
+              child: IconTile(
+                icon: _icon(w.model),
+                color: tokens.info,
+                size: 40,
+                iconSize: 20,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -146,12 +153,14 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
                 children: [
                   Text(
                     w.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   Text(
-                    '${_modelLabel(w.model)} · ${w.action}',
+                    formatTime(w.when),
                     style: Theme.of(
                       context,
                     ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
@@ -181,10 +190,42 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
     _ => Icons.edit_note,
   };
 
+  /// Arabic label for the write action; the raw value is only a fallback.
+  String _actionLabel(String action) => switch (action) {
+    'create' => 'إنشاء',
+    'update' => 'تعديل',
+    'delete' => 'حذف',
+    _ => action,
+  };
+
   String _modelLabel(String model) => switch (model) {
     'Attendance' => 'الحضور',
     'Memorization' => 'الحفظ',
     'Transaction' => 'المعاملات',
     _ => model,
   };
+}
+
+/// Rough shape of the search bar, the filter chips and the first rows.
+class _AuditSkeleton extends StatelessWidget {
+  const _AuditSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionSkeleton(height: 40, lines: 1, showCard: false),
+          SizedBox(height: 12),
+          SectionSkeleton(height: 44, lines: 1),
+          SizedBox(height: 8),
+          SectionSkeleton(height: 44, lines: 1),
+          SizedBox(height: 8),
+          SectionSkeleton(height: 44, lines: 1),
+        ],
+      ),
+    );
+  }
 }

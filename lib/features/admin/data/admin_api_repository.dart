@@ -269,6 +269,37 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
   }
 
   @override
+  Future<List<AdminCourseSummary>> courseBriefs() async {
+    final items = await getAllPages(ApiEndpoints.courses);
+    final result = [for (final item in items) _courseBrief(item)];
+    result.sort(_sortCourses);
+    return result;
+  }
+
+  AdminCourseSummary _courseBrief(Map<String, dynamic> item) {
+    final id = asInt(item['id']);
+    return AdminCourseSummary(
+      id: id,
+      name: asString(item['name']),
+      startDate: asDate(item['startDate']),
+      endDate: asDate(item['endDate']),
+      isActive:
+          item['active'] == true ||
+          !DateTime.now().isAfter(asDate(item['endDate'])),
+      sessionsCount: 0,
+      studentsCount: 0,
+      lastSessionPresent: 0,
+      lastSessionTotal: 0,
+      attendancePercent: 0,
+      series: const [],
+      goodPoints: asInt(item['goodMemorizationPoints']),
+      veryGoodPoints: asInt(item['veryGoodMemorizationPoints']),
+      excellentPoints: asInt(item['excellentMemorizationPoints']),
+      certificatePoints: asInt(item['quranCertificatePoints']),
+    );
+  }
+
+  @override
   Future<List<AdminCourseSummary>?> coursesCached() async {
     final memory = _coursesCache;
     if (memory != null && memory.isNotEmpty) return memory;
@@ -311,11 +342,18 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
     ]);
     final sessions = parallel[0] as List<Map<String, dynamic>>;
     final total = parallel[1] as Map<String, dynamic>;
-    final last = sessions.isEmpty ? null : sessions.last;
-    final summary = last == null
-        ? const <String, dynamic>{}
-        : await _safeGetMap(ApiEndpoints.sessionSummary(asInt(last['id'])));
-    final lastPresent = asInt(summary['present']);
+    // The line chart needs the whole attendance history, not just the last
+    // session. Cap the window so a long course does not trigger hundreds of
+    // summary calls on the landing page. The chart itself downsample to 8
+    // points, so there is no value in fetching more than 8 summaries.
+    const window = 8;
+    final chartSessions = sessions.length > window
+        ? sessions.sublist(sessions.length - window)
+        : sessions;
+    final rows = chartSessions.isEmpty
+        ? const <AdminSessionRow>[]
+        : await _sessionRows(chartSessions);
+    final last = rows.isEmpty ? null : rows.last;
     return AdminCourseSummary(
       id: id,
       name: asString(item['name']),
@@ -326,10 +364,10 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
           !DateTime.now().isAfter(asDate(item['endDate'])),
       sessionsCount: sessions.length,
       studentsCount: asInt(total['students']),
-      lastSessionPresent: lastPresent,
-      lastSessionTotal: asInt(summary['total']),
+      lastSessionPresent: last?.present ?? 0,
+      lastSessionTotal: last?.total ?? 0,
       attendancePercent: asDouble(total['attendanceRate']).round(),
-      series: lastPresent > 0 ? [lastPresent.toDouble()] : const [],
+      series: [for (final row in rows) row.present.toDouble()],
       goodPoints: asInt(item['goodMemorizationPoints']),
       veryGoodPoints: asInt(item['veryGoodMemorizationPoints']),
       excellentPoints: asInt(item['excellentMemorizationPoints']),
@@ -428,6 +466,7 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
     Map<String, dynamic>? summary,
   }) {
     final map = summary ?? const <String, dynamic>{};
+    final course = asMap(json['course']);
     return AdminSessionRow(
       id: asInt(json['id']),
       index: asInt(json['orderInCourse'] ?? json['index']),
@@ -439,6 +478,8 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
       latePoints: asInt(json['latePoints']),
       earlyUntil: hhmm(json['earlyUntil']),
       lateFrom: hhmm(json['lateFrom']),
+      courseId: asInt(json['courseId'] ?? course['id']),
+      courseName: asString(course['name'] ?? json['courseName']),
     );
   }
 
@@ -1029,6 +1070,44 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
     } catch (_) {
       return null;
     }
+  }
+
+  @override
+  Future<AdminUserRow> createUser({
+    required String name,
+    String? username,
+    String? password,
+    String? email,
+    bool isAdmin = false,
+    int? studentId,
+    int? teacherId,
+  }) async {
+    final json = await postMap(
+      ApiEndpoints.adminUsers,
+      data: {
+        'name': name.trim(),
+        if (username != null && username.trim().isNotEmpty)
+          'username': username.trim(),
+        if (password != null && password.isNotEmpty) 'password': password,
+        if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+        'studentId': ?studentId,
+        'teacherId': ?teacherId,
+        'isAdmin': isAdmin,
+      },
+    );
+    _userPages.clear();
+    return _adminUserRowFrom(json);
+  }
+
+  @override
+  Future<void> resetUserPassword(int userId, {String? newPassword}) async {
+    await postMap(
+      ApiEndpoints.adminUserResetPassword(userId),
+      data: {
+        if (newPassword != null && newPassword.isNotEmpty)
+          'newPassword': newPassword,
+      },
+    );
   }
 
   @override

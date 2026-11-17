@@ -1,17 +1,21 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/route_guards.dart';
+import '../../../../core/state/section_loader.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/date_time_utils.dart';
+import '../../../../core/utils/numeral_utils.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/metric_charts.dart';
 import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
-import '../../../../core/widgets/status_badge.dart';
 import '../../../auth/presentation/cubits/auth_cubit.dart';
 import '../../../auth/presentation/cubits/auth_state.dart';
 import '../../../student/domain/models/student_models.dart';
@@ -19,13 +23,22 @@ import '../../domain/admin_models.dart';
 import '../../../../shared/permissions.dart';
 import '../admin_shell.dart';
 import '../widgets/absence_notice_sheet.dart';
+import '../widgets/attendance_status_chip.dart';
+import '../widgets/course_metrics_panel.dart';
 import '../widgets/session_records_section.dart';
 import '../widgets/session_setup_sheet.dart';
 import 'record_entry_sheet.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
-/// E3 — Session page: single serial flow (attendance → records → summary →
-/// messages/export).
+/// Payload of the attendance block: the scanned rows (categories + times) and
+/// the session roster, which is the source of truth for absences.
+typedef _AttendanceData = ({
+  List<AdminAttendanceRow> attendance,
+  List<AdminSessionMember> members,
+});
+
+/// E3 — Session page: independent progressive sections (attendance → records →
+/// summary), so a slow card never blocks the page shell.
 class AdminSessionScreen extends StatefulWidget {
   const AdminSessionScreen({super.key, required this.sessionId});
 
@@ -36,41 +49,55 @@ class AdminSessionScreen extends StatefulWidget {
 }
 
 class _AdminSessionScreenState extends State<AdminSessionScreen> {
-  late Future<_Data> _future;
   final Set<int> _pendingMembers = {};
+
+  /// Bumped by pull-to-refresh and after every write so each section reloads
+  /// on its own.
+  int _revision = 0;
+
+  /// Last known session date (filled by the page shell). Used as the base day
+  /// when adjusting an arrival time and for the attendance header.
+  DateTime? _sessionDate;
+
+  late Future<AdminSessionRow> _sessionFuture;
+
+  AttendanceCategory? _filter;
+  static const int _previewCount = 6;
 
   @override
   void initState() {
     super.initState();
-    _future = _load();
+    // `AdminRepositoryScope.of` uses `getInheritedWidgetOfExactType`, so the
+    // repository can be resolved before the first build.
+    _sessionFuture = _loadSessionRow();
   }
 
-  Future<T?> _safe<T>(Future<T> future) async {
-    try {
-      return await future;
-    } catch (_) {
-      return null;
-    }
+  Future<AdminSessionRow> _loadSessionRow() async {
+    final row = await AdminRepositoryScope.of(
+      context,
+    ).sessionRow(widget.sessionId);
+    _sessionDate = row.date;
+    return row;
   }
 
-  Future<_Data> _load() async {
+  /// One request pair for the three cards that share the same dependency.
+  Future<_AttendanceData> _loadAttendance() async {
     final repo = AdminRepositoryScope.of(context);
-    final sessionF = repo.sessionRow(widget.sessionId);
-    final attendanceF = _safe(repo.sessionAttendance(widget.sessionId));
-    final membersF = _safe(repo.sessionMembers(widget.sessionId));
-    final recordsF = _safe(repo.sessionRecords(widget.sessionId));
-    return _Data(
-      session: await sessionF,
-      attendance: await attendanceF ?? const [],
-      members: await membersF ?? const [],
-      records: await recordsF ?? const [],
+    final results = await Future.wait<List<Object>>([
+      repo.sessionAttendance(widget.sessionId),
+      repo.sessionMembers(widget.sessionId),
+    ]);
+    return (
+      attendance: results[0] as List<AdminAttendanceRow>,
+      members: results[1] as List<AdminSessionMember>,
     );
   }
 
   void _reload() {
     if (!mounted) return;
     setState(() {
-      _future = _load();
+      _revision++;
+      _sessionFuture = _loadSessionRow();
     });
   }
 
@@ -93,23 +120,22 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
   Widget build(BuildContext context) {
     final canSendAbsence = _canSendAbsenceNotice(context);
     final canViewAttendance = canViewModule(context, 'attendance');
-    final canMessages = hasAnyAbility(context, const ['messagesExport']);
-    return AsyncView<_Data>(
-      future: _future,
-      cacheKey: 'admin-session-${widget.sessionId}',
+    return AsyncView<AdminSessionRow>(
+      future: _sessionFuture,
+      cacheKey: 'admin-session-row-${widget.sessionId}',
       frame: (context, child) => Scaffold(
         appBar: AppBar(title: const Text('الجلسة')),
         body: child,
       ),
-      builder: (context, data) => Scaffold(
+      builder: (context, session) => Scaffold(
         appBar: AppBar(
-          title: Text('جلسة #${data.session.index}'),
+          title: Text('جلسة #${session.index}'),
           actions: [
             if (canEditModule(context, 'courses'))
               IconButton(
                 tooltip: 'تعديل الجلسة',
                 icon: const Icon(Icons.edit_outlined),
-                onPressed: () => _editSession(context, data),
+                onPressed: () => _editSession(context, session),
               ),
           ],
         ),
@@ -122,25 +148,44 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 if (canViewAttendance) ...[
-                  _attendanceBar(
-                    context,
-                    data,
-                    canSendAbsence: canSendAbsence,
-                    canRegister: canEditModule(context, 'attendance'),
+                  AsyncSection<_AttendanceData>(
+                    cacheKey: 'admin-session-attendance-${widget.sessionId}',
+                    revision: _revision,
+                    skeleton: const SectionSkeleton(height: 96, lines: 3),
+                    load: _loadAttendance,
+                    builder: (context, data) => Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _attendanceBar(
+                          context,
+                          data,
+                          canSendAbsence: canSendAbsence,
+                          canRegister: canEditModule(context, 'attendance'),
+                        ),
+                        const SizedBox(height: 12),
+                        _attendanceList(context, data),
+                        const SizedBox(height: 12),
+                        _summarySection(context, data),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  _attendanceList(context, data),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                 ],
                 _recordSection(context),
-                const SizedBox(height: 16),
                 if (canViewAttendance) ...[
-                  SessionRecordsSection(records: data.records),
-                  const SizedBox(height: 16),
-                  _summarySection(context, data),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+                  AsyncSection<List<AdminSessionRecord>>(
+                    cacheKey: 'admin-session-records-${widget.sessionId}',
+                    revision: _revision,
+                    delay: const Duration(milliseconds: 80),
+                    skeleton: const SectionSkeleton(height: 64, lines: 2),
+                    load: () => AdminRepositoryScope.of(
+                      context,
+                    ).sessionRecords(widget.sessionId),
+                    builder: (context, records) =>
+                        SessionRecordsSection(records: records),
+                  ),
                 ],
-                if (canMessages) _messagesSection(context),
               ],
             ),
           ),
@@ -149,28 +194,38 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
     );
   }
 
+  /// The roster of the session; falls back to the scanned attendees when the
+  /// server roster is empty (e.g. a brand-new session).
+  List<AdminSessionMember> _roster(_AttendanceData data) =>
+      data.members.isEmpty ? _fallbackMembers(data) : data.members;
+
+  /// Roster-based absence count: every roster member without an arrival time
+  /// is absent. This stays consistent with the visible day list (the old
+  /// `session.total` could be 0 and wrongly report «غياب 0»).
+  int _absentCount(_AttendanceData data) =>
+      _roster(data).where((m) => !m.present).length;
+
+  static Color _categoryColor(AppTokens tokens, AttendanceCategory c) =>
+      switch (c) {
+        AttendanceCategory.early => tokens.brand,
+        AttendanceCategory.onTime => tokens.infoLight,
+        AttendanceCategory.late => tokens.danger,
+        AttendanceCategory.absent => tokens.textMuted,
+      };
+
   Widget _attendanceBar(
     BuildContext context,
-    _Data data, {
+    _AttendanceData data, {
     required bool canSendAbsence,
     required bool canRegister,
   }) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    final early = data.attendance
-        .where((a) => a.category == AttendanceCategory.early)
-        .length;
-    final onTime = data.attendance
-        .where((a) => a.category == AttendanceCategory.onTime)
-        .length;
-    final late = data.attendance
-        .where((a) => a.category == AttendanceCategory.late)
-        .length;
-    final present = data.attendance.length;
-    final absent = data.session.total - present;
-    final absentees =
-        (data.members.isEmpty ? _fallbackMembers(data) : data.members)
-            .where((m) => !m.present)
-            .toList();
+    final roster = _roster(data);
+    int countOf(AttendanceCategory c) =>
+        roster.where((m) => _categoryOf(m, data) == c).length;
+    final absent = _absentCount(data);
+    final absentees = roster.where((m) => !m.present).toList();
+    final date = _sessionDate;
 
     return AppCard(
       child: Column(
@@ -181,34 +236,44 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
               Expanded(
                 child: Text(
                   'الحضور اللحظي',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
-              Text(
-                formatDate(data.session.date),
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-              ),
+              if (date != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  formatDate(date),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                ),
+              ],
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
+          // Words stay hidden until hover / long press; only icons + counts.
           Wrap(
             spacing: 6,
             runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              StatusBadge(label: 'مبكر $early', color: tokens.brand),
-              StatusBadge(label: 'في الوقت $onTime', color: tokens.infoLight),
-              StatusBadge(label: 'متأخر $late', color: tokens.danger),
-              StatusBadge(
-                label: 'غائب ${absent < 0 ? 0 : absent}',
-                color: tokens.textMuted,
-              ),
+              for (final c in const [
+                AttendanceCategory.early,
+                AttendanceCategory.onTime,
+                AttendanceCategory.late,
+                AttendanceCategory.absent,
+              ])
+                AttendanceStatusChip(
+                  category: c,
+                  count: c == AttendanceCategory.absent ? absent : countOf(c),
+                ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           AppButton(
             label: 'تسجيل الحضور (مسح + يدوي)',
             icon: Icons.qr_code_scanner,
@@ -256,16 +321,12 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
       ..showSnackBar(SnackBar(content: Text('أُرسل $count إشعار غياب')));
   }
 
-  static const _filterLabels = ['الكل', 'مبكر', 'في الوقت', 'متأخر', 'غائب'];
-
-  String? _filter;
-  static const int _previewCount = 6;
-
-  Widget _attendanceList(BuildContext context, _Data data) {
-    final members = data.members.isEmpty
-        ? _fallbackMembers(data)
-        : data.members;
+  Widget _attendanceList(BuildContext context, _AttendanceData data) {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
+    final members = _roster(data);
     final visible = members.where((m) => _matchesFilter(m, data)).toList();
+    int countOf(AttendanceCategory c) =>
+        members.where((m) => _categoryOf(m, data) == c).length;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -284,48 +345,82 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            reverse: true,
-            child: Row(
-              children: [
-                for (final label in _filterLabels)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 6),
-                    child: ChoiceChip(
-                      label: Text(label),
-                      selected:
-                          _filter == label ||
-                          (_filter == null && label == 'الكل'),
-                      onSelected: (_) => setState(
-                        () => _filter = label == 'الكل' ? null : label,
+          const SizedBox(height: 2),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (visible.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          'لا نتائج لهذا الفلتر',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      )
+                    else
+                      for (final m in visible.take(_previewCount))
+                        _memberRow(context, data, m),
+                    if (visible.length > _previewCount)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: TextButton(
+                          onPressed: () => _showAll(context, data),
+                          child: Text('عرض الكل (${visible.length})'),
+                        ),
                       ),
-                    ),
-                  ),
-              ],
-            ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _filterGroup(tokens, countOf),
+            ],
           ),
-          const SizedBox(height: 4),
-          if (visible.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                'لا نتائج لهذا الفلتر',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            )
-          else
-            for (final m in visible.take(_previewCount))
-              _memberRow(context, data, m),
-          if (visible.length > _previewCount)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: TextButton(
-                onPressed: () => _showAll(context, data),
-                child: Text('عرض الكل (${visible.length})'),
-              ),
+        ],
+      ),
+    );
+  }
+
+  /// Vertical icon-first filters: the Arabic label only surfaces on hover /
+  /// long press, so every row does not repeat «مبكر / في الوقت …». The group is
+  /// a single column aligned to the reading start (right in RTL).
+  Widget _filterGroup(
+    AppTokens tokens,
+    int Function(AttendanceCategory) countOf,
+  ) {
+    return Align(
+      key: const ValueKey('session-attendance-filters'),
+      alignment: AlignmentDirectional.centerStart,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _FilterIconChip(
+            icon: Icons.apps,
+            label: 'الكل',
+            selected: _filter == null,
+            color: tokens.textSecondary,
+            onTap: () => setState(() => _filter = null),
+          ),
+          for (final c in const [
+            AttendanceCategory.early,
+            AttendanceCategory.onTime,
+            AttendanceCategory.late,
+            AttendanceCategory.absent,
+          ]) ...[
+            const SizedBox(height: 6),
+            _FilterIconChip(
+              icon: AttendanceStatusChip.iconOf(c),
+              label: AttendanceStatusChip.labelOf(c),
+              selected: _filter == c,
+              color: _categoryColor(tokens, c),
+              count: countOf(c),
+              onTap: () => setState(() => _filter = _filter == c ? null : c),
             ),
+          ],
         ],
       ),
     );
@@ -333,7 +428,7 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
 
   /// Fallback when the roster is empty (e.g. brand-new session): show the
   /// scanned attendees only.
-  List<AdminSessionMember> _fallbackMembers(_Data data) => [
+  List<AdminSessionMember> _fallbackMembers(_AttendanceData data) => [
     for (final a in data.attendance)
       AdminSessionMember(
         studentId: a.studentId,
@@ -342,22 +437,13 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
       ),
   ];
 
-  bool _matchesFilter(AdminSessionMember m, _Data data) {
-    switch (_filter) {
-      case 'مبكر':
-        return _categoryOf(m, data) == AttendanceCategory.early;
-      case 'في الوقت':
-        return _categoryOf(m, data) == AttendanceCategory.onTime;
-      case 'متأخر':
-        return _categoryOf(m, data) == AttendanceCategory.late;
-      case 'غائب':
-        return !m.present;
-      default:
-        return true;
-    }
+  bool _matchesFilter(AdminSessionMember m, _AttendanceData data) {
+    final filter = _filter;
+    if (filter == null) return true;
+    return _categoryOf(m, data) == filter;
   }
 
-  AttendanceCategory? _categoryOf(AdminSessionMember m, _Data data) {
+  AttendanceCategory? _categoryOf(AdminSessionMember m, _AttendanceData data) {
     if (!m.present) return AttendanceCategory.absent;
     for (final a in data.attendance) {
       if (a.studentId == m.studentId) return a.category;
@@ -365,7 +451,11 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
     return null;
   }
 
-  Widget _memberRow(BuildContext context, _Data data, AdminSessionMember m) {
+  Widget _memberRow(
+    BuildContext context,
+    _AttendanceData data,
+    AdminSessionMember m,
+  ) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final category = _categoryOf(m, data);
     final absent = !m.present;
@@ -388,6 +478,8 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
             Expanded(
               child: Text(
                 m.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: absent ? tokens.textMuted : tokens.textPrimary,
                   decoration: absent ? TextDecoration.lineThrough : null,
@@ -403,22 +495,20 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ] else ...[
-              if (m.arrivalTime != null)
+              if (m.arrivalTime != null) ...[
+                const SizedBox(width: 8),
                 Text(
                   formatTime(m.arrivalTime!),
+                  textDirection: TextDirection.ltr,
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
+              ],
               const SizedBox(width: 8),
-              StatusBadge(
-                label: _categoryLabel(category ?? AttendanceCategory.absent),
-                color: switch (category) {
-                  AttendanceCategory.early => tokens.brand,
-                  AttendanceCategory.onTime => tokens.infoLight,
-                  AttendanceCategory.late => tokens.danger,
-                  _ => tokens.textMuted,
-                },
+              AttendanceStatusChip(
+                category: category ?? AttendanceCategory.absent,
+                dense: true,
               ),
               const SizedBox(width: 4),
               Icon(
@@ -435,7 +525,10 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
 
   /// Quick attendance actions from the day list: add / adjust time / remove
   /// (with an undo window) — saves the supervisor a trip to the scan page.
-  Future<void> _editAttendance(_Data data, AdminSessionMember m) async {
+  Future<void> _editAttendance(
+    _AttendanceData data,
+    AdminSessionMember m,
+  ) async {
     if (!canEditModule(context, 'attendance') ||
         _pendingMembers.contains(m.studentId)) {
       return;
@@ -527,16 +620,16 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
             ..hideCurrentSnackBar()
             ..showSnackBar(SnackBar(content: Text('سُجّل حضور ${m.name}')));
         case 'time':
-          final base = m.arrivalTime ?? data.session.date;
+          final base = m.arrivalTime ?? _sessionDate ?? DateTime.now();
           final picked = await showTimePicker(
             context: context,
             initialTime: TimeOfDay.fromDateTime(base),
           );
           if (picked == null || !mounted) return;
           final at = DateTime(
-            data.session.date.year,
-            data.session.date.month,
-            data.session.date.day,
+            base.year,
+            base.month,
+            base.day,
             picked.hour,
             picked.minute,
           );
@@ -580,11 +673,9 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
     }
   }
 
-  void _showAll(BuildContext context, _Data data) {
+  void _showAll(BuildContext context, _AttendanceData data) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    final members = data.members.isEmpty
-        ? _fallbackMembers(data)
-        : data.members;
+    final members = _roster(data);
     final visible = members.where((m) => _matchesFilter(m, data)).toList();
     showAppSheet<void>(
       context: context,
@@ -599,17 +690,20 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
           children: [
             Row(
               children: [
-                Text(
-                  'قائمة اليوم (${visible.length})',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const Spacer(),
-                Text(
-                  'حاضر ${visible.where((m) => m.present).length}',
-                  style: TextStyle(
-                    color: tokens.brandText,
-                    fontWeight: FontWeight.w800,
+                Expanded(
+                  child: Text(
+                    'قائمة اليوم (${visible.length})',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
+                ),
+                const SizedBox(width: 8),
+                IconCount(
+                  icon: Icons.how_to_reg_outlined,
+                  value: visible.where((m) => m.present).length,
+                  tooltip: 'الحاضرون في القائمة',
+                  color: tokens.brandText,
                 ),
               ],
             ),
@@ -632,7 +726,7 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SectionHeader(icon: Icons.edit_note, title: 'التسجيل'),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           AppButton(
             label: 'تسجيل (حفظ · متون · معاملة)',
             icon: Icons.add,
@@ -648,11 +742,16 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
     );
   }
 
-  Widget _summarySection(BuildContext context, _Data data) {
+  Widget _summarySection(BuildContext context, _AttendanceData data) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    final present = data.attendance.length;
-    final total = data.session.total > present ? data.session.total : present;
-    final absent = total - present;
+    final roster = _roster(data);
+    final present = roster.where((m) => m.present).length;
+    // The roster is the source of truth when it is loaded; `session.total`
+    // can be 0 and must never drive the absence count.
+    final total = math.max(math.max(roster.length, present), 0);
+    final absent = _absentCount(data);
+    final percent = total == 0 ? 0.0 : (present / total) * 100;
+
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -661,92 +760,48 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
             icon: Icons.summarize_outlined,
             title: 'محصلة اليوم',
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$present',
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            color: tokens.brandText,
-                          ),
-                    ),
-                    Text(
-                      'حاضر',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$absent',
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            color: tokens.textMuted,
-                          ),
-                    ),
-                    Text(
-                      'غائب',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
           const SizedBox(height: 12),
-          // Drawn summary: stacked present/absent bar.
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: SizedBox(
-              height: 14,
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: present,
-                    child: Container(color: tokens.brand),
-                  ),
-                  Expanded(
-                    flex: absent,
-                    child: Container(color: tokens.surfaceSubtle),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(Icons.circle, size: 10, color: tokens.brand),
-              const SizedBox(width: 4),
-              Text(
-                'حضور',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        IconCount(
+                          icon: Icons.how_to_reg_outlined,
+                          value: present,
+                          fraction: total > 0 ? total : null,
+                          tooltip: 'الحاضرون من إجمالي القائمة',
+                          color: tokens.brandText,
+                        ),
+                        IconCount(
+                          icon: Icons.person_off_outlined,
+                          value: absent,
+                          tooltip: 'الغائبون',
+                          color: tokens.dangerText,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _attendanceRatioBar(
+                      tokens: tokens,
+                      present: present,
+                      absent: absent,
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(width: 14),
-              Icon(Icons.circle, size: 10, color: tokens.textMuted),
-              const SizedBox(width: 4),
-              Text(
-                'غياب',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+              Tooltip(
+                message: 'نسبة الحضور',
+                triggerMode: TooltipTriggerMode.longPress,
+                child: PercentDonut(percent: percent, size: 72, strokeWidth: 7),
               ),
             ],
           ),
@@ -755,46 +810,45 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
     );
   }
 
-  Widget _messagesSection(BuildContext context) {
-    final tokens = Theme.of(context).extension<AppTokens>()!;
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SectionHeader(
-            icon: Icons.chat_outlined,
-            title: 'الرسائل والتصدير',
+  /// Thin stacked bar: brand = present, muted = absent.
+  Widget _attendanceRatioBar({
+    required AppTokens tokens,
+    required int present,
+    required int absent,
+  }) {
+    final empty = present <= 0 && absent <= 0;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: Tooltip(
+        message: 'حضور $present · غياب $absent',
+        triggerMode: TooltipTriggerMode.longPress,
+        child: SizedBox(
+          height: 8,
+          child: Row(
+            children: [
+              if (present > 0)
+                Expanded(
+                  flex: present,
+                  child: ColoredBox(color: tokens.brand),
+                ),
+              if (absent > 0)
+                Expanded(
+                  flex: absent,
+                  child: ColoredBox(
+                    color: tokens.textMuted.withValues(alpha: 0.22),
+                  ),
+                ),
+              if (empty)
+                Expanded(child: ColoredBox(color: tokens.surfaceSubtle)),
+            ],
           ),
-          const SizedBox(height: 6),
-          for (final label in const ['رسائل اليوم', 'تصدير حضور اليوم'])
-            ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.send_outlined, color: tokens.brandText),
-              title: Text(label),
-              trailing: Icon(
-                Icons.chevron_left,
-                color: tokens.borderStructural,
-              ),
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('$label — يتطلب ربط الخادم')),
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }
 
-  String _categoryLabel(AttendanceCategory c) => switch (c) {
-    AttendanceCategory.early => 'مبكر',
-    AttendanceCategory.onTime => 'في الوقت',
-    AttendanceCategory.late => 'متأخر',
-    AttendanceCategory.absent => 'غائب',
-  };
-
-  Future<void> _editSession(BuildContext context, _Data data) async {
+  Future<void> _editSession(BuildContext context, AdminSessionRow s) async {
     final repo = AdminRepositoryScope.of(context);
-    final s = data.session;
     final setup = await showSessionSetupSheet(
       context,
       initial: SessionSetupValues(
@@ -808,7 +862,7 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
     );
     if (setup == null || !mounted) return;
     await repo.updateSession(
-      data.session.id,
+      s.id,
       earlyPoints: setup.earlyPoints,
       midPoints: setup.midPoints,
       latePoints: setup.latePoints,
@@ -822,16 +876,80 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
   }
 }
 
-class _Data {
-  const _Data({
-    required this.session,
-    required this.attendance,
-    required this.members,
-    required this.records,
+/// Icon-first filter chip for the day list: the Arabic label only appears on
+/// hover / long press, while the count stays visible. Keeps rows free of the
+/// repeated «مبكر / في الوقت / متأخر / غائب» words.
+class _FilterIconChip extends StatelessWidget {
+  const _FilterIconChip({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+    this.count,
   });
 
-  final AdminSessionRow session;
-  final List<AdminAttendanceRow> attendance;
-  final List<AdminSessionMember> members;
-  final List<AdminSessionRecord> records;
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+  final int? count;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
+    final foreground = selected ? tokens.surfaceCard : color;
+    final count = this.count;
+    return Tooltip(
+      message: label,
+      triggerMode: TooltipTriggerMode.longPress,
+      waitDuration: const Duration(milliseconds: 250),
+      child: Semantics(
+        selected: selected,
+        button: true,
+        label: label,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: SizedBox(
+            height: 44,
+            child: Center(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: selected ? tokens.brand : tokens.surfaceCard,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: selected ? tokens.brand : tokens.borderStructural,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 15, color: foreground),
+                    if (count != null && count > 0) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        formatNumber(count),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: foreground,
+                          fontWeight: FontWeight.w800,
+                          height: 1,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

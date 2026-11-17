@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../../core/utils/date_time_utils.dart';
+import '../../../core/utils/identity_code.dart';
 import '../../student/data/local/student_database.dart' as db;
 import '../../student/data/student_local_repository.dart';
 import '../../student/domain/models/student_models.dart';
@@ -17,6 +18,13 @@ class AdminLocalRepository implements AdminRepository {
 
   final db.StudentDatabase _database;
   final StudentLocalRepository _student;
+
+  /// Demo-only account overlay: the local database has no user table, so new
+  /// accounts created from the UI live here for the session.
+  final List<AdminUserRow> _createdAccounts = [];
+  final Map<int, int> _accountTeacherLinks = {};
+  int _nextAccountId = 900000;
+  int _nextTeacherId = 9000;
 
   // ── Aggregates ──────────────────────────────────────────────────────────
 
@@ -115,6 +123,36 @@ class AdminLocalRepository implements AdminRepository {
         ),
       );
     }
+    result.sort((a, b) {
+      if (a.isActive != b.isActive) return a.isActive ? -1 : 1;
+      return b.startDate.compareTo(a.startDate);
+    });
+    return result;
+  }
+
+  @override
+  Future<List<AdminCourseSummary>> courseBriefs() async {
+    final courseRows = await _database.select(_database.courses).get();
+    final result = [
+      for (final c in courseRows)
+        AdminCourseSummary(
+          id: c.id,
+          name: c.name,
+          startDate: c.startDate,
+          endDate: c.endDate,
+          isActive: !DateTime.now().isAfter(c.endDate),
+          sessionsCount: 0,
+          studentsCount: 0,
+          lastSessionPresent: 0,
+          lastSessionTotal: 0,
+          attendancePercent: 0,
+          series: const [],
+          goodPoints: c.goodPoints,
+          veryGoodPoints: c.veryGoodPoints,
+          excellentPoints: c.excellentPoints,
+          certificatePoints: c.certificatePoints,
+        ),
+    ];
     result.sort((a, b) {
       if (a.isActive != b.isActive) return a.isActive ? -1 : 1;
       return b.startDate.compareTo(a.startDate);
@@ -267,6 +305,7 @@ class AdminLocalRepository implements AdminRepository {
       latePoints: s.latePoints,
       earlyUntil: s.earlyUntil,
       lateFrom: s.lateFrom,
+      courseId: s.courseId,
     );
   }
 
@@ -581,11 +620,13 @@ class AdminLocalRepository implements AdminRepository {
     void add(String name, String role) {
       final n = name.trim();
       if (n.isEmpty || !seen.add(n)) return;
+      final id = nextUserId++;
       out.add(
         TeacherCandidate(
-          userId: nextUserId++,
+          userId: id,
           name: n,
-          username: n,
+          // Keep the display name separate from the mosque-scoped username.
+          username: mosqueScopedCode('frq', id),
           role: role,
         ),
       );
@@ -600,6 +641,24 @@ class AdminLocalRepository implements AdminRepository {
     students.sort((a, b) => a.name.compareTo(b.name));
     for (final s in students) {
       add(s.name, 'طالب');
+    }
+    for (final account in _createdAccounts) {
+      final isTeacher =
+          account.isTeacher || _accountTeacherLinks.containsKey(account.id);
+      if (!isTeacher) continue;
+      final name = account.name.trim().isEmpty
+          ? account.username.trim()
+          : account.name.trim();
+      if (name.isEmpty || !seen.add(name)) continue;
+      out.add(
+        TeacherCandidate(
+          userId: account.id,
+          name: name,
+          username: account.username,
+          role: 'معلم',
+          teacherId: _accountTeacherLinks[account.id] ?? account.teacherId,
+        ),
+      );
     }
     return out;
   }
@@ -618,7 +677,7 @@ class AdminLocalRepository implements AdminRepository {
       const AdminUserRow(
         id: 0,
         name: 'مدير المسجد',
-        username: 'admin',
+        username: 'frq-admin',
         active: true,
         isAdmin: true,
         isSupervisor: true,
@@ -650,6 +709,22 @@ class AdminLocalRepository implements AdminRepository {
           isStudent: true,
           studentId: s.id,
           teamNames: s.teamNames.isEmpty ? const [] : [s.teamNames],
+        ),
+      for (final account in _createdAccounts)
+        AdminUserRow(
+          id: account.id,
+          name: account.name,
+          username: account.username,
+          active: account.active,
+          isAdmin: account.isAdmin,
+          isSupervisor:
+              account.isSupervisor &&
+              !_accountTeacherLinks.containsKey(account.id),
+          isTeacher:
+              account.isTeacher || _accountTeacherLinks.containsKey(account.id),
+          isStudent: account.isStudent,
+          studentId: account.studentId,
+          teacherId: _accountTeacherLinks[account.id] ?? account.teacherId,
         ),
     ];
     var filtered = rows;
@@ -702,6 +777,37 @@ class AdminLocalRepository implements AdminRepository {
   }
 
   @override
+  Future<AdminUserRow> createUser({
+    required String name,
+    String? username,
+    String? password,
+    String? email,
+    bool isAdmin = false,
+    int? studentId,
+    int? teacherId,
+  }) async {
+    final row = AdminUserRow(
+      id: ++_nextAccountId,
+      name: name.trim(),
+      username: username?.trim() ?? '',
+      active: true,
+      isAdmin: isAdmin,
+      isSupervisor: !isAdmin && teacherId == null,
+      isTeacher: teacherId != null,
+      isStudent: studentId != null,
+      studentId: studentId,
+      teacherId: teacherId,
+    );
+    _createdAccounts.add(row);
+    return row;
+  }
+
+  @override
+  Future<void> resetUserPassword(int userId, {String? newPassword}) async {
+    // Demo-only: the local fallback has no credentials to update.
+  }
+
+  @override
   Future<AdminUserPermissions> userPermissions(int userId) async {
     return const AdminUserPermissions(
       isAdmin: false,
@@ -723,10 +829,12 @@ class AdminLocalRepository implements AdminRepository {
   Future<AdminTeacherDetail?> teacherDetail(int teacherId) async => null;
 
   @override
-  Future<int> createTeacher(String name) async => 0;
+  Future<int> createTeacher(String name) async => ++_nextTeacherId;
 
   @override
-  Future<void> linkTeacherToUser(int userId, int teacherId) async {}
+  Future<void> linkTeacherToUser(int userId, int teacherId) async {
+    _accountTeacherLinks[userId] = teacherId;
+  }
 
   @override
   Future<void> deleteTeacher(int teacherId) async {
@@ -1563,6 +1671,7 @@ class AdminLocalRepository implements AdminRepository {
   }) async {
     final existing = await _database.select(_database.students).get();
     final id = await _nextId(existing.length, base: 1000);
+    final mosqueInfo = await mosque();
     await _database
         .into(_database.students)
         .insert(
@@ -1571,8 +1680,9 @@ class AdminLocalRepository implements AdminRepository {
             name: name,
             fatherName: Value(fatherName),
             yearOfBirth: Value(yearOfBirth),
-            // BR-625/707: barcode = mosque code + student id.
-            barcode: 'frq-$id',
+            // BR-624/625/707: both the account username and the barcode carry
+            // the mosque code as their only prefix.
+            barcode: mosqueScopedCode(mosqueInfo.code, id),
           ),
         );
     if (teamId != null) {

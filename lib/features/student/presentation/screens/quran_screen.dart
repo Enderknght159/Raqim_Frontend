@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/state/section_loader.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
-import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/progress_bar.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
-import '../../data/student_repository.dart';
 import '../../domain/models/student_models.dart';
 import '../../domain/quran_units.dart';
 import '../../domain/student_stats.dart';
@@ -15,10 +14,28 @@ import '../student_shell.dart';
 import '../widgets/certificates_sheet.dart';
 import '../widgets/quran_map.dart';
 import '../widgets/rating_stars.dart';
+import '../widgets/section_memo.dart';
 import '../widgets/tasmi_log_sheet.dart';
+
+/// Juz are considered "tested" when a certificate covers their range.
+Set<int> _testedJuz(List<Certificate> certs) {
+  final tested = <int>{};
+  for (final c in certs) {
+    for (var j = c.startJuz; j <= c.endJuz; j++) {
+      tested.add(j);
+    }
+  }
+  return tested;
+}
+
+typedef _QuranMapData = ({List<Memorization> memorizations, Set<int> testedJuz});
 
 /// B2 — القرآن: stats + map of the whole mushaf (juz-paged) + certificates +
 /// tasmi' log.
+///
+/// The page shell, every section header and the fast cards paint immediately;
+/// the stats, the mushaf map, the certificates and the tasmi' log each load in
+/// their own [AsyncSection], so a slow map query never hides the rest.
 class QuranScreen extends StatefulWidget {
   const QuranScreen({super.key});
 
@@ -27,143 +44,137 @@ class QuranScreen extends StatefulWidget {
 }
 
 class _QuranScreenState extends State<QuranScreen> {
-  Future<_QuranData>? _future;
-  Future<_QuranData?>? _cached;
+  /// Bumped by pull-to-refresh so every section refetches.
+  int _revision = 0;
+
+  SectionMemo<List<Memorization>>? _memorizations;
+  SectionMemo<List<Certificate>>? _certificates;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_memorizations != null) return;
     final repo = StudentRepositoryScope.of(context);
-    _future ??= _load(repo);
-    _cached ??= _cachedData(repo);
+    _memorizations = SectionMemo(repo.allMemorizations);
+    _certificates = SectionMemo(repo.certificates);
   }
 
-  Future<_QuranData> _load(StudentRepository repo) async {
-    final memsF = repo.allMemorizations();
-    final statsF = repo.quranStats();
-    final certsF = repo.certificates();
-    final mems = await memsF;
-    final stats = await statsF;
-    final certs = await certsF;
-    return _QuranData(
-      stats: stats,
-      memorizations: mems,
-      certificates: certs,
+  Future<void> _refresh() async {
+    if (!mounted) return;
+    setState(() => _revision++);
+  }
+
+  /// Map + certificates share the certificate request through the memo.
+  Future<_QuranMapData> _loadMap() async {
+    // A certificates failure must not hide the map: it only drops the
+    // «مختبر» overlay, while the certificates card reports its own error.
+    final certsF = _certificates!(_revision).then<List<Certificate>>(
+      (certs) => certs,
+      onError: (Object _, StackTrace _) => const <Certificate>[],
+    );
+    final results = await Future.wait<Object>([
+      _memorizations!(_revision),
+      certsF,
+    ]);
+    final certs = results[1] as List<Certificate>;
+    return (
+      memorizations: results[0] as List<Memorization>,
       testedJuz: _testedJuz(certs),
     );
-  }
-
-  Future<_QuranData?> _cachedData(StudentRepository repo) async {
-    final mems = await repo.cachedMemorizations();
-    final stats = await repo.cachedQuranStats();
-    final certs = await repo.cachedCertificates();
-    if (mems == null && stats == null && certs == null) return null;
-    return _QuranData(
-      stats:
-          stats ??
-          const QuranStats(
-            pagesMemorized: 0,
-            monthlyRate: 0,
-            expectedCompletion: null,
-          ),
-      memorizations: mems ?? const [],
-      certificates: certs ?? const [],
-      testedJuz: _testedJuz(certs ?? const []),
-    );
-  }
-
-  /// Juz are considered "tested" when a certificate covers their range.
-  Set<int> _testedJuz(List<Certificate> certs) {
-    final tested = <int>{};
-    for (final c in certs) {
-      for (var j = c.startJuz; j <= c.endJuz; j++) {
-        tested.add(j);
-      }
-    }
-    return tested;
   }
 
   @override
   Widget build(BuildContext context) {
     final repo = StudentRepositoryScope.of(context);
-    final future = _future ??= _load(repo);
     return Scaffold(
-      body: AsyncView<_QuranData>(
-        future: future,
-        cacheKey: 'student-quran',
-        cached: _cached ??= _cachedData(repo),
-        onRetry: () => setState(() => _future = _load(repo)),
-        builder: (context, data) => _QuranBody(data: data),
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          children: [
+            AsyncSection<QuranStats>(
+              cacheKey: 'student-quran-stats',
+              revision: _revision,
+              load: repo.quranStats,
+              skeleton: const _StatsSkeleton(),
+              builder: (context, stats) => _StatsSection(stats: stats),
+            ),
+            const SizedBox(height: 14),
+            const SectionHeader(icon: Icons.map_outlined, title: 'خريطة الحفظ'),
+            const SizedBox(height: 8),
+            AsyncSection<_QuranMapData>(
+              cacheKey: 'student-quran-map',
+              revision: _revision,
+              delay: const Duration(milliseconds: 60),
+              load: _loadMap,
+              skeleton: const SectionSkeleton(height: 240, lines: 1),
+              builder: (context, data) {
+                if (data.memorizations.isEmpty) {
+                  return const EmptyState(
+                    title: 'ابدأ رحلتك!',
+                    icon: Icons.rocket_launch,
+                    message: 'لم تسجّل أي صفحات بعد',
+                  );
+                }
+                return QuranMap(
+                  memorizations: data.memorizations,
+                  testedJuz: data.testedJuz,
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            const SectionHeader(
+              icon: Icons.emoji_events_outlined,
+              title: 'شهادات القرآن',
+            ),
+            const SizedBox(height: 10),
+            AsyncSection<List<Certificate>>(
+              cacheKey: 'student-quran-certificates',
+              revision: _revision,
+              delay: const Duration(milliseconds: 100),
+              load: () => _certificates!(_revision),
+              skeleton: const SectionSkeleton(height: 84, lines: 2),
+              builder: (context, certs) =>
+                  _CertificatesCard(certs: certs, testedJuz: _testedJuz(certs)),
+            ),
+            const SizedBox(height: 16),
+            const SectionHeader(icon: Icons.history, title: 'سجل التسميع'),
+            const SizedBox(height: 10),
+            AsyncSection<List<Memorization>>(
+              cacheKey: 'student-quran-tasmi',
+              revision: _revision,
+              delay: const Duration(milliseconds: 140),
+              load: () => _memorizations!(_revision),
+              skeleton: const SectionSkeleton(height: 60, lines: 1),
+              builder: (context, mems) => _TasmiCard(memorizations: mems),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _QuranData {
-  const _QuranData({
-    required this.stats,
-    required this.memorizations,
-    required this.certificates,
-    required this.testedJuz,
-  });
+// ── Stats (motivational) ──────────────────────────────────────────────────
+
+class _StatsSection extends StatelessWidget {
+  const _StatsSection({required this.stats});
 
   final QuranStats stats;
-  final List<Memorization> memorizations;
-  final List<Certificate> certificates;
-  final Set<int> testedJuz;
-}
-
-class _QuranBody extends StatelessWidget {
-  const _QuranBody({required this.data});
-
-  final _QuranData data;
 
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    if (data.memorizations.isEmpty) {
-      return const EmptyState(
-        title: 'ابدأ رحلتك!',
-        icon: Icons.rocket_launch,
-        message: 'لم تسجّل أي صفحات بعد',
-      );
-    }
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _statsSection(context, tokens),
-        const SizedBox(height: 14),
-        const SectionHeader(icon: Icons.map_outlined, title: 'خريطة الحفظ'),
-        const SizedBox(height: 8),
-        QuranMap(memorizations: data.memorizations, testedJuz: data.testedJuz),
-        const SizedBox(height: 16),
-        const SectionHeader(
-          icon: Icons.emoji_events_outlined,
-          title: 'شهادات القرآن',
-        ),
-        const SizedBox(height: 10),
-        _certificatesCard(context, tokens),
-        const SizedBox(height: 16),
-        const SectionHeader(icon: Icons.history, title: 'سجل التسميع'),
-        const SizedBox(height: 10),
-        _tasmiPreview(context, tokens),
-        const SizedBox(height: 24),
-      ],
-    );
-  }
-
-  // ── Stats (motivational) ────────────────────────────────────────────────
-
-  Widget _statsSection(BuildContext context, AppTokens tokens) {
-    final stats = data.stats;
     return Column(
       children: [
         // Two adjacent cards: khitmah (date is the hero) + monthly rate.
         Row(
           children: [
-            Expanded(child: _khatmCard(context, tokens, stats)),
+            Expanded(child: _khatmCard(context, tokens)),
             const SizedBox(width: 10),
-            Expanded(child: _rateCard(context, tokens, stats)),
+            Expanded(child: _rateCard(context, tokens)),
           ],
         ),
         const SizedBox(height: 10),
@@ -176,7 +187,10 @@ class _QuranBody extends StatelessWidget {
                 children: [
                   Icon(Icons.hourglass_top, size: 16, color: tokens.info),
                   const SizedBox(width: 6),
-                  Flexible(
+                  // Expanded (not Flexible + Spacer): the label takes all the
+                  // leftover width instead of half of it, so it is never
+                  // ellipsised early on a 390px phone.
+                  Expanded(
                     child: Text(
                       'نسبة إتمام الحفظ للقرآن كاملًا',
                       maxLines: 1,
@@ -186,7 +200,7 @@ class _QuranBody extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   Text(
                     '${stats.percent}%',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
@@ -216,7 +230,7 @@ class _QuranBody extends StatelessWidget {
     );
   }
 
-  Widget _khatmCard(BuildContext context, AppTokens tokens, QuranStats stats) {
+  Widget _khatmCard(BuildContext context, AppTokens tokens) {
     return AppCard(
       color: tokens.infoTint,
       borderColor: tokens.infoLight.withValues(alpha: 0.4),
@@ -235,7 +249,7 @@ class _QuranBody extends StatelessWidget {
           Text(
             stats.expectedCompletion == null
                 ? '—'
-                : _fmt(stats.expectedCompletion!),
+                : _fmtDate(stats.expectedCompletion!),
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               color: tokens.info,
               fontWeight: FontWeight.w900,
@@ -246,7 +260,7 @@ class _QuranBody extends StatelessWidget {
     );
   }
 
-  Widget _rateCard(BuildContext context, AppTokens tokens, QuranStats stats) {
+  Widget _rateCard(BuildContext context, AppTokens tokens) {
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,11 +304,40 @@ class _QuranBody extends StatelessWidget {
       ),
     );
   }
+}
 
-  // ── Certificates ───────────────────────────────────────────────────────
+class _StatsSkeleton extends StatelessWidget {
+  const _StatsSkeleton();
 
-  Widget _certificatesCard(BuildContext context, AppTokens tokens) {
-    final certs = data.certificates;
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: SectionSkeleton(height: 34, lines: 1)),
+            SizedBox(width: 10),
+            Expanded(child: SectionSkeleton(height: 34, lines: 1)),
+          ],
+        ),
+        SizedBox(height: 10),
+        SectionSkeleton(height: 34, lines: 1),
+      ],
+    );
+  }
+}
+
+// ── Certificates ──────────────────────────────────────────────────────────
+
+class _CertificatesCard extends StatelessWidget {
+  const _CertificatesCard({required this.certs, required this.testedJuz});
+
+  final List<Certificate> certs;
+  final Set<int> testedJuz;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
     final entries = <CertificateEntry>[
       for (final c in certs)
         (
@@ -362,7 +405,7 @@ class _QuranBody extends StatelessWidget {
             ),
           const SizedBox(height: 4),
           Text(
-            'الأجزاء المختبرة: ${data.testedJuz.length} من 30',
+            'الأجزاء المختبرة: ${testedJuz.length} من 30',
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
@@ -371,29 +414,57 @@ class _QuranBody extends StatelessWidget {
       ),
     );
   }
+}
 
-  // ── Tasmi' log ─────────────────────────────────────────────────────────
+// ── Tasmi' log ─────────────────────────────────────────────────────────────
 
-  Widget _tasmiPreview(BuildContext context, AppTokens tokens) {
-    final mems = data.memorizations;
+class _TasmiCard extends StatelessWidget {
+  const _TasmiCard({required this.memorizations});
+
+  final List<Memorization> memorizations;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
+    final mems = memorizations;
     final rows = mems
         .map(
           (m) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 5),
             child: Row(
               children: [
-                Text(
-                  'صفحة ${m.page}',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                // Icon + number: «صفحة» is not repeated on every row.
+                Tooltip(
+                  message: 'رقم الصفحة',
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.auto_stories_outlined,
+                        size: 14,
+                        color: tokens.textMuted,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${m.page}',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const Spacer(),
-                Text(
-                  quranDisplaySurah(m.page, m.partIndex, m.surah),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    quranDisplaySurah(m.page, m.partIndex, m.surah),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 RatingStars(rating: m.rating),
@@ -405,7 +476,16 @@ class _QuranBody extends StatelessWidget {
     return AppCard(
       child: Column(
         children: [
-          for (final r in rows.take(3)) r,
+          if (rows.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'لم تسجّل أي صفحات بعد',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            )
+          else
+            for (final r in rows.take(3)) r,
           if (rows.length > 3)
             TextButton(
               onPressed: () => showTasmiLogSheet(context, mems),
@@ -418,6 +498,6 @@ class _QuranBody extends StatelessWidget {
       ),
     );
   }
-
-  String _fmt(DateTime d) => '${d.day}/${d.month}/${d.year}';
 }
+
+String _fmtDate(DateTime d) => '${d.day}/${d.month}/${d.year}';

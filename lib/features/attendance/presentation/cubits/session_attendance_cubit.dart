@@ -236,6 +236,39 @@ class SessionAttendanceCubit extends Cubit<SessionAttendanceState> {
     }
   }
 
+  /// Registers a student that is not part of the course roster yet (never
+  /// attended any session of this course), so the backend — which accepts any
+  /// mosque student on `POST /sessions/{id}/attendance` — can record them.
+  ///
+  /// The newcomer is appended to [SessionAttendanceState.members] first so the
+  /// list shows them immediately, then the normal [register] path runs so the
+  /// undo banner, duplicate handling and failure events keep working.
+  /// Returns true when attendance ended up registered in this session.
+  Future<bool> registerExternal(AdminStudentRow student, {DateTime? at}) async {
+    final current = state;
+    if (!current.isReady) return false;
+    final existing = current.members
+        .where((m) => m.studentId == student.id)
+        .firstOrNull;
+    final member =
+        existing ??
+        AdminSessionMember(
+          studentId: student.id,
+          name: student.name,
+          barcode: student.barcode,
+        );
+    if (existing == null) {
+      // Seed from the roster fallback so appending one newcomer does not hide
+      // students that the server only exposed through `attendance`.
+      final base = current.members.isNotEmpty
+          ? current.members
+          : current.roster;
+      emit(current.copyWith(members: [...base, member], clearError: true));
+    }
+    await register(member, at: at);
+    return state.registered.containsKey(student.id);
+  }
+
   Future<void> handleScan(String code) async {
     final value = code.trim();
     final current = state;

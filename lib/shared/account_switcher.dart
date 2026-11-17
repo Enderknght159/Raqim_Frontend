@@ -319,6 +319,7 @@ class _AddAccountDialogState extends State<_AddAccountDialog> {
               labelText: 'كلمة المرور',
               prefixIcon: const Icon(Icons.lock_outline),
               suffixIcon: IconButton(
+                tooltip: _obscure ? 'إظهار كلمة المرور' : 'إخفاء كلمة المرور',
                 onPressed: () => setState(() => _obscure = !_obscure),
                 icon: Icon(
                   _obscure ? Icons.visibility_outlined : Icons.visibility_off,

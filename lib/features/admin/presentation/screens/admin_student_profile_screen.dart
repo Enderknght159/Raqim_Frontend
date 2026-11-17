@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/state/section_loader.dart';
+import '../../../../core/storage/screen_cache.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
-import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/icon_toggle_group.dart';
 import '../../../../core/widgets/progress_bar.dart';
 import '../../../../core/widgets/responsive_page.dart';
@@ -20,6 +21,7 @@ import '../../../student/presentation/widgets/quran_map.dart';
 import '../../../student/presentation/widgets/tasmi_log_sheet.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
+import '../widgets/course_metrics_panel.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// E7 — Student profile (admin): the student's whole record — header (teams
@@ -50,12 +52,28 @@ class AdminStudentProfileScreen extends StatefulWidget {
 }
 
 class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
-  late Future<_Data> _future;
+  /// Bumped after every write so all card sections reload.
+  int _revision = 0;
+  String? _studentName;
+
+  /// One profile request shared by the card sections.
+  Future<AdminStudentProfile>? _profileFuture;
+  int _profileToken = 0;
+  bool _cacheSeeded = false;
 
   @override
-  void initState() {
-    super.initState();
-    _future = _load();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_cacheSeeded) return;
+    _cacheSeeded = true;
+    // Paint the title immediately on a revisit instead of «ملف الطالب».
+    final prefix =
+        '${widget.teacherMode ? 'teacher' : 'admin'}-student-${widget.studentId}';
+    final cached = ScreenCache.instance.read<AdminStudentProfile>(
+      '$prefix-header',
+    );
+    final name = cached?.profile.name;
+    if (name != null && name.isNotEmpty) _studentName = name;
   }
 
   Future<T?> _safe<T>(Future<T> future) async {
@@ -66,26 +84,33 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
     }
   }
 
-  Future<_Data> _load() async {
-    final repo = AdminRepositoryScope.of(context);
-    final profileF = repo.studentProfile(widget.studentId);
-    final recordsF = repo.studentCourseRecords(widget.studentId);
-    final requestsF = widget.teacherMode
-        ? Future.value(const <AdminChangeRequest>[])
-        : _safe(repo.changeRequests());
-    final teamsF = _safe(repo.teams());
-    final profile = await profileF;
-    final records = await recordsF;
-    final requests = (await requestsF ?? const [])
-        .where((r) => r.studentId == widget.studentId)
-        .toList();
-    final allTeams = await teamsF ?? const [];
-    return _Data(
-      profile: profile,
-      records: records,
-      requests: requests,
-      allTeams: allTeams,
+  Future<AdminStudentProfile> _fetchProfile() async {
+    final token = _profileToken;
+    final profile = await AdminRepositoryScope.of(
+      context,
+    ).studentProfile(widget.studentId);
+    if (mounted &&
+        token == _profileToken &&
+        _studentName != profile.profile.name) {
+      setState(() => _studentName = profile.profile.name);
+    }
+    return profile;
+  }
+
+  /// Memoized profile for the header/overview/Quran/output/data cards. A
+  /// failure is not memoized so a section retry hits the repository again.
+  Future<AdminStudentProfile> _profile() {
+    final existing = _profileFuture;
+    if (existing != null) return existing;
+    final future = _fetchProfile();
+    _profileFuture = future;
+    future.then<void>(
+      (_) {},
+      onError: (Object _) {
+        if (identical(_profileFuture, future)) _profileFuture = null;
+      },
     );
+    return future;
   }
 
   bool _canEditStudents(BuildContext context) {
@@ -96,50 +121,156 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
   }
 
   void _reload() {
+    if (!mounted) return;
     setState(() {
-      _future = _load();
+      _profileFuture = null;
+      _profileToken++;
+      _revision++;
     });
   }
 
+  Future<void> _refresh() async {
+    if (!mounted) return;
+    setState(() {
+      _profileFuture = null;
+      _profileToken++;
+      _revision++;
+    });
+  }
+
+  /// Shared error card for the profile-backed cards. Retrying reloads the
+  /// whole page so every card that failed on the same request recovers.
+  Widget _profileError(BuildContext context, VoidCallback _) =>
+      SectionError(onRetry: _reload, message: 'تعذر تحميل بيانات الطالب');
+
   @override
   Widget build(BuildContext context) {
-    return AsyncView<_Data>(
-      future: _future,
-      cacheKey:
-          '${widget.teacherMode ? 'teacher' : 'admin'}-student-${widget.studentId}',
-      frame: (context, child) => Scaffold(
-        appBar: AppBar(title: const Text('ملف الطالب')),
-        body: child,
-      ),
-      builder: (context, data) => Scaffold(
-        appBar: AppBar(title: Text(data.profile.profile.name)),
-        body: ResponsivePage(
-          maxWidth: 1200,
+    final prefix =
+        '${widget.teacherMode ? 'teacher' : 'admin'}-student-${widget.studentId}';
+    return Scaffold(
+      appBar: AppBar(title: Text(_studentName ?? 'ملف الطالب')),
+      body: ResponsivePage(
+        maxWidth: 1200,
+        child: RefreshIndicator(
+          onRefresh: _refresh,
           child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
             children: [
-              _header(context, data),
+              AsyncSection<AdminStudentProfile>(
+                cacheKey: '$prefix-header',
+                revision: _revision,
+                skeleton: const SectionSkeleton(height: 52, lines: 1),
+                errorBuilder: _profileError,
+                load: _profile,
+                builder: (context, profile) => _header(context, profile),
+              ),
               const SizedBox(height: 12),
-              _overview(context, data.profile),
+              AsyncSection<AdminStudentProfile>(
+                cacheKey: '$prefix-overview',
+                revision: _revision,
+                skeleton: const SectionSkeleton(height: 72, lines: 1),
+                errorBuilder: _profileError,
+                load: _profile,
+                builder: (context, profile) => _overview(context, profile),
+              ),
               const SizedBox(height: 12),
-              _teamsCard(context, data),
+              AsyncSection<AdminStudentProfile>(
+                cacheKey: '$prefix-teams',
+                revision: _revision,
+                skeleton: const SectionSkeleton(height: 64, lines: 2),
+                errorBuilder: _profileError,
+                load: _profile,
+                builder: (context, profile) => _teamsCard(context, profile),
+              ),
               const SizedBox(height: 12),
-              _quranCard(context, data.profile),
+              // Quran map + tasmi' + certificates sheet.
+              AsyncSection<AdminStudentProfile>(
+                cacheKey: '$prefix-quran',
+                revision: _revision,
+                skeleton: const SectionSkeleton(height: 140, lines: 3),
+                errorBuilder: _profileError,
+                load: _profile,
+                builder: (context, profile) => _quranCard(context, profile),
+              ),
               const SizedBox(height: 12),
-              _achievementCard(context, data.profile),
+              // Academic activity/output (subjects, exams, matn, show-more).
+              AsyncSection<AdminStudentProfile>(
+                cacheKey: '$prefix-output',
+                revision: _revision,
+                skeleton: const SectionSkeleton(height: 110, lines: 3),
+                errorBuilder: _profileError,
+                load: _profile,
+                builder: (context, profile) =>
+                    _achievementCard(context, profile),
+              ),
               const SizedBox(height: 12),
-              _dataCard(context, data.profile),
+              AsyncSection<AdminStudentProfile>(
+                cacheKey: '$prefix-data',
+                revision: _revision,
+                skeleton: const SectionSkeleton(height: 96, lines: 2),
+                errorBuilder: _profileError,
+                load: _profile,
+                builder: (context, profile) => _dataCard(context, profile),
+              ),
               const SizedBox(height: 12),
-              _phonesCard(context, data.profile),
+              AsyncSection<AdminStudentProfile>(
+                cacheKey: '$prefix-phones',
+                revision: _revision,
+                skeleton: const SectionSkeleton(height: 64, lines: 2),
+                errorBuilder: _profileError,
+                load: _profile,
+                builder: (context, profile) => _phonesCard(context, profile),
+              ),
               if (!widget.teacherMode) ...[
                 const SizedBox(height: 12),
-                _qr(context, data.profile),
+                AsyncSection<AdminStudentProfile>(
+                  cacheKey: '$prefix-qr',
+                  revision: _revision,
+                  skeleton: const SectionSkeleton(height: 180, lines: 1),
+                  errorBuilder: _profileError,
+                  load: _profile,
+                  builder: (context, profile) => _qr(context, profile),
+                ),
               ],
               const SizedBox(height: 12),
-              _records(context, data),
+              // Course records: their own request.
+              AsyncSection<List<({int courseId, String course, int points})>>(
+                cacheKey: '$prefix-records',
+                revision: _revision,
+                skeleton: const SectionSkeleton(height: 88, lines: 3),
+                errorBuilder: (context, retry) => SectionError(
+                  onRetry: retry,
+                  message: 'تعذر تحميل سجلات الدورات',
+                ),
+                load: () => AdminRepositoryScope.of(
+                  context,
+                ).studentCourseRecords(widget.studentId),
+                builder: (context, records) => _records(context, records),
+              ),
               if (!widget.teacherMode) ...[
                 const SizedBox(height: 12),
-                _changeRequests(context, data),
+                AsyncSection<List<AdminChangeRequest>>(
+                  cacheKey: '$prefix-requests',
+                  revision: _revision,
+                  skeleton: const SectionSkeleton(height: 64, lines: 2),
+                  errorBuilder: (context, retry) => SectionError(
+                    onRetry: retry,
+                    message: 'تعذر تحميل طلبات التغيير',
+                  ),
+                  load: () async {
+                    final requests =
+                        await _safe(
+                          AdminRepositoryScope.of(context).changeRequests(),
+                        ) ??
+                        const <AdminChangeRequest>[];
+                    return requests
+                        .where((r) => r.studentId == widget.studentId)
+                        .toList();
+                  },
+                  builder: (context, requests) =>
+                      _changeRequests(context, requests),
+                ),
               ],
             ],
           ),
@@ -150,9 +281,8 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
 
   // ── Header (teams are tappable → team manager) ─────────────────────────
 
-  Widget _header(BuildContext context, _Data data) {
+  Widget _header(BuildContext context, AdminStudentProfile p) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    final p = data.profile;
     return AppCard(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,9 +327,9 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
   }
 
   /// Explicit access to the student's teams (tap → team manager).
-  Widget _teamsCard(BuildContext context, _Data data) {
+  Widget _teamsCard(BuildContext context, AdminStudentProfile p) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    final teams = data.profile.teams;
+    final teams = p.teams;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -245,14 +375,14 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
                 trailing: widget.teacherMode
                     ? null
                     : Icon(Icons.chevron_left, color: tokens.borderStructural),
-                onTap: widget.teacherMode ? null : () => _openTeam(data, team),
+                onTap: widget.teacherMode ? null : () => _openTeam(team),
               ),
         ],
       ),
     );
   }
 
-  Future<void> _openTeam(_Data data, Team team) async {
+  Future<void> _openTeam(Team team) async {
     await context.push('/admin/teams/${team.id}');
     if (!mounted) return;
     _reload();
@@ -271,35 +401,47 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
             title: 'نظرة عامة',
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: StatTile(
-                  label: 'صفحات محفوظة',
-                  value: p.pagesMemorized,
-                  icon: Icons.auto_stories_outlined,
-                  color: tokens.brand,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: StatTile(
-                  label: 'شهادات',
-                  value: p.certificatesCount,
-                  icon: Icons.school_outlined,
-                  color: tokens.reward,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: StatTile(
-                  label: 'حلقات',
-                  value: p.teams.length,
-                  icon: Icons.hub_outlined,
-                  color: tokens.info,
-                ),
-              ),
-            ],
+          // Three tiles on a phone squeeze the Arabic labels into ellipses,
+          // so they reflow to two per row below 520px.
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 520 ? 3 : 2;
+              final tileWidth =
+                  (constraints.maxWidth - 8 * (columns - 1)) / columns;
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  SizedBox(
+                    width: tileWidth,
+                    child: StatTile(
+                      label: 'صفحات محفوظة',
+                      value: p.pagesMemorized,
+                      icon: Icons.auto_stories_outlined,
+                      color: tokens.brand,
+                    ),
+                  ),
+                  SizedBox(
+                    width: tileWidth,
+                    child: StatTile(
+                      label: 'شهادات',
+                      value: p.certificatesCount,
+                      icon: Icons.school_outlined,
+                      color: tokens.reward,
+                    ),
+                  ),
+                  SizedBox(
+                    width: tileWidth,
+                    child: StatTile(
+                      label: 'حلقات',
+                      value: p.teams.length,
+                      icon: Icons.hub_outlined,
+                      color: tokens.info,
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -323,20 +465,31 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
             title: 'البطاقة القرآنية',
           ),
           const SizedBox(height: 8),
-          Row(
+          // Icon + number pairs: the caption lives in the tooltip so the three
+          // counters never wrap into «رقم فوقه كلمة» stacks.
+          Wrap(
+            spacing: 16,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              _miniStat(context, '${p.pagesMemorized}', 'صفحة', tokens.brand),
-              _miniStat(
-                context,
-                '${p.testedJuz}/30',
-                'أجزاء مختبرة',
-                tokens.info,
+              IconCount(
+                icon: Icons.auto_stories_outlined,
+                value: p.pagesMemorized,
+                tooltip: 'صفحات محفوظة',
+                color: tokens.brand,
               ),
-              _miniStat(
-                context,
-                '${p.certificatesCount}',
-                'شهادة',
-                tokens.reward,
+              IconCount(
+                icon: Icons.fact_check_outlined,
+                value: p.testedJuz,
+                fraction: 30,
+                tooltip: 'أجزاء مختبرة من 30',
+                color: tokens.info,
+              ),
+              IconCount(
+                icon: Icons.school_outlined,
+                value: p.certificatesCount,
+                tooltip: 'شهادات',
+                color: tokens.reward,
               ),
             ],
           ),
@@ -409,12 +562,16 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
                           color: tokens.accentMatn,
                         ),
                         const SizedBox(width: 6),
-                        Expanded(child: Text('${s.subject} (النهائي)')),
-                        Text(
-                          s.result == null ? '—' : '${s.result}%',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            color: tokens.info,
+                        Expanded(child: Text(s.subject)),
+                        const SizedBox(width: 8),
+                        Tooltip(
+                          message: 'النتيجة النهائية',
+                          child: Text(
+                            s.result == null ? '—' : '${s.result}%',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: tokens.info,
+                            ),
                           ),
                         ),
                       ],
@@ -464,10 +621,13 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
                     Row(
                       children: [
                         Expanded(child: Text(m.name)),
-                        Text(
-                          '${m.lastVerse} / ${m.totalVerses} بيت',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: tokens.textMuted),
+                        const SizedBox(width: 8),
+                        IconCount(
+                          icon: Icons.format_quote_outlined,
+                          value: m.lastVerse,
+                          fraction: m.totalVerses,
+                          tooltip: 'البيت الأخير من إجمالي الأبيات',
+                          color: tokens.accentMatn,
                         ),
                       ],
                     ),
@@ -621,44 +781,20 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
                     Icons.format_quote_outlined,
                     color: tokens.accentMatn,
                   ),
-                  title: Text('${m.matnName} — البيت الأخير ${m.lastVerse}'),
+                  title: Text(m.matnName),
                   subtitle: Text(
                     '${m.teacherName}'
                     '${m.date == null ? '' : ' · ${m.date!.day}/${m.date!.month}/${m.date!.year}'}',
                   ),
+                  trailing: IconCount(
+                    icon: Icons.format_list_numbered_outlined,
+                    value: m.lastVerse,
+                    tooltip: 'البيت الأخير',
+                    color: tokens.accentMatn,
+                  ),
                 ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _miniStat(
-    BuildContext context,
-    String value,
-    String label,
-    Color color,
-  ) {
-    final tokens = Theme.of(context).extension<AppTokens>()!;
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-          ),
-        ],
       ),
     );
   }
@@ -1069,7 +1205,10 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
 
   // ── Course records (tap → the student's achievement in that course) ───
 
-  Widget _records(BuildContext context, _Data data) {
+  Widget _records(
+    BuildContext context,
+    List<({int courseId, String course, int points})> records,
+  ) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     return AppCard(
       child: Column(
@@ -1080,13 +1219,13 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
             title: 'سجلات الدورات',
           ),
           const SizedBox(height: 4),
-          if (data.records.isEmpty)
+          if (records.isEmpty)
             Text(
               'لا سجلات في أي دورة',
               style: Theme.of(context).textTheme.bodyMedium,
             )
           else
-            for (final r in data.records)
+            for (final r in records)
               ListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
@@ -1101,21 +1240,13 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      '${r.points}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        color: tokens.rewardText,
-                      ),
+                    IconCount(
+                      icon: Icons.stars_outlined,
+                      value: r.points,
+                      tooltip: 'نقاط الدورة',
+                      color: tokens.rewardText,
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'نقطة',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                    ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     Icon(Icons.chevron_left, color: tokens.borderStructural),
                   ],
                 ),
@@ -1130,7 +1261,10 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
     );
   }
 
-  Widget _changeRequests(BuildContext context, _Data data) {
+  Widget _changeRequests(
+    BuildContext context,
+    List<AdminChangeRequest> requests,
+  ) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     return AppCard(
       child: Column(
@@ -1141,10 +1275,10 @@ class _AdminStudentProfileScreenState extends State<AdminStudentProfileScreen> {
             title: 'طلبات التغيير',
           ),
           const SizedBox(height: 8),
-          if (data.requests.isEmpty)
+          if (requests.isEmpty)
             Text('لا طلبات', style: Theme.of(context).textTheme.bodyMedium)
           else
-            for (final r in data.requests)
+            for (final r in requests)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
@@ -1263,20 +1397,4 @@ class _TapRow extends StatelessWidget {
       ),
     );
   }
-}
-
-class _Data {
-  const _Data({
-    required this.profile,
-    required this.records,
-    required this.requests,
-    required this.allTeams,
-  });
-
-  final AdminStudentProfile profile;
-
-  /// Per-course records: {courseId, course name, points}.
-  final List<({int courseId, String course, int points})> records;
-  final List<AdminChangeRequest> requests;
-  final List<AdminTeamRow> allTeams;
 }

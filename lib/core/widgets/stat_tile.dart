@@ -5,9 +5,11 @@ import 'app_card.dart';
 import 'icon_tile.dart';
 import '../theme/app_theme.dart';
 
-/// A compact stat tile used on dashboards (summary cards): the icon sits on
-/// top, with the value and its label stacked beneath it (avoids cramped rows
-/// on narrow cards).
+/// A compact dashboard stat card: the icon and its label share the top row,
+/// and the numeric value sits large and centred underneath.
+///
+/// The value is wrapped in a [FittedBox] so a long number can never collide
+/// with (or push out) the header row.
 class StatTile extends StatelessWidget {
   const StatTile({
     super.key,
@@ -31,31 +33,51 @@ class StatTile extends StatelessWidget {
     return AppCard(
       onTap: onTap,
       padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            IconTile(icon: icon!, color: accent, size: 34, iconSize: 17),
-            const SizedBox(height: 8),
-          ],
-          Text(
-            formatNumber(value),
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: accent,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 92),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                if (icon != null) ...[
+                  IconTile(icon: icon!, color: accent, size: 30, iconSize: 16),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: Tooltip(
+                    message: label,
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: tokens.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+            const SizedBox(height: 10),
+            Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  formatNumber(value),
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: accent,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -6,15 +6,18 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loading.dart';
 import '../../../../core/widgets/status_badge.dart';
+import '../../../../shared/permissions.dart';
 import '../../data/admin_refresh.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/admin_models.dart';
+import 'account_create_sheet.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// Opens the teacher picker for a team. Returns `''` for "no teacher", a
 /// [TeacherCandidate] for a new assignment, or `null` when cancelled.
 Future<Object?> showTeamTeacherPicker(
   BuildContext context, {
+  required AdminRepository repository,
   required List<TeacherCandidate> candidates,
   required String selected,
 }) {
@@ -23,6 +26,7 @@ Future<Object?> showTeamTeacherPicker(
     isScrollControlled: true,
     showDragHandle: true,
     builder: (context) => _TeacherPickerSheet(
+      repository: repository,
       candidates: candidates,
       selected: selected,
     ),
@@ -186,6 +190,7 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
   Future<void> _editTeacher() async {
     final result = await showTeamTeacherPicker(
       context,
+      repository: widget.repo,
       candidates: _teacherCandidates,
       selected: _teacherName,
     );
@@ -448,8 +453,13 @@ class _TeamManagerSheetState extends State<TeamManagerSheet> {
 
 /// Searchable teacher picker: every account can be a team teacher.
 class _TeacherPickerSheet extends StatefulWidget {
-  const _TeacherPickerSheet({required this.candidates, required this.selected});
+  const _TeacherPickerSheet({
+    required this.repository,
+    required this.candidates,
+    required this.selected,
+  });
 
+  final AdminRepository repository;
   final List<TeacherCandidate> candidates;
   final String selected;
 
@@ -459,7 +469,9 @@ class _TeacherPickerSheet extends StatefulWidget {
 
 class _TeacherPickerSheetState extends State<_TeacherPickerSheet> {
   final _search = TextEditingController();
+  final _created = <TeacherCandidate>[];
   bool _teachersOnly = true;
+  bool _creating = false;
 
   @override
   void dispose() {
@@ -467,12 +479,41 @@ class _TeacherPickerSheetState extends State<_TeacherPickerSheet> {
     super.dispose();
   }
 
+  Future<void> _createTeacherAccount() async {
+    if (_creating) return;
+    setState(() => _creating = true);
+    try {
+      final created = await showCreateAccountSheet(
+        context,
+        repository: widget.repository,
+        initialRole: AdminAccountRole.teacher,
+      );
+      if (created == null || !mounted) return;
+      final candidate = TeacherCandidate(
+        userId: created.user.id,
+        name: created.user.displayName,
+        username: created.user.username,
+        role: 'معلم',
+      );
+      setState(() {
+        _created.add(candidate);
+        _teachersOnly = true;
+      });
+      if (!mounted) return;
+      Navigator.of(context).pop(candidate);
+    } finally {
+      if (mounted) setState(() => _creating = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
+    final canCreate = hasAnyAbility(context, const ['userManagement']);
+    final allCandidates = [..._created, ...widget.candidates];
     final q = _search.text.trim().toLowerCase();
     final base = _teachersOnly
-        ? widget.candidates
+        ? allCandidates
               .where(
                 (c) =>
                     c.role.contains('معلم') ||
@@ -480,7 +521,7 @@ class _TeacherPickerSheetState extends State<_TeacherPickerSheet> {
                     c.role.contains('إدارة'),
               )
               .toList()
-        : widget.candidates;
+        : allCandidates;
     final results = q.isEmpty
         ? base
         : base
@@ -505,6 +546,12 @@ class _TeacherPickerSheetState extends State<_TeacherPickerSheet> {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const Spacer(),
+                if (canCreate)
+                  TextButton.icon(
+                    onPressed: _creating ? null : _createTeacherAccount,
+                    icon: const Icon(Icons.person_add_alt_1, size: 18),
+                    label: const Text('حساب مدرس جديد'),
+                  ),
               ],
             ),
           ),

@@ -6,6 +6,7 @@ import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/list_row.dart';
 import '../../../../core/widgets/responsive_grid.dart';
+import '../../../../core/widgets/skeleton.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../data/student_repository.dart';
 import '../../domain/models/student_models.dart';
@@ -13,6 +14,10 @@ import '../student_shell.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// B4 — حلقاتي: team cards → details (teacher + peers).
+///
+/// The team list is a single request (page-level `AsyncView`), while each
+/// card's peers row loads on its own: it shows a slim skeleton instead of
+/// flashing «لا أصدقاء» before the peers arrive.
 class MyTeamsScreen extends StatelessWidget {
   const MyTeamsScreen({super.key});
 
@@ -50,21 +55,45 @@ class MyTeamsScreen extends StatelessWidget {
   }
 }
 
-class _TeamCard extends StatelessWidget {
+class _TeamCard extends StatefulWidget {
   const _TeamCard({required this.repo, required this.team});
 
   final StudentRepository repo;
   final Team team;
 
   @override
+  State<_TeamCard> createState() => _TeamCardState();
+}
+
+class _TeamCardState extends State<_TeamCard> {
+  late Future<List<StudentBrief>> _peers;
+
+  @override
+  void initState() {
+    super.initState();
+    _peers = widget.repo.peersOfTeam(widget.team.id);
+  }
+
+  @override
+  void didUpdateWidget(covariant _TeamCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.team.id != widget.team.id ||
+        oldWidget.repo != widget.repo) {
+      _peers = widget.repo.peersOfTeam(widget.team.id);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
+    final team = widget.team;
     return FutureBuilder<List<StudentBrief>>(
-      future: repo.peersOfTeam(team.id),
+      future: _peers,
       builder: (context, snapshot) {
         final peers = snapshot.data ?? const <StudentBrief>[];
+        final loading = snapshot.connectionState != ConnectionState.done;
         return AppCard(
-          onTap: () => _showDetail(context, peers),
+          onTap: loading ? null : () => _showDetail(context, peers),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -126,14 +155,20 @@ class _TeamCard extends StatelessWidget {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  _avatarStack(tokens, peers),
-                  const SizedBox(width: 10),
-                  Text(
-                    peers.isEmpty ? 'لا أصدقاء' : '${peers.length} أصدقاء',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                  ),
+                  if (loading) ...[
+                    const Skeleton(width: 64, height: 24, radius: 12),
+                    const SizedBox(width: 10),
+                    const Skeleton(width: 56, height: 12),
+                  ] else ...[
+                    _avatarStack(tokens, peers),
+                    const SizedBox(width: 10),
+                    Text(
+                      peers.isEmpty ? 'لا أصدقاء' : '${peers.length} أصدقاء',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -170,19 +205,20 @@ class _TeamCard extends StatelessWidget {
     );
   }
 
-  IconData _typeIcon() => team.typeName == 'قرآن'
+  IconData _typeIcon() => widget.team.typeName == 'قرآن'
       ? Icons.menu_book
-      : team.typeName == 'عام'
+      : widget.team.typeName == 'عام'
       ? Icons.groups_outlined
       : Icons.school_outlined;
 
-  Color _typeColor(AppTokens tokens) => team.typeName == 'قرآن'
+  Color _typeColor(AppTokens tokens) => widget.team.typeName == 'قرآن'
       ? tokens.brand
-      : team.typeName == 'عام'
+      : widget.team.typeName == 'عام'
       ? tokens.infoLight
       : tokens.accentMatn;
 
   void _showDetail(BuildContext context, List<StudentBrief> peers) {
+    final team = widget.team;
     final tokens = Theme.of(context).extension<AppTokens>()!;
     showAppSheet<void>(
       context: context,

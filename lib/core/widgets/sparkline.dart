@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import 'metric_charts.dart';
 
 /// Minimal sparkline (cumulative points trend) with a soft filled area.
+/// The series is downsampled and drawn as a smooth curve so a busy log does
+/// not turn into a jagged zig-zag.
 class Sparkline extends StatelessWidget {
   const Sparkline({
     super.key,
@@ -22,7 +25,10 @@ class Sparkline extends StatelessWidget {
     return SizedBox(
       height: height,
       child: CustomPaint(
-        painter: _SparklinePainter(values: values, color: accent),
+        painter: _SparklinePainter(
+          values: downsampleSeries(values, 8),
+          color: accent,
+        ),
       ),
     );
   }
@@ -36,28 +42,43 @@ class _SparklinePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (values.length < 2) return;
+    if (values.isEmpty) return;
+    final chart = Rect.fromLTWH(2, 4, size.width - 4, size.height - 8);
+    if (values.length == 1) {
+      canvas.drawCircle(
+        chart.center,
+        2.5,
+        Paint()..color = color,
+      );
+      return;
+    }
     double minV = values.reduce((a, b) => a < b ? a : b);
     double maxV = values.reduce((a, b) => a > b ? a : b);
     final span = maxV - minV;
-    if (span == 0) return;
+    if (span == 0) {
+      canvas.drawLine(
+        Offset(chart.left, chart.center.dy),
+        Offset(chart.right, chart.center.dy),
+        Paint()
+          ..color = color
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round,
+      );
+      return;
+    }
 
     Offset pointAt(int i) {
-      final x = size.width * (i / (values.length - 1));
-      final y =
-          size.height - ((values[i] - minV) / span) * (size.height - 8) - 4;
-      return Offset(x, y.clamp(-8, size.height + 8));
+      final x = chart.left + chart.width * (i / (values.length - 1));
+      final y = chart.bottom - ((values[i] - minV) / span) * chart.height;
+      return Offset(x, y.clamp(chart.top, chart.bottom));
     }
 
-    final linePath = Path()..moveTo(0, size.height);
-    for (var i = 0; i < values.length; i++) {
-      final p = pointAt(i);
-      linePath.lineTo(p.dx, p.dy);
-    }
+    final points = [for (var i = 0; i < values.length; i++) pointAt(i)];
+    final linePath = smoothPathThrough(points, bounds: chart);
 
     final fillPath = Path.from(linePath)
-      ..lineTo(size.width, size.height - 4)
-      ..lineTo(0, size.height - 4)
+      ..lineTo(points.last.dx, chart.bottom)
+      ..lineTo(points.first.dx, chart.bottom)
       ..close();
 
     canvas.drawPath(
@@ -70,7 +91,7 @@ class _SparklinePainter extends CustomPainter {
             color.withValues(alpha: 0.25),
             color.withValues(alpha: 0.02),
           ],
-        ).createShader(Offset.zero & size),
+        ).createShader(chart),
     );
     canvas.drawPath(
       linePath,
@@ -78,6 +99,7 @@ class _SparklinePainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2
         ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
         ..color = color,
     );
   }

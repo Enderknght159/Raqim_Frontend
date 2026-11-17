@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../../../../core/utils/identity_code.dart';
 import '../../domain/quran_units.dart';
 import 'student_database.dart' as db;
 
@@ -81,11 +82,9 @@ Future<void> seedDemoDataIfNeeded(db.StudentDatabase database) async {
     for (var i = 0; i < names.length; i++) {
       final id = i + 1;
       final teamId = teamPool[i % teamPool.length];
-      // Legacy barcode for a few existing students (BR-625/707), custom
-      // mosque-code barcode for the rest.
-      final barcode = (id == 1 || id == 3 || id == 7)
-          ? 'st-${530 + id}'
-          : 'frq-$id';
+      // BR-624/625/707: the mosque code is the only prefix — for every
+      // student barcode and every account username. No role prefixes.
+      final barcode = mosqueScopedCode('frq', id);
       b.insert(
         database.students,
         db.StudentsCompanion.insert(

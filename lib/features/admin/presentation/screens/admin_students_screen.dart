@@ -38,6 +38,7 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
   bool _loading = true;
   bool _loadingMore = false;
   bool _refreshing = false;
+  bool _addingStudent = false;
   Object? _error;
   Object? _loadMoreError;
 
@@ -162,9 +163,9 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
         actions: [
           if (canEditModule(context, 'students'))
             IconButton(
-              tooltip: 'إضافة طالب',
+              tooltip: _addingStudent ? 'جارٍ تجهيز النموذج…' : 'إضافة طالب',
               icon: const Icon(Icons.person_add_alt),
-              onPressed: _addStudent,
+              onPressed: _addingStudent ? null : _addStudent,
             ),
         ],
       ),
@@ -341,111 +342,172 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
   }
 
   Future<void> _addStudent() async {
+    if (_addingStudent) return;
+    setState(() => _addingStudent = true);
     final repo = AdminRepositoryScope.of(context);
     final name = TextEditingController();
     final father = TextEditingController();
     final year = TextEditingController();
     final phone = TextEditingController();
-    final teams = await repo.teams();
-    if (!mounted) return;
-    int? teamId;
-    final created = await showAppSheet<int>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) => Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 0,
-            bottom: 28 + MediaQuery.viewInsetsOf(context).bottom,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('طالب جديد', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 16),
-              TextField(
-                controller: name,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(labelText: 'الاسم'),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: father,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(labelText: 'اسم الأب'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: year,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(
-                        labelText: 'سنة الميلاد',
+    try {
+      final teams = await repo.teams();
+      if (!mounted) return;
+      int? teamId;
+      var submitting = false;
+      var error = '';
+      final created = await showAppSheet<int>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setSheetState) => Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 0,
+              bottom: 28 + MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'طالب جديد',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: name,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(labelText: 'الاسم'),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: father,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(
+                          labelText: 'اسم الأب',
+                        ),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: year,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        decoration: const InputDecoration(
+                          labelText: 'سنة الميلاد',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phone,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'رقم ولي الأمر (اختياري)',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SearchPickerField<AdminTeamRow>(
+                  label: 'اختر الحلقة (اختياري)',
+                  items: teams,
+                  titleBuilder: (t) => t.name,
+                  subtitleBuilder: (t) =>
+                      '${t.typeName} · ${t.studentsCount} طالب',
+                  value: teamId == null
+                      ? null
+                      : teams.where((t) => t.id == teamId).firstOrNull,
+                  onChanged: (t) => setSheetState(() => teamId = t.id),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'سيُنشأ الباركود وحساب الطالب تلقائيًا بسابقة المسجد فقط.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                if (error.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    error,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: phone,
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')),
-                ],
-                decoration: const InputDecoration(
-                  labelText: 'رقم ولي الأمر (اختياري)',
+                const SizedBox(height: 16),
+                AppButton(
+                  label: submitting ? 'جارٍ الإنشاء…' : 'إنشاء',
+                  loading: submitting,
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          final trimmed = name.text.trim();
+                          if (trimmed.isEmpty) {
+                            setSheetState(
+                              () => error = 'أدخل اسم الطالب أولًا.',
+                            );
+                            return;
+                          }
+                          setSheetState(() {
+                            submitting = true;
+                            error = '';
+                          });
+                          try {
+                            final id = await repo.addStudent(
+                              name: trimmed,
+                              fatherName: father.text.trim().isEmpty
+                                  ? null
+                                  : father.text.trim(),
+                              yearOfBirth: int.tryParse(year.text),
+                              teamId: teamId,
+                              phone: phone.text.trim(),
+                            );
+                            if (context.mounted) {
+                              Navigator.of(context).pop(id);
+                            }
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            setSheetState(() {
+                              submitting = false;
+                              error = 'تعذّر إنشاء الطالب: $e';
+                            });
+                          }
+                        },
                 ),
-              ),
-              const SizedBox(height: 12),
-              SearchPickerField<AdminTeamRow>(
-                label: 'اختر الحلقة (اختياري)',
-                items: teams,
-                titleBuilder: (t) => t.name,
-                subtitleBuilder: (t) =>
-                    '${t.typeName} · ${t.studentsCount} طالب',
-                value: teamId == null
-                    ? null
-                    : teams.where((t) => t.id == teamId).firstOrNull,
-                onChanged: (t) => setSheetState(() => teamId = t.id),
-              ),
-              const SizedBox(height: 16),
-              AppButton(
-                label: 'إنشاء',
-                onPressed: () async {
-                  final trimmed = name.text.trim();
-                  if (trimmed.isEmpty) return;
-                  final id = await repo.addStudent(
-                    name: trimmed,
-                    fatherName: father.text.trim().isEmpty
-                        ? null
-                        : father.text.trim(),
-                    yearOfBirth: int.tryParse(year.text),
-                    teamId: teamId,
-                    phone: phone.text.trim(),
-                  );
-                  if (context.mounted) Navigator.of(context).pop(id);
-                },
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
-    );
-    if (!mounted) return;
-    if (created != null) {
-      context.push('/admin/students/$created');
+      );
+      if (!mounted) return;
+      if (created != null) {
+        context.push('/admin/students/$created');
+      }
+      _reload();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('تعذّر فتح نموذج الطالب: $error')),
+        );
+    } finally {
+      if (mounted) setState(() => _addingStudent = false);
     }
-    _reload();
   }
 }
 
@@ -499,22 +561,27 @@ class _StudentRowTile extends StatelessWidget {
                 ],
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  student.barcode,
-                  textDirection: TextDirection.ltr,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.info),
-                ),
-                if (!student.active)
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 110),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
                   Text(
-                    'معطّل',
-                    style: TextStyle(color: tokens.dangerText, fontSize: 12),
+                    student.barcode,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textDirection: TextDirection.ltr,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.info),
                   ),
-              ],
+                  if (!student.active)
+                    Text(
+                      'معطّل',
+                      style: TextStyle(color: tokens.dangerText, fontSize: 12),
+                    ),
+                ],
+              ),
             ),
             const SizedBox(width: 6),
             IconButton(

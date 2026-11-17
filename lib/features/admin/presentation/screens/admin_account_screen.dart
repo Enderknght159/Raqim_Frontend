@@ -150,6 +150,7 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
                       decoration: const InputDecoration(
                         labelText: 'اسم المستخدم',
                         helperText: 'لا يمكن تغيير اسم المستخدم من هنا',
+                        suffixIcon: Icon(Icons.lock_outline),
                       ),
                     ),
                     const SizedBox(height: 10),

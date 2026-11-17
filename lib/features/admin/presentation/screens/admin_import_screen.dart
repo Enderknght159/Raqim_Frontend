@@ -69,9 +69,23 @@ class _AdminImportScreenState extends State<AdminImportScreen> {
                   ),
                   const SizedBox(height: 8),
                   if (_fileName != null)
-                    Text(
-                      'الملف: $_fileName',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.insert_drive_file_outlined,
+                          size: 18,
+                          color: tokens.textMuted,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _fileName!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      ],
                     ),
                   const SizedBox(height: 8),
                   AppButton(

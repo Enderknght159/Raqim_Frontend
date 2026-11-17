@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/state/section_loader.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
-import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/responsive_grid.dart';
 import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
@@ -21,23 +21,16 @@ class AdminAssetsScreen extends StatefulWidget {
 }
 
 class _AdminAssetsScreenState extends State<AdminAssetsScreen> {
-  late Future<_AssetsData> _future;
+  /// Bumped after every write so the three lists refetch independently.
+  int _revision = 0;
+
+  void _reload() {
+    if (!mounted) return;
+    setState(() => _revision++);
+  }
 
   @override
-  void initState() {
-    super.initState();
-    _future = _load();
-  }
-
-  Future<T?> _safe<T>(Future<T> future) async {
-    try {
-      return await future;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<_AssetsData> _load() async {
+  Widget build(BuildContext context) {
     final repo = AdminRepositoryScope.of(context);
     final canMatn = canViewModule(context, 'matn');
     final canExams = canViewModule(context, 'exams');
@@ -48,158 +41,159 @@ class _AdminAssetsScreenState extends State<AdminAssetsScreen> {
     final canDeleteExams = canDeleteModule(context, 'exams');
     final canEditDistributions = canEditModule(context, 'distributions');
     final canDeleteDistributions = canDeleteModule(context, 'distributions');
-    final matns = canMatn ? await _safe(repo.matns()) : null;
-    final subjects = canExams ? await _safe(repo.subjects()) : null;
-    final distributables = canDistributions
-        ? await _safe(repo.distributables())
-        : null;
-    return _AssetsData(
-      canMatn: canMatn,
-      canExams: canExams,
-      canDistributions: canDistributions,
-      matns: matns ?? const [],
-      subjects: subjects ?? const [],
-      distributables: distributables ?? const [],
-      canEditMatn: canEditMatn,
-      canDeleteMatn: canDeleteMatn,
-      canEditExams: canEditExams,
-      canDeleteExams: canDeleteExams,
-      canEditDistributions: canEditDistributions,
-      canDeleteDistributions: canDeleteDistributions,
-    );
-  }
-
-  void _reload() {
-    setState(() {
-      _future = _load();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AsyncView<_AssetsData>(
-      future: _future,
-      cacheKey: 'admin-assets',
-      frame: (context, child) => Scaffold(
-        appBar: AppBar(title: const Text('المحتوى')),
-        body: child,
-      ),
-      builder: (context, data) => Scaffold(
-        appBar: AppBar(title: const Text('المحتوى')),
-        body: ResponsivePage(
-          maxWidth: 1100,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              if (data.canMatn)
-                _section(
-                  'المتون',
-                  data.matns,
-                  data.canEditMatn ? () => _addMatn() : null,
-                  onEdit: data.canEditMatn ? (item) => _editMatn(item) : null,
-                  onDelete: data.canDeleteMatn ? _deleteMatn : null,
+    return Scaffold(
+      appBar: AppBar(title: const Text('المحتوى')),
+      body: ResponsivePage(
+        maxWidth: 1100,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (canMatn) ...[
+              _sectionHeader('المتون', canEditMatn ? () => _addMatn() : null),
+              const SizedBox(height: 6),
+              AsyncSection<List<AdminContentItem>>(
+                cacheKey: 'admin-assets-matns',
+                revision: _revision,
+                skeleton: const SectionSkeleton(height: 44, lines: 1),
+                errorBuilder: (context, retry) =>
+                    SectionError(onRetry: retry, message: 'تعذر تحميل المتون'),
+                load: repo.matns,
+                builder: (context, items) => _itemsGrid(
+                  items,
+                  onEdit: canEditMatn ? (item) => _editMatn(item) : null,
+                  onDelete: canDeleteMatn ? _deleteMatn : null,
                 ),
-              if (data.canExams)
-                _section(
-                  'المواد',
-                  data.subjects,
-                  data.canEditExams ? () => _addSimple('مادة') : null,
-                  onEdit: data.canEditExams
+              ),
+              const SizedBox(height: 16),
+            ],
+            if (canExams) ...[
+              _sectionHeader(
+                'المواد',
+                canEditExams ? () => _addSimple('مادة') : null,
+              ),
+              const SizedBox(height: 6),
+              AsyncSection<List<AdminContentItem>>(
+                cacheKey: 'admin-assets-subjects',
+                revision: _revision,
+                delay: const Duration(milliseconds: 60),
+                skeleton: const SectionSkeleton(height: 44, lines: 1),
+                errorBuilder: (context, retry) =>
+                    SectionError(onRetry: retry, message: 'تعذر تحميل المواد'),
+                load: repo.subjects,
+                builder: (context, items) => _itemsGrid(
+                  items,
+                  onEdit: canEditExams
                       ? (item) => _editSimple('مادة', item)
                       : null,
-                  onDelete: data.canDeleteExams ? _deleteSubject : null,
+                  onDelete: canDeleteExams ? _deleteSubject : null,
                 ),
-              if (data.canDistributions)
-                _section(
-                  'الموزّعات',
-                  data.distributables,
-                  data.canEditDistributions ? () => _addSimple('موزّع') : null,
-                  onEdit: data.canEditDistributions
+              ),
+              const SizedBox(height: 16),
+            ],
+            if (canDistributions) ...[
+              _sectionHeader(
+                'الموزّعات',
+                canEditDistributions ? () => _addSimple('موزّع') : null,
+              ),
+              const SizedBox(height: 6),
+              AsyncSection<List<AdminContentItem>>(
+                cacheKey: 'admin-assets-distributables',
+                revision: _revision,
+                delay: const Duration(milliseconds: 120),
+                skeleton: const SectionSkeleton(height: 44, lines: 1),
+                errorBuilder: (context, retry) => SectionError(
+                  onRetry: retry,
+                  message: 'تعذر تحميل الموزّعات',
+                ),
+                load: repo.distributables,
+                builder: (context, items) => _itemsGrid(
+                  items,
+                  onEdit: canEditDistributions
                       ? (item) => _editSimple('موزّع', item)
                       : null,
-                  onDelete: data.canDeleteDistributions
+                  onDelete: canDeleteDistributions
                       ? _deleteDistributable
                       : null,
                 ),
+              ),
+              const SizedBox(height: 16),
             ],
-          ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _section(
-    String title,
-    List<AdminContentItem> items,
-    VoidCallback? onAdd, {
+  Widget _sectionHeader(String title, VoidCallback? onAdd) {
+    return SectionHeader(
+      icon: Icons.list_alt_outlined,
+      title: title,
+      trailing: TextButton.icon(
+        onPressed: onAdd,
+        icon: const Icon(Icons.add, size: 18),
+        label: const Text('إضافة'),
+      ),
+    );
+  }
+
+  Widget _itemsGrid(
+    List<AdminContentItem> items, {
     ValueChanged<AdminContentItem>? onEdit,
     Future<void> Function(AdminContentItem)? onDelete,
   }) {
+    if (items.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text('لا عناصر', style: Theme.of(context).textTheme.bodyMedium),
+      );
+    }
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return ResponsiveGrid(
+      minItemWidth: 280,
+      maxColumns: 3,
       children: [
-        SectionHeader(
-          icon: Icons.list_alt_outlined,
-          title: title,
-          trailing: TextButton.icon(
-            onPressed: onAdd,
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('إضافة'),
-          ),
-        ),
-        const SizedBox(height: 6),
-        if (items.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              'لا عناصر',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          )
-        else
-          ResponsiveGrid(
-            minItemWidth: 280,
-            maxColumns: 3,
-            children: [
-              for (final it in items)
-                AppCard(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 6,
-                  ),
-                  onTap: onEdit == null ? null : () => onEdit(it),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Text(it.name),
+        for (final it in items)
+          AppCard(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            onTap: onEdit == null ? null : () => onEdit(it),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          it.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      if ((it.subtitle ?? '').isNotEmpty)
-                        Flexible(
-                          child: Text(
+                        if ((it.subtitle ?? '').isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
                             it.subtitle!,
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(color: tokens.textMuted),
                           ),
-                        ),
-                      const SizedBox(width: 6),
-                      IconButton(
-                        tooltip: 'حذف',
-                        icon: const Icon(Icons.delete_outline, size: 20),
-                        color: tokens.dangerText,
-                        onPressed: onDelete == null ? null : () => onDelete(it),
-                      ),
-                      Icon(Icons.chevron_left, color: tokens.borderStructural),
-                    ],
+                        ],
+                      ],
+                    ),
                   ),
                 ),
-            ],
+                const SizedBox(width: 6),
+                IconButton(
+                  tooltip: 'حذف',
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  color: tokens.dangerText,
+                  onPressed: onDelete == null ? null : () => onDelete(it),
+                ),
+                Icon(Icons.chevron_left, color: tokens.borderStructural),
+              ],
+            ),
           ),
-        const SizedBox(height: 16),
       ],
     );
   }
@@ -518,34 +512,4 @@ class _AdminAssetsScreenState extends State<AdminAssetsScreen> {
     if (!mounted) return;
     _reload();
   }
-}
-
-class _AssetsData {
-  const _AssetsData({
-    required this.canMatn,
-    required this.canExams,
-    required this.canDistributions,
-    required this.matns,
-    required this.subjects,
-    required this.distributables,
-    required this.canEditMatn,
-    required this.canDeleteMatn,
-    required this.canEditExams,
-    required this.canDeleteExams,
-    required this.canEditDistributions,
-    required this.canDeleteDistributions,
-  });
-
-  final bool canMatn;
-  final bool canExams;
-  final bool canDistributions;
-  final List<AdminContentItem> matns;
-  final List<AdminContentItem> subjects;
-  final List<AdminContentItem> distributables;
-  final bool canEditMatn;
-  final bool canDeleteMatn;
-  final bool canEditExams;
-  final bool canDeleteExams;
-  final bool canEditDistributions;
-  final bool canDeleteDistributions;
 }

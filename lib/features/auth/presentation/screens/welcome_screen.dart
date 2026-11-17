@@ -185,25 +185,33 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           onPressed: _continue,
         ),
         const SizedBox(height: 16),
-        Row(
+        // Wrap so the two secondary links stack instead of being squeezed
+        // into two narrow halves on a 390px phone.
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Expanded(
-              child: TextButton(
-                onPressed: _showUsernameHelp,
-                child: Text(
-                  'من أين آتي باسم المستخدم؟',
-                  style: TextStyle(color: tokens.brandText),
-                ),
+            TextButton(
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: const Size(0, 44),
+              ),
+              onPressed: _showUsernameHelp,
+              child: Text(
+                'من أين آتي باسم المستخدم؟',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: tokens.brandText),
               ),
             ),
-            Container(width: 1, height: 18, color: tokens.borderStructural),
-            Expanded(
-              child: TextButton(
-                onPressed: () => context.push('/not-allowed'),
-                child: Text(
-                  'إضافة مسجدي',
-                  style: TextStyle(color: tokens.textMuted),
-                ),
+            TextButton(
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: const Size(0, 44),
+              ),
+              onPressed: () => context.push('/not-allowed'),
+              child: Text(
+                'إضافة مسجدي',
+                style: TextStyle(color: tokens.textMuted),
               ),
             ),
           ],

@@ -22,8 +22,28 @@ import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// B5 — الملف: welcome header (with mosque name) + barcode + data + phones +
 /// edit requests + account.
-class ProfileScreen extends StatelessWidget {
+///
+/// The profile is a single request, so the page keeps one `AsyncView` (with the
+/// stale-while-revalidate cache); pull-to-refresh really refetches it instead
+/// of doing nothing.
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  Future<({StudentProfileModel profile, String mosqueName})>? _future;
+  Future<({StudentProfileModel profile, String mosqueName})?>? _cached;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final repo = StudentRepositoryScope.of(context);
+    _future ??= _load(repo);
+    _cached ??= _cachedLoad(repo);
+  }
 
   Future<({StudentProfileModel profile, String mosqueName})> _load(
     StudentRepository repo,
@@ -41,20 +61,36 @@ class ProfileScreen extends StatelessWidget {
     return (profile: profile, mosqueName: await repo.mosqueName());
   }
 
+  Future<void> _refresh() async {
+    final repo = StudentRepositoryScope.of(context);
+    final future = _load(repo);
+    final cached = _cachedLoad(repo);
+    if (!mounted) return;
+    setState(() {
+      _future = future;
+      _cached = cached;
+    });
+    try {
+      await future;
+    } catch (_) {
+      // `AsyncView` renders the error/stale state; the indicator just stops.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final repo = StudentRepositoryScope.of(context);
     return Scaffold(
       body: AsyncView<({StudentProfileModel profile, String mosqueName})>(
-        future: _load(repo),
+        future: _future!,
         cacheKey: 'student-profile',
-        cached: _cachedLoad(repo),
+        cached: _cached,
+        onRetry: _refresh,
         builder: (context, data) {
           final profile = data.profile;
           return ResponsivePage(
             maxWidth: 720,
             child: RefreshIndicator(
-              onRefresh: () async {},
+              onRefresh: _refresh,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),

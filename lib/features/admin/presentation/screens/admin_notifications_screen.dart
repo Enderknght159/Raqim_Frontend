@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/state/section_loader.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/date_time_utils.dart';
 import '../../../../core/widgets/app_card.dart';
-import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/date_grouped_list.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/icon_tile.dart';
@@ -22,14 +22,9 @@ class AdminNotificationsScreen extends StatefulWidget {
 }
 
 class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
-  late Future<List<AdminNotification>> _future;
+  /// Bumped after every undo so the list refetches.
+  int _revision = 0;
   String? _kindFilter;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = _load();
-  }
 
   Future<List<AdminNotification>> _load() async {
     final repo = AdminRepositoryScope.of(context);
@@ -39,18 +34,23 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
   }
 
   void _reload() {
-    setState(() {
-      _future = _load();
-    });
+    if (!mounted) return;
+    setState(() => _revision++);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('الإشعارات')),
-      body: AsyncView<List<AdminNotification>>(
-        future: _future,
+      body: AsyncSection<List<AdminNotification>>(
         cacheKey: 'admin-notifications',
+        revision: _revision,
+        skeleton: const _NotificationsSkeleton(),
+        errorBuilder: (context, retry) => Padding(
+          padding: const EdgeInsets.all(16),
+          child: SectionError(onRetry: retry, message: 'تعذر تحميل الإشعارات'),
+        ),
+        load: _load,
         builder: (context, items) {
           if (items.isEmpty) {
             return const EmptyState(
@@ -112,27 +112,33 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
   Widget _row(BuildContext context, AdminNotification n) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final (icon, color) = _style(n.kind, tokens);
-    final title = _title(n);
+    final kind = adminNotificationKindLabel(n.kind);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: AppCard(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
           children: [
-            IconTile(icon: icon, color: color, size: 40, iconSize: 20),
+            Tooltip(
+              message: kind,
+              triggerMode: TooltipTriggerMode.longPress,
+              child: IconTile(icon: icon, color: color, size: 40, iconSize: 20),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title,
+                    _title(n),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   Text(
-                    '${adminNotificationKindLabel(n.kind)} · ${formatTime(n.when)}',
+                    formatTime(n.when),
                     style: Theme.of(
                       context,
                     ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
@@ -153,10 +159,11 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
     );
   }
 
+  /// The kind is already carried by the leading icon (and its tooltip), so the
+  /// row itself only names the person and how many others share the write.
   String _title(AdminNotification n) {
-    final kind = adminNotificationKindLabel(n.kind);
-    if (n.extraCount == 0) return '$kind — ${n.firstName}';
-    return '$kind لـ ${n.firstName} و${n.extraCount} آخرين';
+    if (n.extraCount == 0) return n.firstName;
+    return '${n.firstName} و${n.extraCount} آخرين';
   }
 
   (IconData, Color) _style(String kind, AppTokens tokens) => switch (kind) {
@@ -198,5 +205,29 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
         ),
       );
     _reload();
+  }
+}
+
+/// Rough shape of the kind chips and the first notification rows.
+class _NotificationsSkeleton extends StatelessWidget {
+  const _NotificationsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionSkeleton(height: 40, lines: 1, showCard: false),
+          SizedBox(height: 12),
+          SectionSkeleton(height: 44, lines: 1),
+          SizedBox(height: 8),
+          SectionSkeleton(height: 44, lines: 1),
+          SizedBox(height: 8),
+          SectionSkeleton(height: 44, lines: 1),
+        ],
+      ),
+    );
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
@@ -13,6 +15,10 @@ import '../student_shell.dart';
 
 /// Notifications feed: every record added for the student, sorted
 /// chronologically (newest first) and grouped by day.
+///
+/// The feed is one request; «mark as read» is fired separately after it loads,
+/// so the list paints without waiting for that write (and a failed write no
+/// longer replaces the whole feed with an error page).
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -21,14 +27,22 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  late Future<List<StudentNotification>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final repo = StudentRepositoryScope.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('الإشعارات')),
       body: AsyncView<List<StudentNotification>>(
-        future: _load(repo),
+        future: _future,
         cacheKey: 'student-notifications',
+        onRetry: () => setState(() => _future = _load()),
         builder: (context, items) {
           if (items.isEmpty) {
             return const Center(child: Text('لا إشعارات بعد'));
@@ -46,11 +60,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  // Marks notifications as read after loading them.
-  Future<List<StudentNotification>> _load(StudentRepository repo) async {
+  Future<List<StudentNotification>> _load() async {
+    final repo = StudentRepositoryScope.of(context);
     final items = await repo.notifications();
-    await repo.markNotifRead();
+    unawaited(_markRead(repo));
     return items;
+  }
+
+  /// Side effect only: a failure just keeps the badge until the next visit.
+  static Future<void> _markRead(StudentRepository repo) async {
+    try {
+      await repo.markNotifRead();
+    } catch (_) {
+      // Ignored on purpose.
+    }
   }
 }
 

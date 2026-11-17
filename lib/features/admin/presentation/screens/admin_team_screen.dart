@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/state/section_loader.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
-import '../../../../core/widgets/app_loading.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
-import '../../../../core/widgets/status_badge.dart';
 import '../../../../shared/permissions.dart';
 import '../../data/admin_refresh.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
+import '../widgets/course_metrics_panel.dart';
 import '../widgets/team_manager_sheet.dart';
 
 /// Full team (halaqa) page: summary, teacher management, and members.
@@ -38,18 +38,17 @@ class AdminTeamScreen extends StatefulWidget {
 }
 
 class _AdminTeamScreenState extends State<AdminTeamScreen> {
+  /// Bumped after writes and org changes so both sections reload together.
+  int _revision = 0;
+
+  /// Last team payload, mirrored for the AppBar and the teacher actions.
   AdminTeamRow? _team;
-  List<AdminStudentRow> _members = const [];
-  List<TeacherCandidate> _candidates = const [];
-  bool _loading = true;
   bool _saving = false;
-  Object? _error;
 
   @override
   void initState() {
     super.initState();
     AdminRefresh.instance.addListener(_onOrgChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
@@ -60,50 +59,47 @@ class _AdminTeamScreenState extends State<AdminTeamScreen> {
 
   void _onOrgChanged() {
     if (!mounted) return;
-    _load(silent: true);
+    _reload();
   }
 
-  Future<void> _load({bool silent = false}) async {
+  void _reload() {
     if (!mounted) return;
-    if (!silent) {
-      setState(() {
-        _loading = true;
-        _error = null;
-      });
-    }
-    final repo = AdminRepositoryScope.of(context);
-    try {
-      final team = await repo.team(widget.teamId);
-      final members = await repo.teamStudents(widget.teamId);
-      final candidates = await repo.teacherCandidates();
-      if (!mounted) return;
-      setState(() {
-        _team = team;
-        _members = members;
-        _candidates = candidates;
-        _loading = false;
-        _error = null;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = error;
-      });
-    }
+    setState(() => _revision++);
+  }
+
+  Future<void> _refresh() async {
+    if (!mounted) return;
+    setState(() => _revision++);
+  }
+
+  /// Summary section loader; also keeps [_team] in sync for the AppBar.
+  Future<AdminTeamRow?> _loadTeam() async {
+    final team = await AdminRepositoryScope.of(context).team(widget.teamId);
+    if (mounted) setState(() => _team = team);
+    return team;
   }
 
   bool get _canEdit => canEditModule(context, 'teams');
 
   Future<void> _editTeacher() async {
     if (_saving || _team == null || !_canEdit) return;
+    final repo = AdminRepositoryScope.of(context);
+    final List<TeacherCandidate> candidates;
+    try {
+      candidates = await repo.teacherCandidates();
+    } catch (error) {
+      if (!mounted) return;
+      _notice('تعذّر تحميل قائمة المعلمين: $error');
+      return;
+    }
+    if (!mounted) return;
     final result = await showTeamTeacherPicker(
       context,
-      candidates: _candidates,
+      repository: repo,
+      candidates: candidates,
       selected: _team!.teacherName,
     );
     if (result == null || !mounted) return;
-    final repo = AdminRepositoryScope.of(context);
     setState(() => _saving = true);
     try {
       if (result is String && result.isEmpty) {
@@ -114,9 +110,11 @@ class _AdminTeamScreenState extends State<AdminTeamScreen> {
         return;
       }
       if (!mounted) return;
-      _notice(result is String ? 'أُزيل معلم الحلقة.' : 'تم تعيين معلم الحلقة.');
+      _notice(
+        result is String ? 'أُزيل معلم الحلقة.' : 'تم تعيين معلم الحلقة.',
+      );
       AdminRefresh.instance.teamsChanged();
-      await _load(silent: true);
+      _reload();
     } catch (error) {
       if (!mounted) return;
       _notice('تعذّر تعديل معلم الحلقة: $error');
@@ -127,7 +125,9 @@ class _AdminTeamScreenState extends State<AdminTeamScreen> {
 
   Future<void> _removeTeacher() async {
     final team = _team;
-    if (_saving || team == null || team.teacherName.isEmpty || !_canEdit) return;
+    if (_saving || team == null || team.teacherName.isEmpty || !_canEdit) {
+      return;
+    }
     final confirmed = await _confirm(
       title: 'إزالة معلم الحلقة',
       message:
@@ -142,7 +142,7 @@ class _AdminTeamScreenState extends State<AdminTeamScreen> {
       if (!mounted) return;
       _notice('تمت إزالة معلم الحلقة.');
       AdminRefresh.instance.teamsChanged();
-      await _load(silent: true);
+      _reload();
     } catch (error) {
       if (!mounted) return;
       _notice('تعذّر إزالة معلم الحلقة: $error');
@@ -160,7 +160,7 @@ class _AdminTeamScreenState extends State<AdminTeamScreen> {
       repository: AdminRepositoryScope.of(context),
     );
     if (!mounted) return;
-    await _load(silent: true);
+    _reload();
   }
 
   Future<void> _openTeacher() async {
@@ -170,7 +170,7 @@ class _AdminTeamScreenState extends State<AdminTeamScreen> {
       '/admin/teachers/${Uri.encodeComponent(team.teacherName)}',
     );
     if (!mounted) return;
-    await _load(silent: true);
+    _reload();
   }
 
   @override
@@ -185,47 +185,83 @@ class _AdminTeamScreenState extends State<AdminTeamScreen> {
           if (team != null && team.teacherName.isNotEmpty && _canEdit)
             IconButton(
               tooltip: 'إزالة معلم الحلقة',
-              icon: Icon(Icons.person_remove_outlined, color: tokens.dangerText),
+              icon: Icon(
+                Icons.person_remove_outlined,
+                color: tokens.dangerText,
+              ),
               onPressed: _saving ? null : _removeTeacher,
             ),
         ],
       ),
       body: ResponsivePage(
         maxWidth: 900,
-        child: _loading && team == null
-            ? const AppLoadingView()
-            : _error != null && team == null
-            ? AppErrorView(error: _error, onRetry: _load)
-            : team == null
-            ? const EmptyState(
-                title: 'الحلقة غير موجودة',
-                message: 'ربما حُذفت أو لم تعد متاحة لحسابك.',
-                icon: Icons.hub_outlined,
-              )
-            : RefreshIndicator(
-                onRefresh: () => _load(silent: true),
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _summaryCard(context, team),
-                    const SizedBox(height: 16),
-                    const SectionHeader(
-                      icon: Icons.school_outlined,
-                      title: 'معلم الحلقة',
-                    ),
-                    const SizedBox(height: 8),
-                    _teacherCard(context, team),
-                    if (_saving) ...[
-                      const SizedBox(height: 12),
-                      LinearProgressIndicator(color: tokens.brand),
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            children: [
+              // Summary + teacher card share the team request; members load
+              // independently so a slow roster never hides the header.
+              AsyncSection<AdminTeamRow?>(
+                cacheKey: 'admin-team-${widget.teamId}',
+                revision: _revision,
+                skeleton: const SectionSkeleton(height: 96, lines: 2),
+                errorBuilder: (context, retry) => SectionError(
+                  onRetry: retry,
+                  message: 'تعذر تحميل بيانات الحلقة',
+                ),
+                load: _loadTeam,
+                builder: (context, team) {
+                  if (team == null) {
+                    return const EmptyState(
+                      title: 'الحلقة غير موجودة',
+                      message: 'ربما حُذفت أو لم تعد متاحة لحسابك.',
+                      icon: Icons.hub_outlined,
+                    );
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _summaryCard(context, team),
+                      const SizedBox(height: 16),
+                      const SectionHeader(
+                        icon: Icons.school_outlined,
+                        title: 'معلم الحلقة',
+                      ),
+                      const SizedBox(height: 8),
+                      _teacherCard(context, team),
+                      if (_saving) ...[
+                        const SizedBox(height: 12),
+                        LinearProgressIndicator(color: tokens.brand),
+                      ],
                     ],
-                    const SizedBox(height: 16),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              AsyncSection<List<AdminStudentRow>>(
+                cacheKey: 'admin-team-students-${widget.teamId}',
+                revision: _revision,
+                delay: const Duration(milliseconds: 80),
+                skeleton: const SectionSkeleton(height: 52, lines: 3),
+                errorBuilder: (context, retry) => SectionError(
+                  onRetry: retry,
+                  message: 'تعذر تحميل طلاب الحلقة',
+                ),
+                load: () =>
+                    AdminRepositoryScope.of(context).teamStudents(widget.teamId),
+                builder: (context, members) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                     SectionHeader(
                       icon: Icons.groups_outlined,
-                      title: 'الطلاب (${_members.length})',
+                      title: 'الطلاب (${members.length})',
                       trailing: _canEdit
                           ? TextButton.icon(
-                              onPressed: _saving ? null : _manageMembers,
+                              onPressed: _saving || _team == null
+                                  ? null
+                                  : _manageMembers,
                               icon: const Icon(
                                 Icons.manage_accounts_outlined,
                                 size: 18,
@@ -235,22 +271,25 @@ class _AdminTeamScreenState extends State<AdminTeamScreen> {
                           : null,
                     ),
                     const SizedBox(height: 8),
-                    if (_members.isEmpty)
+                    if (members.isEmpty)
                       const EmptyState(
                         title: 'لا طلاب في الحلقة',
                         message: 'أضف طلابًا من «إدارة الطلاب».',
                         icon: Icons.person_add_alt_1_outlined,
                       )
                     else
-                      for (final student in _members)
+                      for (final student in members)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: _memberRow(context, student),
                         ),
-                    const SizedBox(height: 24),
                   ],
                 ),
               ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -287,8 +326,10 @@ class _AdminTeamScreenState extends State<AdminTeamScreen> {
                   ],
                 ),
               ),
-              StatusBadge(
-                label: '${team.studentsCount} طالب',
+              IconCount(
+                icon: Icons.groups_outlined,
+                value: team.studentsCount,
+                tooltip: 'عدد الطلاب',
                 color: tokens.infoLight,
               ),
             ],
@@ -296,11 +337,7 @@ class _AdminTeamScreenState extends State<AdminTeamScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              Icon(
-                Icons.school_outlined,
-                size: 18,
-                color: tokens.accentMatn,
-              ),
+              Icon(Icons.school_outlined, size: 18, color: tokens.accentMatn),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -401,6 +438,8 @@ class _AdminTeamScreenState extends State<AdminTeamScreen> {
                 if (student.barcode.isNotEmpty)
                   Text(
                     student.barcode,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: tokens.textMuted, fontSize: 12),
                   ),
               ],

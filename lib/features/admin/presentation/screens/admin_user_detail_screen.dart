@@ -1,7 +1,12 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/state/section_loader.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/adaptive_sheet.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/responsive_page.dart';
@@ -9,6 +14,7 @@ import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../../shared/permissions.dart';
 import '../../data/admin_refresh.dart';
+import '../../data/admin_repository.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
 import '../widgets/permission_editor.dart';
@@ -48,11 +54,11 @@ class AdminUserDetailScreen extends StatefulWidget {
 }
 
 class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
+  /// Bumped after writes (permissions/teaching) so the access section reloads.
+  int _revision = 0;
   AdminUserPermissions? _permissions;
   int? _teacherId;
-  bool _loadingPermissions = true;
   bool _saving = false;
-  String? _permissionsError;
 
   bool get _isSupervisor =>
       _permissions?.isSupervisor ?? widget.kind == AdminUserKind.admin;
@@ -67,7 +73,6 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
     super.initState();
     _teacherId = widget.teacherId;
     AdminRefresh.instance.addListener(_onOrgChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadAccount());
   }
 
   @override
@@ -78,55 +83,43 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
 
   void _onOrgChanged() {
     if (!mounted) return;
-    _loadAccount();
+    _reload();
   }
 
-  Future<void> _loadAccount() async {
+  /// Bumped after every write; the access section refetches on its own.
+  void _reload() {
     if (!mounted) return;
+    setState(() => _revision++);
+  }
+
+  /// One request for supervision permissions and the linked teacher row.
+  /// The values are also kept on the state so the header and the permission
+  /// editor can read them without racing the section rebuild.
+  Future<int?> _loadAccess() async {
+    if (!mounted) return _teacherId;
     final repo = AdminRepositoryScope.of(context);
     if (!_canManagePermissions) {
       final row = await repo.user(widget.userId);
-      if (!mounted) return;
-      setState(() {
-        _teacherId = row?.teacherId ?? _teacherId;
-        _loadingPermissions = false;
-        _permissionsError = null;
-      });
-      return;
+      final teacherId = row?.teacherId ?? _teacherId;
+      _teacherId = teacherId;
+      return teacherId;
     }
-    try {
-      final stored = await repo.userPermissions(widget.userId);
-      var teacherId = _teacherId;
-      if (teacherId == null) {
-        final row = await repo.user(widget.userId);
-        teacherId = row?.teacherId;
-      }
-      if (!mounted) return;
-      setState(() {
-        _permissions = stored.copyWith(
-          isAdmin: stored.isAdmin || widget.kind == AdminUserKind.admin,
-        );
-        _teacherId = teacherId;
-        _loadingPermissions = false;
-        _permissionsError = null;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _loadingPermissions = false;
-        _permissionsError = '$error';
-      });
+    final stored = await repo.userPermissions(widget.userId);
+    var teacherId = _teacherId;
+    if (teacherId == null) {
+      final row = await repo.user(widget.userId);
+      teacherId = row?.teacherId;
     }
+    _permissions = stored.copyWith(
+      isAdmin: stored.isAdmin || widget.kind == AdminUserKind.admin,
+    );
+    _teacherId = teacherId;
+    return teacherId;
   }
 
   Future<void> _openPermissions() async {
     final current = _permissions;
-    if (!_canManagePermissions ||
-        _saving ||
-        _loadingPermissions ||
-        current == null) {
-      return;
-    }
+    if (!_canManagePermissions || _saving || current == null) return;
     final result = await showPermissionEditor(
       context,
       initial: current,
@@ -145,11 +138,9 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
       await repo.updateUserPermissions(widget.userId, result);
       final stored = await repo.userPermissions(widget.userId);
       if (!mounted) return;
-      setState(() {
-        _permissions = stored;
-        _saving = false;
-        _permissionsError = null;
-      });
+      setState(() => _saving = false);
+      _permissions = stored;
+      _reload();
       _notice(
         current.isAdmin && !result.isAdmin
             ? 'أُزيلت صفة المدير وحُفظت الصلاحيات.'
@@ -176,7 +167,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
       ).toString(),
     );
     if (!mounted) return;
-    await _loadAccount();
+    _reload();
   }
 
   @override
@@ -230,7 +221,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
                                     AdminUserKind.student => tokens.brand,
                                   },
                                 ),
-                                if (_isSupervisor) ...[
+                                if (_isSupervisor && _roleLabel != 'أدمن') ...[
                                   const SizedBox(width: 6),
                                   StatusBadge(
                                     label: 'مشرف',
@@ -265,139 +256,160 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
               title: 'الصلاحيات والوصول',
             ),
             const SizedBox(height: 8),
-            if (_canManagePermissions)
-              AppCard(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 4,
-                ),
-                onTap: _loadingPermissions || _saving ? null : _openPermissions,
-                child: Row(
-                  children: [
-                    Icon(Icons.rule, color: tokens.textPrimary),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        child: Text(
-                          'صلاحيات الإشراف',
-                          style: TextStyle(
-                            color: tokens.textPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (_loadingPermissions || _saving)
-                      const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    else
-                      StatusBadge(
-                        label: _isSupervisor ? 'مشرف' : 'بلا صلاحيات',
-                        color: _isSupervisor ? tokens.info : tokens.textMuted,
-                      ),
-                    const SizedBox(width: 6),
-                    Icon(Icons.chevron_left, color: tokens.borderStructural),
-                  ],
-                ),
-              )
-            else
-              AppCard(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 4,
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.lock_outline, color: tokens.textMuted),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        child: Text(
-                          'صلاحيات الإشراف — للمدير العام فقط',
-                          style: TextStyle(
-                            color: tokens.textMuted,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+            AsyncSection<int?>(
+              cacheKey: 'admin-user-detail-access-${widget.userId}',
+              revision: _revision,
+              skeleton: const _AccessSkeleton(),
+              errorBuilder: (context, retry) => SectionError(
+                onRetry: retry,
+                message: 'تعذر تحميل الصلاحيات والتدريس',
               ),
-            if (_permissionsError != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  'تعذر تحميل الصلاحيات الحالية: $_permissionsError',
-                  style: TextStyle(color: tokens.dangerText, fontSize: 12),
-                ),
-              ),
-            const SizedBox(height: 8),
-            AppCard(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              onTap: _loadingPermissions || _saving ? null : _openTeaching,
-              child: Row(
+              load: _loadAccess,
+              builder: (context, teacherId) => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(Icons.school_outlined, color: tokens.accentMatn),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      child: Text(
-                        'صلاحيات التدريس',
-                        style: TextStyle(
-                          color: tokens.textPrimary,
-                          fontWeight: FontWeight.w600,
-                        ),
+                  if (_canManagePermissions)
+                    AppCard(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      onTap: _saving ? null : _openPermissions,
+                      child: Row(
+                        children: [
+                          Icon(Icons.rule, color: tokens.textPrimary),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              child: Text(
+                                'صلاحيات الإشراف',
+                                style: TextStyle(
+                                  color: tokens.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (_saving)
+                            const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          else
+                            StatusBadge(
+                              label: _isSupervisor ? 'مشرف' : 'بلا صلاحيات',
+                              color: _isSupervisor
+                                  ? tokens.info
+                                  : tokens.textMuted,
+                            ),
+                          const SizedBox(width: 6),
+                          Icon(
+                            Icons.chevron_left,
+                            color: tokens.borderStructural,
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    AppCard(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.lock_outline, color: tokens.textMuted),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              child: Text(
+                                'صلاحيات الإشراف — للمدير العام فقط',
+                                style: TextStyle(
+                                  color: tokens.textMuted,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
+                  const SizedBox(height: 8),
+                  AppCard(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
+                    onTap: _saving ? null : _openTeaching,
+                    child: Row(
+                      children: [
+                        Icon(Icons.school_outlined, color: tokens.accentMatn),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            child: Text(
+                              'صلاحيات التدريس',
+                              style: TextStyle(
+                                color: tokens.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                        StatusBadge(
+                          label: teacherId == null ? 'غير معيّن' : 'مدرّس',
+                          color: teacherId == null
+                              ? tokens.textMuted
+                              : tokens.accentMatn,
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.chevron_left,
+                          color: tokens.borderStructural,
+                        ),
+                      ],
+                    ),
                   ),
-                  StatusBadge(
-                    label: _teacherId == null ? 'غير معيّن' : 'مدرّس',
-                    color: _teacherId == null
-                        ? tokens.textMuted
-                        : tokens.accentMatn,
-                  ),
-                  const SizedBox(width: 6),
-                  Icon(Icons.chevron_left, color: tokens.borderStructural),
+                  if (widget.studentId != null) ...[
+                    const SizedBox(height: 8),
+                    AppCard(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      onTap: () =>
+                          context.push('/admin/students/${widget.studentId}'),
+                      child: Row(
+                        children: [
+                          Icon(Icons.person_outline, color: tokens.brandText),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              child: Text(
+                                'ملف الطالب',
+                                style: TextStyle(
+                                  color: tokens.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_left,
+                            color: tokens.borderStructural,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
-            if (widget.studentId != null) ...[
-              const SizedBox(height: 8),
-              AppCard(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 4,
-                ),
-                onTap: () =>
-                    context.push('/admin/students/${widget.studentId}'),
-                child: Row(
-                  children: [
-                    Icon(Icons.person_outline, color: tokens.brandText),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        child: Text(
-                          'ملف الطالب',
-                          style: TextStyle(
-                            color: tokens.textPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                    Icon(Icons.chevron_left, color: tokens.borderStructural),
-                  ],
-                ),
-              ),
-            ],
             const SizedBox(height: 16),
             const SectionHeader(
               icon: Icons.manage_accounts_outlined,
@@ -406,7 +418,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
             const SizedBox(height: 8),
             AppCard(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              onTap: () => _notice('أُرسل رابط إعادة ضبط كلمة المرور (تجريبي)'),
+              onTap: _saving ? null : _resetPassword,
               child: Row(
                 children: [
                   Icon(Icons.lock_reset, color: tokens.textPrimary),
@@ -458,6 +470,71 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
     );
   }
 
+  Future<void> _resetPassword() async {
+    if (_saving) return;
+    final repo = AdminRepositoryScope.of(context);
+    final password = await showAppSheet<String>(
+      context: context,
+      maxWidth: 520,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => _ResetPasswordSheet(
+        repository: repo,
+        userId: widget.userId,
+        accountName: widget.name,
+      ),
+    );
+    if (password == null || !mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تمت إعادة الضبط'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('كلمة المرور الجديدة:'),
+            const SizedBox(height: 8),
+            SelectableText(
+              password,
+              textDirection: TextDirection.ltr,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'اعرضها على صاحب الحساب مرة واحدة، ثم اطلب منه تغييرها.',
+              style: Theme.of(dialogContext).textTheme.bodySmall,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: password));
+              if (!dialogContext.mounted) return;
+              ScaffoldMessenger.of(dialogContext)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(
+                  const SnackBar(content: Text('نُسخت كلمة المرور')),
+                );
+            },
+            icon: const Icon(Icons.copy, size: 18),
+            label: const Text('نسخ'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('تم'),
+          ),
+        ],
+      ),
+    );
+  }
+
   String get _roleLabel {
     if (_permissions?.isAdmin ?? widget.kind == AdminUserKind.admin) {
       return 'أدمن';
@@ -474,13 +551,16 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label, style: TextStyle(color: tokens.textMuted, fontSize: 13)),
-          const Spacer(),
-          Flexible(
+          const SizedBox(width: 12),
+          Expanded(
             child: Text(
               value,
               textAlign: TextAlign.end,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
@@ -519,5 +599,168 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
     );
     if (confirm != true || !mounted) return;
     _notice('$title — تم (محلي تجريبي)');
+  }
+}
+
+/// Matches the two access tiles (supervision + teaching) so the section does
+/// not jump when the real cards arrive.
+class _AccessSkeleton extends StatelessWidget {
+  const _AccessSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionSkeleton(height: 44, lines: 1),
+        SizedBox(height: 8),
+        SectionSkeleton(height: 44, lines: 1),
+      ],
+    );
+  }
+}
+
+/// Admin-side password reset. Returns the new password so the caller can show
+/// it once and copy it for the account owner.
+class _ResetPasswordSheet extends StatefulWidget {
+  const _ResetPasswordSheet({
+    required this.repository,
+    required this.userId,
+    required this.accountName,
+  });
+
+  final AdminRepository repository;
+  final int userId;
+  final String accountName;
+
+  @override
+  State<_ResetPasswordSheet> createState() => _ResetPasswordSheetState();
+}
+
+class _ResetPasswordSheetState extends State<_ResetPasswordSheet> {
+  final _password = TextEditingController();
+  final _confirm = TextEditingController();
+  bool _busy = false;
+  bool _obscure = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final generated = _generatePassword();
+    _password.text = generated;
+    _confirm.text = generated;
+  }
+
+  @override
+  void dispose() {
+    _password.dispose();
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  String _generatePassword() {
+    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+    final random = Random.secure();
+    final code = List.generate(8, (_) => chars[random.nextInt(chars.length)]);
+    return 'rq${code.join()}';
+  }
+
+  Future<void> _submit() async {
+    if (_busy) return;
+    final value = _password.text;
+    if (value.length < 6) {
+      setState(() => _error = 'كلمة المرور 6 أحرف على الأقل.');
+      return;
+    }
+    if (value != _confirm.text) {
+      setState(() => _error = 'كلمتا المرور غير متطابقتين.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.repository.resetUserPassword(
+        widget.userId,
+        newPassword: value,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(value);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = 'تعذّرت إعادة الضبط: $error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(20, 4, 20, 24 + bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'إعادة ضبط كلمة المرور',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            widget.accountName,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _password,
+            obscureText: _obscure,
+            textDirection: TextDirection.ltr,
+            decoration: InputDecoration(
+              labelText: 'كلمة المرور الجديدة',
+              helperText: 'وُلّدت تلقائيًا — يمكنك تعديلها.',
+              suffixIcon: IconButton(
+                tooltip: _obscure ? 'إظهار' : 'إخفاء',
+                onPressed: () => setState(() => _obscure = !_obscure),
+                icon: Icon(
+                  _obscure
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _confirm,
+            obscureText: _obscure,
+            textDirection: TextDirection.ltr,
+            decoration: const InputDecoration(labelText: 'تأكيد كلمة المرور'),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _error!,
+              style: TextStyle(color: tokens.dangerText, fontSize: 12),
+            ),
+          ],
+          const SizedBox(height: 16),
+          AppButton(
+            label: _busy ? 'جارٍ إعادة الضبط…' : 'إعادة ضبط كلمة المرور',
+            icon: Icons.lock_reset,
+            loading: _busy,
+            onPressed: _busy ? null : _submit,
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -22,11 +22,6 @@ class AdminSystemScreen extends StatelessWidget {
         profile.canExport('students') ||
         profile.canExport('attendance') ||
         hasAnyAbility(context, const ['messagesExport', 'barcodeExport']);
-    final canKiosk =
-        profile == null ||
-        profile.isAdmin ||
-        profile.canView('attendance') ||
-        profile.canView('points');
     final canUsers =
         profile == null || hasAnyAbility(context, const ['userManagement']);
     final canAudit =
@@ -50,18 +45,6 @@ class AdminSystemScreen extends StatelessWidget {
         ),
       if (canExport)
         (icon: Icons.qr_code_2, label: 'باركود PDF', path: '/admin/tools'),
-      if (canExport)
-        (
-          icon: Icons.description_outlined,
-          label: 'أوراق التسميع',
-          path: '/admin/tools',
-        ),
-      if (canKiosk)
-        (
-          icon: Icons.sync_outlined,
-          label: 'المزامنة والكشك',
-          path: '/admin/sync-kiosk',
-        ),
     ];
     final management = [
       if (canUsers)

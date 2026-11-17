@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/state/section_loader.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
-import '../../../../core/widgets/app_loading.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
@@ -13,6 +13,7 @@ import '../../../../shared/permissions.dart';
 import '../../data/admin_refresh.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
+import '../widgets/course_metrics_panel.dart';
 
 /// Unified teacher page (merges the old teacher profile and teaching
 /// permissions pages): account/teacher identity, his teams, assignment,
@@ -45,18 +46,34 @@ class AdminTeacherManagementScreen extends StatefulWidget {
       _AdminTeacherManagementScreenState();
 }
 
+typedef _TeacherIdentity = ({
+  AdminUserRow? row,
+  AdminTeacherDetail? detail,
+  int? teacherId,
+  String name,
+  String username,
+});
+
+typedef _TeacherTeams = ({
+  List<AdminTeamRow> mine,
+  List<AdminTeamRow> others,
+});
+
 class _AdminTeacherManagementScreenState
     extends State<AdminTeacherManagementScreen> {
+  /// Bumped after writes and org changes so both sections reload.
+  int _revision = 0;
   String _name = '';
   String _username = '';
   int? _userId;
   int? _teacherId;
   AdminTeacherDetail? _detail;
-  List<AdminTeamRow> _allTeams = const [];
-  bool _loading = true;
+
+  /// One identity request shared by the profile and teams sections.
+  Future<_TeacherIdentity>? _identityFuture;
+  int _identityToken = 0;
   bool _saving = false;
   int? _busyTeamId;
-  Object? _error;
 
   @override
   void initState() {
@@ -66,7 +83,6 @@ class _AdminTeacherManagementScreenState
     _userId = widget.userId;
     _teacherId = widget.initialTeacherId;
     AdminRefresh.instance.addListener(_onOrgChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
@@ -77,54 +93,84 @@ class _AdminTeacherManagementScreenState
 
   void _onOrgChanged() {
     if (!mounted) return;
-    _load(silent: true);
+    _reload();
   }
 
-  Future<void> _load({bool silent = false}) async {
+  void _reload() {
     if (!mounted) return;
-    if (!silent) {
-      setState(() {
-        _loading = true;
-        _error = null;
-      });
-    }
-    final repo = AdminRepositoryScope.of(context);
-    try {
-      AdminUserRow? row;
-      if (_userId != null) {
-        row = await repo.user(_userId!);
-      } else if (_teacherId == null && _name.isNotEmpty) {
-        final teachers = await repo.teachers();
-        final match = teachers.where((t) => t.name == _name).firstOrNull;
-        _teacherId = match?.id;
-      }
+    setState(() {
+      _identityFuture = null;
+      _identityToken++;
+      _revision++;
+    });
+  }
 
-      final teacherId = _teacherId ?? row?.teacherId;
-      final detail = teacherId == null || teacherId == 0
-          ? null
-          : await repo.teacherDetail(teacherId);
-      final teams = await repo.teams();
-      if (!mounted) return;
+  Future<void> _refresh() async {
+    if (!mounted) return;
+    setState(() {
+      _identityFuture = null;
+      _identityToken++;
+      _revision++;
+    });
+  }
+
+  Future<_TeacherIdentity> _identity() {
+    final existing = _identityFuture;
+    if (existing != null) return existing;
+    final future = _loadIdentity();
+    _identityFuture = future;
+    // A failed identity must not stay memoized, or a section retry would
+    // replay the same failure.
+    future.then<void>(
+      (_) {},
+      onError: (Object _) {
+        if (identical(_identityFuture, future)) _identityFuture = null;
+      },
+    );
+    return future;
+  }
+
+  Future<_TeacherIdentity> _loadIdentity() async {
+    final token = _identityToken;
+    final repo = AdminRepositoryScope.of(context);
+    AdminUserRow? row;
+    var teacherId = _teacherId;
+    var name = _name;
+    var username = _username;
+    var userId = _userId;
+    if (userId != null) {
+      row = await repo.user(userId);
+    } else if (teacherId == null && name.isNotEmpty) {
+      final teachers = await repo.teachers();
+      teacherId = teachers.where((t) => t.name == name).firstOrNull?.id;
+    }
+
+    final resolvedTeacherId = teacherId ?? row?.teacherId;
+    final detail = resolvedTeacherId == null || resolvedTeacherId == 0
+        ? null
+        : await repo.teacherDetail(resolvedTeacherId);
+    var resolvedUserId = userId ?? row?.id ?? detail?.userId;
+    if (row?.teacherId != null) resolvedUserId = row!.id;
+
+    final identity = (
+      row: row,
+      detail: detail,
+      teacherId: detail?.id ?? resolvedTeacherId,
+      name: _pickName(row, detail),
+      username: row?.username.trim() ?? username,
+    );
+    if (mounted && token == _identityToken) {
       setState(() {
-        _name = _pickName(row, detail);
-        _username = row?.username.trim() ?? _username;
-        _userId = _userId ?? row?.id ?? detail?.userId;
-        if (row?.teacherId != null) _userId = row!.id;
+        _name = identity.name;
+        _username = identity.username;
+        _userId = resolvedUserId;
         // The local demo repository has no teacher detail endpoint; keep the
         // id resolved from the teachers list so the profile still renders.
-        _teacherId = detail?.id ?? teacherId;
+        _teacherId = identity.teacherId;
         _detail = detail;
-        _allTeams = teams;
-        _loading = false;
-        _error = null;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = error;
       });
     }
+    return identity;
   }
 
   String _pickName(AdminUserRow? row, AdminTeacherDetail? detail) {
@@ -140,9 +186,12 @@ class _AdminTeacherManagementScreenState
     return 'حساب بدون اسم';
   }
 
-  List<AdminTeamRow> get _mine {
-    final byId = {for (final team in _allTeams) team.id: team};
-    final refs = _detail?.teams ?? const <AdminTeamRef>[];
+  List<AdminTeamRow> _mineFor(
+    _TeacherIdentity identity,
+    List<AdminTeamRow> allTeams,
+  ) {
+    final byId = {for (final team in allTeams) team.id: team};
+    final refs = identity.detail?.teams ?? const <AdminTeamRef>[];
     final result = <AdminTeamRow>[];
     final seen = <int>{};
     for (final ref in refs) {
@@ -152,19 +201,23 @@ class _AdminTeacherManagementScreenState
           id: ref.id,
           name: ref.name.isEmpty ? (full?.name ?? 'حلقة بدون اسم') : ref.name,
           typeName: full?.typeName ?? '',
-          teacherName: _name,
+          teacherName: identity.name,
           studentsCount: full?.studentsCount ?? 0,
-          teacherId: _teacherId,
+          teacherId: identity.teacherId,
         ),
       );
       seen.add(ref.id);
     }
-    for (final team in _allTeams) {
+    for (final team in allTeams) {
       if (seen.contains(team.id)) continue;
       final matchesTeacherId =
-          _teacherId != null && _teacherId != 0 && team.teacherId == _teacherId;
+          identity.teacherId != null &&
+          identity.teacherId != 0 &&
+          team.teacherId == identity.teacherId;
       final matchesName =
-          _detail == null && _name.isNotEmpty && team.teacherName == _name;
+          identity.detail == null &&
+          identity.name.isNotEmpty &&
+          team.teacherName == identity.name;
       if (matchesTeacherId || matchesName) {
         result.add(team);
         seen.add(team.id);
@@ -173,14 +226,25 @@ class _AdminTeacherManagementScreenState
     return result;
   }
 
-  List<AdminTeamRow> get _others {
-    final mineIds = _mine.map((team) => team.id).toSet();
-    return _allTeams.where((team) => !mineIds.contains(team.id)).toList();
+  /// Teams section loader. Waits for the shared identity so the teacher id is
+  /// resolved before pairing him with his teams.
+  Future<_TeacherTeams?> _loadTeams() async {
+    final repo = AdminRepositoryScope.of(context);
+    final identity = await _identity();
+    if (identity.teacherId == null) return null;
+    final allTeams = await repo.teams();
+    final mine = _mineFor(identity, allTeams);
+    final mineIds = mine.map((team) => team.id).toSet();
+    return (
+      mine: mine,
+      others: allTeams.where((team) => !mineIds.contains(team.id)).toList(),
+    );
   }
 
   bool get _canEditTeams => canEditModule(context, 'teams');
   bool get _canManageAccounts => hasAnyAbility(context, ['userManagement']);
-  bool get _canRemoveTeacher => _canManageAccounts && canDeleteModule(context, 'teams');
+  bool get _canRemoveTeacher =>
+      _canManageAccounts && canDeleteModule(context, 'teams');
 
   Future<void> _assignTeacher() async {
     if (_saving || !_canManageAccounts) return;
@@ -199,7 +263,7 @@ class _AdminTeacherManagementScreenState
       if (!mounted) return;
       _notice('تم تعيين الحساب كمدرس.');
       AdminRefresh.instance.teamsChanged();
-      await _load(silent: true);
+      _reload();
     } catch (error) {
       if (!mounted) return;
       _notice('تعذر تعيين الحساب كمدرس: $error');
@@ -232,7 +296,7 @@ class _AdminTeacherManagementScreenState
       });
       _notice('تمت إزالة حساب المدرس.');
       AdminRefresh.instance.teamsChanged();
-      await _load(silent: true);
+      _reload();
     } catch (error) {
       if (!mounted) return;
       _notice('تعذر إزالة حساب المدرس: $error');
@@ -241,23 +305,20 @@ class _AdminTeacherManagementScreenState
     }
   }
 
-  Future<void> _assignTeam() async {
+  Future<void> _assignTeam(List<AdminTeamRow> others) async {
     if (_saving || !_canEditTeams) return;
     final targetUserId = _userId ?? _detail?.userId;
     if (targetUserId == null) {
       _notice('لا يوجد حساب مستخدم مرتبط بهذا المعلم. اربط الحساب أولًا.');
       return;
     }
-    if (_others.isEmpty) {
+    if (others.isEmpty) {
       _notice('كل الحلقات مسندة بالفعل، أو لا توجد حلقات متاحة.');
       return;
     }
     final teamId = await showDialog<int>(
       context: context,
-      builder: (context) => _TeamPickerDialog(
-        teams: _others,
-        teacherName: _name,
-      ),
+      builder: (context) => _TeamPickerDialog(teams: others, teacherName: _name),
     );
     if (teamId == null || !mounted) return;
     setState(() {
@@ -271,7 +332,7 @@ class _AdminTeacherManagementScreenState
       if (!mounted) return;
       _notice('تم إسناد الحلقة.');
       AdminRefresh.instance.teamsChanged();
-      await _load(silent: true);
+      _reload();
     } catch (error) {
       if (!mounted) return;
       _notice('تعذر إسناد الحلقة: $error');
@@ -305,7 +366,7 @@ class _AdminTeacherManagementScreenState
       if (!mounted) return;
       _notice('تمت إزالة الحلقة من المدرس.');
       AdminRefresh.instance.teamsChanged();
-      await _load(silent: true);
+      _reload();
     } catch (error) {
       if (!mounted) return;
       _notice('تعذر إزالة الحلقة: $error');
@@ -322,13 +383,19 @@ class _AdminTeacherManagementScreenState
   Future<void> _openTeam(AdminTeamRow team) async {
     await context.push('/admin/teams/${team.id}');
     if (!mounted) return;
-    await _load(silent: true);
+    _reload();
   }
 
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final title = _name.isEmpty ? 'صلاحيات التدريس' : _name;
+    final identityKey =
+        widget.userId?.toString() ??
+        widget.initialTeacherId?.toString() ??
+        widget.teacherName ??
+        widget.initialName ??
+        'unknown';
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
@@ -336,46 +403,90 @@ class _AdminTeacherManagementScreenState
           if ((_teacherId ?? 0) > 0 && _canRemoveTeacher)
             IconButton(
               tooltip: 'إزالة حساب المدرس',
-              icon: Icon(Icons.person_remove_outlined, color: tokens.dangerText),
+              icon: Icon(
+                Icons.person_remove_outlined,
+                color: tokens.dangerText,
+              ),
               onPressed: _saving ? null : _removeTeacher,
             ),
         ],
       ),
       body: ResponsivePage(
         maxWidth: 760,
-        child: _loading && _detail == null && _allTeams.isEmpty
-            ? const AppLoadingView()
-            : _error != null && _detail == null && _allTeams.isEmpty
-            ? AppErrorView(error: _error, onRetry: _load)
-            : RefreshIndicator(
-                onRefresh: () => _load(silent: true),
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            children: [
+              AsyncSection<_TeacherIdentity>(
+                cacheKey: 'admin-teacher-$identityKey-identity',
+                revision: _revision,
+                skeleton: const SectionSkeleton(height: 64, lines: 2),
+                errorBuilder: (context, retry) => SectionError(
+                  onRetry: retry,
+                  message: 'تعذر تحميل بيانات المعلم',
+                ),
+                load: _identity,
+                builder: (context, identity) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _accountCard(context),
+                    _accountCard(context, identity),
                     const SizedBox(height: 16),
                     const SectionHeader(
                       icon: Icons.school_outlined,
                       title: 'صلاحيات التدريس',
                     ),
                     const SizedBox(height: 8),
-                    if (_teacherId == null)
+                    if (identity.teacherId == null)
                       _notTeacherCard(context)
-                    else
-                      _teacherCard(context),
+                    else ...[
+                      _teacherHeaderCard(context, identity),
+                      if ((identity.teacherId ?? 0) > 0 &&
+                          _canRemoveTeacher) ...[
+                        const SizedBox(height: 12),
+                        AppButton(
+                          label: 'إزالة حساب المدرس',
+                          icon: Icons.person_remove_outlined,
+                          variant: AppButtonVariant.dangerOutline,
+                          loading: _saving,
+                          onPressed: _saving ? null : _removeTeacher,
+                        ),
+                      ],
+                    ],
                     if (_saving) ...[
                       const SizedBox(height: 12),
                       LinearProgressIndicator(color: tokens.brand),
                     ],
-                    const SizedBox(height: 24),
                   ],
                 ),
               ),
+              const SizedBox(height: 12),
+              // Depends on the identity above; waits for the same shared
+              // request instead of firing a second one.
+              AsyncSection<_TeacherTeams?>(
+                cacheKey: 'admin-teacher-$identityKey-teams',
+                revision: _revision,
+                delay: const Duration(milliseconds: 80),
+                skeleton: const SectionSkeleton(height: 64, lines: 2),
+                errorBuilder: (context, retry) => SectionError(
+                  onRetry: retry,
+                  message: 'تعذر تحميل حلقات المعلم',
+                ),
+                load: _loadTeams,
+                builder: (context, data) => data == null
+                    ? const SizedBox.shrink()
+                    : _teamsCard(context, data),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _accountCard(BuildContext context) {
+  Widget _accountCard(BuildContext context, _TeacherIdentity identity) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     return AppCard(
       child: Row(
@@ -391,17 +502,17 @@ class _AdminTeacherManagementScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _name.isEmpty ? 'حساب بدون اسم' : _name,
+                  identity.name.isEmpty ? 'حساب بدون اسم' : identity.name,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
-                if (_username.isNotEmpty)
+                if (identity.username.isNotEmpty)
                   Text(
-                    '@$_username',
+                    '@${identity.username}',
                     style: TextStyle(color: tokens.textMuted, fontSize: 13),
                   ),
-                if (_username.isEmpty && _teacherId != null)
+                if (identity.username.isEmpty && identity.teacherId != null)
                   Text(
-                    _userId == null
+                    identity.row == null
                         ? 'ملف معلم غير مرتبط بحساب مستخدم'
                         : 'حساب مرتبط بملف معلم',
                     style: TextStyle(color: tokens.textMuted, fontSize: 13),
@@ -410,8 +521,10 @@ class _AdminTeacherManagementScreenState
             ),
           ),
           StatusBadge(
-            label: _teacherId == null ? 'غير مدرّس' : 'مدرّس',
-            color: _teacherId == null ? tokens.textMuted : tokens.accentMatn,
+            label: identity.teacherId == null ? 'غير مدرّس' : 'مدرّس',
+            color: identity.teacherId == null
+                ? tokens.textMuted
+                : tokens.accentMatn,
           ),
         ],
       ),
@@ -450,86 +563,82 @@ class _AdminTeacherManagementScreenState
     );
   }
 
-  Widget _teacherCard(BuildContext context) {
+  Widget _teacherHeaderCard(BuildContext context, _TeacherIdentity identity) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    final teams = _mine;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.badge_outlined, color: tokens.accentMatn),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _detail?.name.trim().isNotEmpty == true
-                          ? _detail!.name
-                          : (_name.isEmpty ? 'ملف المعلم مرتبط' : _name),
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'هذا الحساب مرتبط بملف معلم ويمكنه إدارة الحلقات المسندة إليه.',
-                style: TextStyle(color: tokens.textSecondary, fontSize: 13),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (teams.isEmpty)
-          AppCard(
-            child: Column(
-              children: [
-                EmptyState(
-                  title: 'لا حلقات مرتبطة',
-                  message: 'أسنِد الحساب لحلقة ليظهر هنا.',
-                  icon: Icons.hub_outlined,
-                  actionLabel: 'إسناد لحلقة',
-                  onAction: _saving || !_canEditTeams ? null : _assignTeam,
-                ),
-              ],
-            ),
-          )
-        else ...[
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
             children: [
+              Icon(Icons.badge_outlined, color: tokens.accentMatn),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'حلقاته',
+                  identity.detail?.name.trim().isNotEmpty == true
+                      ? identity.detail!.name
+                      : (identity.name.isEmpty
+                            ? 'ملف المعلم مرتبط'
+                            : identity.name),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
-              TextButton.icon(
-                onPressed: _saving || !_canEditTeams ? null : _assignTeam,
-                icon: const Icon(Icons.add_home_outlined, size: 18),
-                label: const Text('إسناد لحلقة'),
-              ),
             ],
           ),
-          const SizedBox(height: 4),
-          for (final team in teams)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _teamRow(context, team),
-            ),
-        ],
-        if ((_teacherId ?? 0) > 0 && _canRemoveTeacher) ...[
-          const SizedBox(height: 12),
-          AppButton(
-            label: 'إزالة حساب المدرس',
-            icon: Icons.person_remove_outlined,
-            variant: AppButtonVariant.dangerOutline,
-            loading: _saving,
-            onPressed: _saving ? null : _removeTeacher,
+          const SizedBox(height: 6),
+          Text(
+            'هذا الحساب مرتبط بملف معلم ويمكنه إدارة الحلقات المسندة إليه.',
+            style: TextStyle(color: tokens.textSecondary, fontSize: 13),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _teamsCard(BuildContext context, _TeacherTeams data) {
+    if (data.mine.isEmpty) {
+      return AppCard(
+        child: Column(
+          children: [
+            EmptyState(
+              title: 'لا حلقات مرتبطة',
+              message: 'أسنِد الحساب لحلقة ليظهر هنا.',
+              icon: Icons.hub_outlined,
+              actionLabel: 'إسناد لحلقة',
+              onAction: _saving || !_canEditTeams
+                  ? null
+                  : () => _assignTeam(data.others),
+            ),
+          ],
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'حلقاته',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: _saving || !_canEditTeams
+                  ? null
+                  : () => _assignTeam(data.others),
+              icon: const Icon(Icons.add_home_outlined, size: 18),
+              label: const Text('إسناد لحلقة'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        for (final team in data.mine)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _teamRow(context, team),
+          ),
       ],
     );
   }
@@ -537,10 +646,6 @@ class _AdminTeacherManagementScreenState
   Widget _teamRow(BuildContext context, AdminTeamRow team) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final busy = _busyTeamId == team.id;
-    final subtitle = [
-      if (team.typeName.isNotEmpty) team.typeName,
-      '${team.studentsCount} طالب',
-    ].join(' · ');
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       onTap: busy ? null : () => _openTeam(team),
@@ -557,9 +662,23 @@ class _AdminTeacherManagementScreenState
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(color: tokens.textMuted, fontSize: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (team.typeName.isNotEmpty)
+                      Text(
+                        team.typeName,
+                        style: TextStyle(color: tokens.textMuted, fontSize: 12),
+                      ),
+                    IconCount(
+                      icon: Icons.groups_outlined,
+                      value: team.studentsCount,
+                      tooltip: 'عدد الطلاب',
+                      color: tokens.infoLight,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -724,13 +843,21 @@ class _TeamPickerDialogState extends State<_TeamPickerDialog> {
                             color: tokens.accentMatn,
                           ),
                           title: Text(team.name),
-                          subtitle: Text(
-                            [
-                              if (team.typeName.isNotEmpty) team.typeName,
+                          subtitle: Wrap(
+                            spacing: 8,
+                            runSpacing: 2,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              if (team.typeName.isNotEmpty) Text(team.typeName),
                               if (team.teacherName.isNotEmpty)
-                                'المعلم: ${team.teacherName}',
-                              '${team.studentsCount} طالب',
-                            ].join(' · '),
+                                Text('المعلم: ${team.teacherName}'),
+                              IconCount(
+                                icon: Icons.groups_outlined,
+                                value: team.studentsCount,
+                                tooltip: 'عدد الطلاب',
+                                color: tokens.infoLight,
+                              ),
+                            ],
                           ),
                           onTap: () => Navigator.of(context).pop(team.id),
                         );

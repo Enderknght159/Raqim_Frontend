@@ -5,6 +5,7 @@ import 'package:drift/native.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:raqim/core/theme/app_theme.dart';
+import 'package:raqim/core/widgets/metric_charts.dart';
 import 'package:raqim/core/widgets/search_picker_field.dart';
 import 'package:raqim/features/admin/data/admin_local_repository.dart';
 import 'package:raqim/features/admin/domain/admin_models.dart';
@@ -67,15 +68,16 @@ void main() {
     await tester.pumpWidget(_wrap(repos, const AdminCoursesScreen()));
     await tester.pumpAndSettle();
     expect(find.text('الدورات'), findsWidgets);
-    expect(find.text('دورة الحفظ الصيفية'), findsOneWidget);
+    expect(find.text('دورة الحفظ الصيفية'), findsWidgets);
   });
 
   testWidgets('Admin content (E6) renders sections', (tester) async {
     final repos = await _repos();
     await tester.pumpWidget(_wrap(repos, const AdminContentScreen()));
     await tester.pumpAndSettle();
-    expect(find.text('الطلاب'), findsOneWidget);
-    expect(find.text('الحلقات والمعلمون'), findsOneWidget);
+    expect(find.text('الأشخاص'), findsOneWidget);
+    expect(find.text('المحتوى'), findsWidgets);
+    expect(find.text('الطلاب'), findsWidgets);
   });
 
   testWidgets('Admin students list search finds a student by name', (
@@ -370,9 +372,8 @@ GoRouter _flowRouter(String initialLocation) {
       ),
       GoRoute(
         path: '/admin/teams/:id',
-        builder: (context, state) => AdminTeamScreen(
-          teamId: int.parse(state.pathParameters['id']!),
-        ),
+        builder: (context, state) =>
+            AdminTeamScreen(teamId: int.parse(state.pathParameters['id']!)),
       ),
       // Same contract as the real router: go_router already decodes the
       // path parameter — no second Uri.decodeComponent (regression).
@@ -505,8 +506,8 @@ void mainFlow() {
     await tester.pumpWidget(_flowWrap(repos, '/admin/sessions/100/attendance'));
     await tester.pumpAndSettle();
 
-    // Student 7 (barcode st-537) is absent from session 100 in the seed.
-    await tester.enterText(find.byType(TextField).first, 'st-537');
+    // Student 7 (mosque-scoped barcode frq-7) is absent from session 100.
+    await tester.enterText(find.byType(TextField).first, 'frq-7');
     await tester.pumpAndSettle();
     await tester.tap(find.text('حمزة فؤاد'));
     await tester.pumpAndSettle();
@@ -533,6 +534,8 @@ void mainFlow() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(find.text('تسجيل (حفظ · متون · معاملة)'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('تسجيل (حفظ · متون · معاملة)'));
     await tester.pumpAndSettle();
     expect(find.text('اختر الطالب'), findsOneWidget);
@@ -570,7 +573,8 @@ void mainFlow() {
     await tester.pumpAndSettle();
 
     expect(find.text('إحصاءات الامتحان'), findsOneWidget);
-    expect(find.text('عدد التقديمات'), findsOneWidget);
+    expect(find.byType(PercentDonut), findsOneWidget);
+    expect(find.byType(DistributionBars), findsOneWidget);
     expect(find.text('إضافة تقديم'), findsOneWidget);
     expect(find.textContaining('التقديمات'), findsWidgets);
     expect(tester.takeException(), isNull);
@@ -679,7 +683,7 @@ void mainFlow() {
 
     // Same content as the student's own course detail (B1x).
     expect(find.textContaining('متاح للشراء'), findsOneWidget);
-    expect(find.textContaining('الحضور %'), findsOneWidget);
+    expect(find.textContaining('الحضور'), findsWidgets);
     await tester.scrollUntilVisible(
       find.text('الطلاب الأوائل'),
       300,
@@ -746,10 +750,10 @@ void mainFlow() {
     await tester.pumpWidget(_flowWrap(repos, '/admin/courses/1'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('جلسة #14'), findsOneWidget);
+    expect(find.text('#14'), findsOneWidget);
     await tester.tap(find.text('تحديد'));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('جلسة #14'));
+    await tester.tap(find.text('#14'));
     await tester.pumpAndSettle();
     expect(find.text('حذف المحدد (1)'), findsOneWidget);
 
@@ -758,13 +762,13 @@ void mainFlow() {
     await tester.tap(find.widgetWithText(TextButton, 'حذف'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('جلسة #14'), findsNothing);
+    expect(find.text('#14'), findsNothing);
     expect(find.textContaining('حُذفت 1 جلسة'), findsOneWidget);
 
     // Undo restores the session (and its records).
     await tester.tap(find.text('تراجع'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('جلسة #14'), findsOneWidget);
+    expect(find.text('#14'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -835,7 +839,7 @@ void mainFlow() {
     await tester.tap(find.text('عرض الكل').last);
     await tester.pumpAndSettle();
     expect(find.text('سجلات الجلسة'), findsWidgets);
-    expect(find.text('الحفظ'), findsWidgets);
+    expect(find.byIcon(Icons.payments_outlined), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
@@ -909,7 +913,8 @@ void mainFlow() {
     await tester.tap(find.text('القرآن الكريم'));
     await tester.pumpAndSettle();
 
-    expect(find.text('المتوسط'), findsOneWidget);
+    expect(find.byType(PercentDonut), findsOneWidget);
+    expect(find.byIcon(Icons.analytics_outlined), findsOneWidget);
     expect(find.text('44/50'), findsWidgets);
 
     await tester.tap(find.text('إضافة تقديم'));
@@ -937,7 +942,7 @@ void mainFlow() {
     await tester.pumpWidget(_flowWrap(repos, '/admin'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('دورة الحفظ الصيفية'));
+    await tester.tap(find.text('دورة الحفظ الصيفية').last);
     await tester.pumpAndSettle();
     expect(find.text('تعديل الدورة'), findsNothing);
 
@@ -965,7 +970,7 @@ void mainFlow() {
     await tester.pumpWidget(_flowWrap(repos, '/admin'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('دورة الحفظ الصيفية'));
+    await tester.tap(find.text('دورة الحفظ الصيفية').last);
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.edit_outlined));
     await tester.pumpAndSettle();
@@ -978,7 +983,7 @@ void mainFlow() {
 
     // Back on the landing page, refreshed.
     expect(find.text('دورة الحفظ الصيفية'), findsNothing);
-    expect(find.text('دورة رمضانية'), findsOneWidget);
+    expect(find.text('دورة رمضانية'), findsWidgets);
     final courses = await repos.admin.courses();
     expect(courses.any((c) => c.name == 'دورة الحفظ الصيفية'), isFalse);
     expect(await repos.admin.courseSessions(1), isEmpty);

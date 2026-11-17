@@ -27,6 +27,8 @@ class CourseAchievementView extends StatelessWidget {
     this.leaderboardLoading = false,
     this.leaderboardFailed = false,
     this.padding = const EdgeInsets.all(16),
+    this.showLeaderboard = true,
+    this.scrollable = true,
   });
 
   final StudentCourseBundle bundle;
@@ -38,70 +40,86 @@ class CourseAchievementView extends StatelessWidget {
   final VoidCallback onPointsTap;
   final EdgeInsetsGeometry padding;
 
+  /// When false the leaderboard card is omitted, so the caller can load it in
+  /// its own [AsyncSection] (the student course detail does this).
+  final bool showLeaderboard;
+
+  /// When false the view renders a plain [Column] instead of its own
+  /// [ListView] and drops [ResponsivePage]/[padding], so it can be embedded in
+  /// a page-level scroll view made of independent sections.
+  final bool scrollable;
+
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
     final course = bundle.course;
 
-    return ResponsivePage(
-      maxWidth: 1100,
-      child: ListView(
-        padding: padding,
+    final children = <Widget>[
+      // Header
+      Text(
+        course.name,
+        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+          fontWeight: FontWeight.w900,
+          color: tokens.info,
+        ),
+      ),
+      const SizedBox(height: 4),
+      Row(
         children: [
-          // Header
-          Text(
-            course.name,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: tokens.info,
+          Flexible(
+            child: Text(
+              '${formatDate(course.startDate)} – ${formatDate(course.endDate)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
             ),
           ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Flexible(
-                child: Text(
-                  '${formatDate(course.startDate)} – ${formatDate(course.endDate)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                ),
-              ),
-              const SizedBox(width: 8),
-              StatusBadge(
-                label: course.isActive ? 'نشطة' : 'منتهية',
-                color: course.isActive ? tokens.brand : tokens.textMuted,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Points hero
-          _PointsCard(bundle: bundle, onTap: onPointsTap),
-          const SizedBox(height: 12),
-
-          // Attendance
-          _AttendanceCard(bundle: bundle),
-          const SizedBox(height: 12),
-
-          // Tasmi'
-          _TasmiCard(bundle: bundle),
-          const SizedBox(height: 12),
-
-          // Matn
-          _MatnCard(bundle: bundle),
-          const SizedBox(height: 12),
-
-          // Leaderboard
-          _LeaderboardCard(
-            entries: leaderboard,
-            loading: leaderboardLoading,
-            failed: leaderboardFailed,
+          const SizedBox(width: 8),
+          StatusBadge(
+            label: course.isActive ? 'نشطة' : 'منتهية',
+            color: course.isActive ? tokens.brand : tokens.textMuted,
           ),
         ],
       ),
+      const SizedBox(height: 16),
+
+      // Points hero
+      _PointsCard(bundle: bundle, onTap: onPointsTap),
+      const SizedBox(height: 12),
+
+      // Attendance
+      _AttendanceCard(bundle: bundle),
+      const SizedBox(height: 12),
+
+      // Tasmi'
+      _TasmiCard(bundle: bundle),
+      const SizedBox(height: 12),
+
+      // Matn
+      _MatnCard(bundle: bundle),
+
+      // Leaderboard
+      if (showLeaderboard) ...[
+        const SizedBox(height: 12),
+        StudentLeaderboardCard(
+          entries: leaderboard,
+          loading: leaderboardLoading,
+          failed: leaderboardFailed,
+        ),
+      ],
+    ];
+
+    if (!scrollable) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      );
+    }
+    return ResponsivePage(
+      maxWidth: 1100,
+      child: ListView(padding: padding, children: children),
     );
   }
 }
@@ -202,7 +220,7 @@ class _AttendanceCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'الحضور %${summary.percentage}',
+                  'الحضور ${summary.percentage}%',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
@@ -447,11 +465,14 @@ class _MatnCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                Text(
-                  '$reached / ${matn.totalVerses} بيت',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                Tooltip(
+                  message: 'الأبيات المحفوظة / إجمالي الأبيات',
+                  child: Text(
+                    '$reached / ${matn.totalVerses}',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                  ),
                 ),
                 const SizedBox(width: 6),
                 Icon(
@@ -516,8 +537,11 @@ class _MatnCard extends StatelessWidget {
   }
 }
 
-class _LeaderboardCard extends StatelessWidget {
-  const _LeaderboardCard({
+/// Course leaderboard card. Public so a page can load it in its own
+/// independently-loading section.
+class StudentLeaderboardCard extends StatelessWidget {
+  const StudentLeaderboardCard({
+    super.key,
     required this.entries,
     this.loading = false,
     this.failed = false,
@@ -685,19 +709,23 @@ class _LeaderboardRow extends StatelessWidget {
               ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
-          Text(
-            '${entry.points}',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: tokens.rewardText,
+          // Icon + number: «نقطة» is not repeated on every row.
+          Tooltip(
+            message: 'النقاط',
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.emoji_events, size: 14, color: tokens.rewardText),
+                const SizedBox(width: 3),
+                Text(
+                  '${entry.points}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: tokens.rewardText,
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            'نقطة',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
         ],
       ),

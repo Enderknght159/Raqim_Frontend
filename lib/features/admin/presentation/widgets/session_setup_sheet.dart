@@ -268,6 +268,13 @@ class _SessionSetupSheetState extends State<_SessionSetupSheet> {
                 ],
               ),
             ),
+            const SizedBox(height: 6),
+            Text(
+              'اكتب أي عدد صحيح غير سالب، أو استخدم − و +.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+            ),
             if (_error.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
@@ -297,15 +304,21 @@ class _SessionSetupSheetState extends State<_SessionSetupSheet> {
           Expanded(
             child: Text(
               label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: Theme.of(
                 context,
               ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
+          // Attendance points are intentionally unbounded: the value can be
+          // typed directly or nudged with −/+.
           NumberStepper(
             value: value,
             min: 0,
-            max: 10,
+            max: null,
+            editable: true,
+            semanticLabel: label,
             color: color,
             onChanged: onChanged,
           ),

@@ -9,6 +9,7 @@ abstract class AdminRepository {
   Future<GeneralStats> generalStats();
   Future<AdminHomeData?> homeCached();
   Future<List<AdminCourseSummary>> courses();
+  Future<List<AdminCourseSummary>> courseBriefs();
   Future<List<AdminCourseSummary>?> coursesCached();
   Future<AdminCourseSummary?> courseSummary(int courseId);
   Future<LeaderboardResult> leaderboard(int courseId);
@@ -48,6 +49,21 @@ abstract class AdminRepository {
     int pageSize = 30,
   });
   Future<AdminUserRow?> user(int userId);
+
+  /// Creates a mosque account that is not tied to a student (`POST /admin/users`).
+  Future<AdminUserRow> createUser({
+    required String name,
+    String? username,
+    String? password,
+    String? email,
+    bool isAdmin = false,
+    int? studentId,
+    int? teacherId,
+  });
+
+  /// Resets another account's password (`POST /admin/users/{id}/reset-password`).
+  Future<void> resetUserPassword(int userId, {String? newPassword});
+
   Future<AdminUserPermissions> userPermissions(int userId);
   Future<void> updateUserPermissions(
     int userId,

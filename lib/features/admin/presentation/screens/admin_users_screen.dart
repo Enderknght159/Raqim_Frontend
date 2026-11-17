@@ -7,9 +7,11 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_loading.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/responsive_page.dart';
+import '../../../../shared/permissions.dart';
 import '../../data/admin_refresh.dart';
 import '../../domain/admin_models.dart';
 import '../admin_shell.dart';
+import '../widgets/account_create_sheet.dart';
 import '../widgets/admin_role_badges.dart';
 import 'admin_user_detail_screen.dart';
 
@@ -35,6 +37,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   bool _loading = true;
   bool _loadingMore = false;
   bool _refreshing = false;
+  bool _creatingAccount = false;
   Object? _error;
   Object? _loadMoreError;
 
@@ -211,8 +214,21 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
+    final canManage = hasAnyAbility(context, const ['userManagement']);
     return Scaffold(
-      appBar: AppBar(title: const Text('الحسابات والصلاحيات')),
+      appBar: AppBar(
+        title: const Text('الحسابات والصلاحيات'),
+        actions: [
+          if (canManage)
+            IconButton(
+              tooltip: _creatingAccount
+                  ? 'جارٍ إنشاء الحساب…'
+                  : 'إنشاء حساب مشرف أو مدرس',
+              onPressed: _creatingAccount ? null : _createAccount,
+              icon: const Icon(Icons.person_add_alt_1_outlined),
+            ),
+        ],
+      ),
       body: ResponsivePage(
         maxWidth: 900,
         child: Column(
@@ -271,10 +287,13 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       return AppErrorView(error: _error, onRetry: () => _load(reset: true));
     }
     if (_items.isEmpty) {
-      return const EmptyState(
+      final canManage = hasAnyAbility(context, const ['userManagement']);
+      return EmptyState(
         title: 'لا توجد حسابات',
         icon: Icons.people_outline,
         message: 'جرّب بحثًا آخر أو غيّر التصفية.',
+        actionLabel: canManage ? 'إنشاء حساب' : null,
+        onAction: canManage ? _createAccount : null,
       );
     }
     return ListView.builder(
@@ -332,7 +351,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         : AdminUserKind.student;
     final subtitle = [
       if (row.usernameLabel.isNotEmpty) row.usernameLabel,
-      row.roleLabel,
       if (row.teamNames.isNotEmpty) row.teamNames.join(' • '),
     ].join(' • ');
     return Padding(
@@ -373,26 +391,30 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   Text(
                     row.displayName,
                     maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  Text(
-                    subtitle,
-                    maxLines: 2,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                  ),
+                  if (subtitle.isNotEmpty)
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                    ),
                 ],
               ),
             ),
-            AdminRoleBadges.fromRow(row),
+            AdminRoleBadges.fromRow(row, size: 16),
             if (!row.active) ...[
               const SizedBox(width: 6),
-              Text(
-                'موقوف',
-                style: TextStyle(color: tokens.dangerText, fontSize: 12),
+              Tooltip(
+                message: 'حساب موقوف',
+                triggerMode: TooltipTriggerMode.longPress,
+                child: Icon(Icons.block, size: 16, color: tokens.dangerText),
               ),
             ],
             const SizedBox(width: 6),
@@ -401,6 +423,34 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _createAccount() async {
+    if (_creatingAccount) return;
+    setState(() => _creatingAccount = true);
+    try {
+      final repo = AdminRepositoryScope.of(context);
+      final created = await showCreateAccountSheet(context, repository: repo);
+      if (!mounted || created == null) return;
+      final refreshed = await repo.user(created.user.id) ?? created.user;
+      if (!mounted) return;
+      await _load(reset: true);
+      if (!mounted) return;
+      await _openDetail(
+        context,
+        refreshed,
+        created.role == AdminAccountRole.teacher
+            ? AdminUserKind.teacher
+            : AdminUserKind.admin,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('تعذّر إنشاء الحساب: $error')));
+    } finally {
+      if (mounted) setState(() => _creatingAccount = false);
+    }
   }
 
   Future<void> _openDetail(

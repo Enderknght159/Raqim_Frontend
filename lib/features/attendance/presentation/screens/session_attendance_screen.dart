@@ -6,15 +6,15 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/date_time_utils.dart';
+import '../../../../core/widgets/adaptive_sheet.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_loading.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/responsive_scope.dart';
-import '../../../../core/widgets/status_badge.dart';
+import '../../../admin/data/admin_repository.dart';
 import '../../../admin/domain/admin_models.dart';
 import '../../../admin/presentation/admin_shell.dart';
 import '../cubits/session_attendance_cubit.dart';
-import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
 /// Unified session attendance: camera scan + tolerant auto-search in the same
 /// page. Tap a name = register attendance; the undo snackbar offers «تراجع»
@@ -153,7 +153,16 @@ class _SessionAttendanceViewState extends State<_SessionAttendanceView> {
                   ? 'الحضور'
                   : 'جلسة #${state.session!.index} — '
                         '${formatDate(state.session!.date)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
+            actions: [
+              IconButton(
+                tooltip: 'إضافة طالب',
+                icon: const Icon(Icons.person_add_alt_1),
+                onPressed: state.isReady ? _addStudent : null,
+              ),
+            ],
           ),
           body: Stack(
             children: [
@@ -347,10 +356,13 @@ class _SessionAttendanceViewState extends State<_SessionAttendanceView> {
         const SizedBox(height: 6),
         Expanded(
           child: results.isEmpty
-              ? const EmptyState(
+              ? EmptyState(
                   title: 'لا نتائج',
                   icon: Icons.person_search_outlined,
-                  message: 'جرّب الاسم أو الباركود',
+                  message:
+                      'جرّب الاسم أو الباركود، أو أضف طالبًا غير مدرج في الدورة',
+                  actionLabel: 'إضافة طالب',
+                  onAction: state.isReady ? _addStudent : null,
                 )
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
@@ -433,13 +445,39 @@ class _SessionAttendanceViewState extends State<_SessionAttendanceView> {
                 ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
               ),
               const SizedBox(width: 8),
-              const StatusBadge(label: 'حاضر', color: Color(0xFF00A572)),
+              Icon(Icons.schedule, size: 16, color: tokens.textMuted),
             ] else
               Icon(Icons.add_circle_outline, color: tokens.brandText),
           ],
         ),
       ),
     );
+  }
+
+  /// Opens the all-students picker (the session roster only lists students who
+  /// already attended, so newcomers must be searched in the mosque directory)
+  /// and registers the chosen student into this session.
+  Future<void> _addStudent() async {
+    final repository = AdminRepositoryScope.of(context);
+    final registeredIds = _cubit.state.registered.keys.toSet();
+    final student = await showAppSheet<AdminStudentRow>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => _AddStudentSheet(
+        repository: repository,
+        excludeIds: registeredIds,
+        initialQuery: _search.text.trim(),
+      ),
+    );
+    if (student == null || !mounted) return;
+    final registered = await _cubit.registerExternal(student);
+    if (!mounted || !registered) return;
+    // The freshly added student must stay visible: drop any search filter.
+    if (_search.text.isNotEmpty) {
+      _search.clear();
+      _cubit.setQuery('');
+    }
   }
 
   Future<void> _longPress(AdminSessionMember member) async {
@@ -544,5 +582,253 @@ class _SessionAttendanceViewState extends State<_SessionAttendanceView> {
     );
     if (confirm != true || !mounted) return;
     await _cubit.remove(member);
+  }
+}
+
+/// Paginated all-students lookup used to add a student who never attended any
+/// session of this course — the session roster would never list them.
+class _AddStudentSheet extends StatefulWidget {
+  const _AddStudentSheet({
+    required this.repository,
+    this.excludeIds = const {},
+    this.initialQuery = '',
+  });
+
+  final AdminRepository repository;
+
+  /// Students already present in this session; they need no re-registration.
+  final Set<int> excludeIds;
+
+  /// Carries the screen's failed search over, so the admin keeps the context.
+  final String initialQuery;
+
+  @override
+  State<_AddStudentSheet> createState() => _AddStudentSheetState();
+}
+
+class _AddStudentSheetState extends State<_AddStudentSheet> {
+  final _search = TextEditingController();
+  final _items = <AdminStudentRow>[];
+  Timer? _debounce;
+  int _page = 1;
+  int _requestId = 0;
+  bool _hasMore = true;
+  bool _loading = true;
+  bool _loadingMore = false;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _search.text = widget.initialQuery;
+    _search.selection = TextSelection.collapsed(offset: _search.text.length);
+    _load(reset: true);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _onQueryChanged(String _) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) _load(reset: true);
+    });
+  }
+
+  Future<void> _load({required bool reset}) async {
+    final requestId = ++_requestId;
+    if (reset) {
+      setState(() {
+        _loading = true;
+        _error = null;
+        _items.clear();
+        _page = 1;
+        _hasMore = true;
+        _loadingMore = false;
+      });
+    } else {
+      if (_loadingMore || !_hasMore) return;
+      setState(() => _loadingMore = true);
+    }
+    try {
+      final result = await widget.repository.studentsPage(
+        query: _search.text.trim(),
+        page: _page,
+        pageSize: 30,
+      );
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        _items.addAll(
+          result.items.where((s) => !widget.excludeIds.contains(s.id)),
+        );
+        _hasMore = result.hasMore;
+        _page = result.page + 1;
+        _loading = false;
+        _loadingMore = false;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        _loading = false;
+        _loadingMore = false;
+        _error = error;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.85,
+      maxChildSize: 0.95,
+      minChildSize: 0.5,
+      builder: (context, controller) => Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Row(
+              children: [
+                Icon(Icons.person_add_alt_1, size: 20, color: tokens.brandText),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'إضافة طالب إلى الجلسة',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: TextField(
+              controller: _search,
+              autofocus: true,
+              textInputAction: TextInputAction.search,
+              onChanged: (value) {
+                setState(() {});
+                _onQueryChanged(value);
+              },
+              decoration: InputDecoration(
+                hintText: 'بحث: اسم / معرّف / باركود',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _search.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'مسح',
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          _search.clear();
+                          setState(() {});
+                          _load(reset: true);
+                        },
+                      ),
+              ),
+            ),
+          ),
+          Expanded(child: _body(context, controller)),
+        ],
+      ),
+    );
+  }
+
+  Widget _body(BuildContext context, ScrollController controller) {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
+    if (_loading && _items.isEmpty) return const AppLoadingView(compact: true);
+    if (_error != null && _items.isEmpty) {
+      return AppErrorView(error: _error, onRetry: () => _load(reset: true));
+    }
+    if (_items.isEmpty) {
+      return const EmptyState(
+        title: 'لا نتائج',
+        icon: Icons.person_search_outlined,
+        message: 'لا يوجد طالب مطابق في المسجد',
+      );
+    }
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification.metrics.extentAfter < 240) _load(reset: false);
+        return false;
+      },
+      child: ListView.builder(
+        controller: controller,
+        padding: const EdgeInsets.only(bottom: 16),
+        itemCount: _items.length + 1,
+        itemBuilder: (context, i) {
+          if (i >= _items.length) return _footer();
+          final student = _items[i];
+          final subtitle = [
+            if (student.teamNames.isNotEmpty) student.teamNames,
+            if (student.barcode.isNotEmpty) student.barcode,
+          ].join(' · ');
+          return ListTile(
+            leading: CircleAvatar(
+              radius: 18,
+              backgroundColor: tokens.brandTint,
+              child: Text(
+                student.name.isEmpty ? '؟' : student.name.characters.first,
+                style: TextStyle(
+                  color: tokens.brandText,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            title: Text(
+              student.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            subtitle: subtitle.isEmpty
+                ? null
+                : Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: tokens.textMuted),
+                  ),
+            trailing: Icon(Icons.chevron_left, color: tokens.borderStructural),
+            onTap: () => Navigator.of(context).pop(student),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _footer() {
+    if (_error != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Center(
+          child: TextButton.icon(
+            onPressed: () => _load(reset: false),
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('إعادة المحاولة'),
+          ),
+        ),
+      );
+    }
+    if (!_hasMore) return const SizedBox.shrink();
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+    );
   }
 }

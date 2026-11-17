@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/state/section_loader.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
-import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../shared/permissions.dart';
@@ -21,6 +21,8 @@ class AdminSettingsScreen extends StatefulWidget {
 }
 
 class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
+  /// Bumped after every save/cancel so the mosque and deletion cards refetch.
+  int _revision = 0;
   final _name = TextEditingController();
   final _code = TextEditingController();
   final _email = TextEditingController();
@@ -28,14 +30,6 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   final _city = TextEditingController();
   bool _saving = false;
   bool _exporting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = _load();
-  }
-
-  late Future<({MosqueInfo mosque, MosqueDeletionState state})> _future;
 
   @override
   void dispose() {
@@ -47,23 +41,21 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     super.dispose();
   }
 
-  Future<({MosqueInfo mosque, MosqueDeletionState state})> _load() async {
-    final repo = AdminRepositoryScope.of(context);
-    final mosqueF = repo.mosque();
-    final stateF = repo.mosqueDeletionState();
-    final mosque = await mosqueF;
-    final state = await stateF;
+  /// Loads the identity card only; the deletion state has its own section.
+  Future<MosqueInfo> _loadMosque() async {
+    final mosque = await AdminRepositoryScope.of(context).mosque();
+    if (!mounted) return mosque;
     _name.text = mosque.name;
     _code.text = mosque.code;
     _email.text = mosque.contactEmail ?? '';
     _phone.text = mosque.contactPhone ?? '';
     _city.text = mosque.city ?? '';
-    return (mosque: mosque, state: state);
+    return mosque;
   }
 
   void _reload() {
     if (!mounted) return;
-    setState(() => _future = _load());
+    setState(() => _revision++);
   }
 
   @override
@@ -94,117 +86,148 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     }
     return Scaffold(
       appBar: AppBar(title: const Text('الإعدادات')),
-      body: AsyncView<({MosqueInfo mosque, MosqueDeletionState state})>(
-        future: _future,
-        cacheKey: 'admin-settings',
-        builder: (context, data) => ResponsivePage(
-          maxWidth: 720,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SectionHeader(
-                      icon: Icons.badge_outlined,
-                      title: 'هوية المسجد',
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _name,
-                      decoration: const InputDecoration(labelText: 'الاسم'),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      key: const ValueKey('mosque-code-readonly'),
-                      controller: _code,
-                      readOnly: true,
-                      decoration: const InputDecoration(
-                        labelText: 'الرمز',
-                        helperText:
-                            'الرمز ثابت ولا يمكن تغييره (يُستخدم في الباركود '
-                            'واسم المستخدم)',
-                        suffixIcon: Icon(Icons.lock_outline),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _email,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(labelText: 'البريد'),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _phone,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(labelText: 'الهاتف'),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _city,
-                      decoration: const InputDecoration(labelText: 'المدينة'),
-                    ),
-                    const SizedBox(height: 10),
-                    AppButton(
-                      label: _saving ? 'جارٍ الحفظ…' : 'حفظ',
-                      loading: _saving,
-                      onPressed: _saving ? null : () => _save(data.mosque),
-                    ),
-                  ],
-                ),
+      body: ResponsivePage(
+        maxWidth: 720,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            AsyncSection<MosqueInfo>(
+              cacheKey: 'admin-settings-mosque',
+              revision: _revision,
+              skeleton: const _IdentitySkeleton(),
+              errorBuilder: (context, retry) => SectionError(
+                onRetry: retry,
+                message: 'تعذر تحميل هوية المسجد',
               ),
-              const SizedBox(height: 16),
-              AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SectionHeader(
-                      icon: Icons.policy_outlined,
-                      title: 'سياسة الخصوصية',
+              load: _loadMosque,
+              builder: (context, mosque) => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AppCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SectionHeader(
+                          icon: Icons.badge_outlined,
+                          title: 'هوية المسجد',
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _name,
+                          decoration: const InputDecoration(labelText: 'الاسم'),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          key: const ValueKey('mosque-code-readonly'),
+                          controller: _code,
+                          readOnly: true,
+                          decoration: const InputDecoration(
+                            labelText: 'الرمز',
+                            helperText:
+                                'الرمز ثابت ولا يمكن تغييره. هو السابقة الوحيدة '
+                                'لباركود الطلاب وأسماء كل حسابات المسجد.',
+                            suffixIcon: Icon(Icons.lock_outline),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _email,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: const InputDecoration(
+                            labelText: 'البريد',
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _phone,
+                          keyboardType: TextInputType.phone,
+                          decoration: const InputDecoration(
+                            labelText: 'الهاتف',
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _city,
+                          decoration: const InputDecoration(
+                            labelText: 'المدينة',
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        AppButton(
+                          label: _saving ? 'جارٍ الحفظ…' : 'حفظ',
+                          loading: _saving,
+                          onPressed: _saving ? null : () => _save(mosque),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'النسخة الحالية: ${data.mosque.status ?? '—'}',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  AppCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SectionHeader(
+                          icon: Icons.policy_outlined,
+                          title: 'سياسة الخصوصية',
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'النسخة الحالية: ${mosque.status ?? '—'}',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          onPressed: () => _notice(
+                            this.context,
+                            'تُدار السياسة من لوحة المنصة',
+                          ),
+                          icon: const Icon(Icons.description_outlined),
+                          label: const Text('عرض'),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: () =>
-                          _notice(this.context, 'تُدار السياسة من لوحة المنصة'),
-                      icon: const Icon(Icons.description_outlined),
-                      label: const Text('عرض'),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SectionHeader(
-                      icon: Icons.file_download_outlined,
-                      title: 'تصدير كامل',
+            ),
+            const SizedBox(height: 16),
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SectionHeader(
+                    icon: Icons.file_download_outlined,
+                    title: 'تصدير كامل',
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'مهمة تصدير xlsx برابط تنزيل لمرة واحدة.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: _exporting ? null : () => _export(context),
+                    icon: const Icon(Icons.download),
+                    label: Text(
+                      _exporting ? 'جارٍ إنشاء التصدير…' : 'تصدير كامل',
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'مهمة تصدير xlsx برابط تنزيل لمرة واحدة.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: _exporting ? null : () => _export(context),
-                      icon: const Icon(Icons.download),
-                      label: Text(
-                        _exporting ? 'جارٍ إنشاء التصدير…' : 'تصدير كامل',
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              AppCard(
+            ),
+            const SizedBox(height: 16),
+            AsyncSection<MosqueDeletionState>(
+              cacheKey: 'admin-settings-deletion',
+              revision: _revision,
+              delay: const Duration(milliseconds: 120),
+              skeleton: const SectionSkeleton(height: 56, lines: 2),
+              errorBuilder: (context, retry) => SectionError(
+                onRetry: retry,
+                message: 'تعذر تحميل حالة الحذف',
+              ),
+              load: () =>
+                  AdminRepositoryScope.of(context).mosqueDeletionState(),
+              builder: (context, state) => AppCard(
                 borderColor: tokens.danger.withValues(alpha: 0.4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -215,21 +238,21 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      data.state.isDeleting
+                      state.isDeleting
                           ? 'طلب الحذف نشط. يمكنك إلغاؤه قبل انتهاء المهلة.'
                           : 'يبدأ طلب الحذف بمهلة 30 يومًا، وتظهر شاشة توقف '
                                 'لجميع المستخدمين خلالها مع إمكانية الإلغاء.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                    if (data.state.deletionMessage != null) ...[
+                    if (state.deletionMessage != null) ...[
                       const SizedBox(height: 8),
                       Text(
-                        data.state.deletionMessage!,
+                        state.deletionMessage!,
                         style: TextStyle(color: tokens.dangerText),
                       ),
                     ],
                     const SizedBox(height: 10),
-                    if (data.state.isDeleting)
+                    if (state.isDeleting)
                       AppButton(
                         label: 'إلغاء طلب الحذف',
                         variant: AppButtonVariant.secondary,
@@ -244,8 +267,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -394,6 +417,23 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Reserves the identity card plus the policy card while the mosque loads.
+class _IdentitySkeleton extends StatelessWidget {
+  const _IdentitySkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionSkeleton(height: 150, lines: 2),
+        SizedBox(height: 16),
+        SectionSkeleton(height: 44, lines: 1),
+      ],
     );
   }
 }
