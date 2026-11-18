@@ -134,14 +134,19 @@ class AuthCubit extends Cubit<AuthState> {
 
   Future<void> updateProfile({
     String? name,
+    String? username,
     String? email,
     String? phone,
   }) async {
     final profile = await _repository.updateMe(
       name: name,
+      username: username,
       email: email,
       phone: phone,
     );
+    // Cached screens embed the account name; drop them so the new identity
+    // appears without a manual refresh.
+    ScreenCache.instance.clear();
     emit(AuthAuthenticated(profile));
     _notify();
     _warmCache(profile);

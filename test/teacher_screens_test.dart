@@ -13,6 +13,7 @@ import 'package:raqim/features/student/data/local/student_database.dart';
 import 'package:raqim/features/teacher/domain/teacher_models.dart';
 import 'package:raqim/features/teacher/presentation/screens/teacher_students_screen.dart';
 import 'package:raqim/features/teacher/presentation/screens/teacher_today_screen.dart';
+import 'package:raqim/features/teacher/presentation/screens/teacher_account_screen.dart';
 import 'package:raqim/features/teacher/presentation/teacher_shell.dart';
 
 class _Repos {
@@ -49,6 +50,16 @@ void main() {
     expect(find.text('اليوم'), findsWidgets);
     expect(find.text('طلابي'), findsWidgets);
     expect(find.text('حسابي'), findsWidgets);
+  });
+
+  testWidgets('Teacher account offers self profile editing', (tester) async {
+    final repos = await _repos();
+    await tester.pumpWidget(_wrap(repos, const TeacherAccountScreen()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('بيانات الحساب'), findsOneWidget);
+    expect(find.byKey(const ValueKey('account-name')), findsOneWidget);
+    expect(find.byKey(const ValueKey('account-username')), findsOneWidget);
   });
 
   testWidgets('Teacher today starts with course/session selection', (

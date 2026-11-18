@@ -341,84 +341,69 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 2),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (visible.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Text(
-                          'لا نتائج لهذا الفلتر',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      )
-                    else
-                      for (final m in visible.take(_previewCount))
-                        _memberRow(context, data, m),
-                    if (visible.length > _previewCount)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: TextButton(
-                          onPressed: () => _showAll(context, data),
-                          child: Text('عرض الكل (${visible.length})'),
-                        ),
-                      ),
-                  ],
-                ),
+          const SizedBox(height: 10),
+          _filterGroup(tokens, countOf),
+          const SizedBox(height: 6),
+          if (visible.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                'لا نتائج لهذا الفلتر',
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
-              const SizedBox(width: 8),
-              _filterGroup(tokens, countOf),
-            ],
-          ),
+            )
+          else
+            for (final m in visible.take(_previewCount))
+              _memberRow(context, data, m),
+          if (visible.length > _previewCount)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: TextButton(
+                onPressed: () => _showAll(context, data),
+                child: Text('عرض الكل (${visible.length})'),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  /// Vertical icon-first filters: the Arabic label only surfaces on hover /
-  /// long press, so every row does not repeat «مبكر / في الوقت …». The group is
-  /// a single column aligned to the reading start (right in RTL).
+  /// Horizontal, icon-first filters above the day list: the Arabic label only
+  /// surfaces on hover / long press, so every row does not repeat «مبكر /
+  /// في الوقت …». Wraps into a second line on narrow windows.
   Widget _filterGroup(
     AppTokens tokens,
     int Function(AttendanceCategory) countOf,
   ) {
-    return Align(
+    return Wrap(
       key: const ValueKey('session-attendance-filters'),
-      alignment: AlignmentDirectional.centerStart,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      alignment: WrapAlignment.start,
+      spacing: 6,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _FilterIconChip(
+          icon: Icons.apps,
+          label: 'الكل',
+          selected: _filter == null,
+          color: tokens.textSecondary,
+          onTap: () => setState(() => _filter = null),
+        ),
+        for (final c in const [
+          AttendanceCategory.early,
+          AttendanceCategory.onTime,
+          AttendanceCategory.late,
+          AttendanceCategory.absent,
+        ])
           _FilterIconChip(
-            icon: Icons.apps,
-            label: 'الكل',
-            selected: _filter == null,
-            color: tokens.textSecondary,
-            onTap: () => setState(() => _filter = null),
+            icon: AttendanceStatusChip.iconOf(c),
+            label: AttendanceStatusChip.labelOf(c),
+            selected: _filter == c,
+            color: _categoryColor(tokens, c),
+            count: countOf(c),
+            onTap: () => setState(() => _filter = _filter == c ? null : c),
           ),
-          for (final c in const [
-            AttendanceCategory.early,
-            AttendanceCategory.onTime,
-            AttendanceCategory.late,
-            AttendanceCategory.absent,
-          ]) ...[
-            const SizedBox(height: 6),
-            _FilterIconChip(
-              icon: AttendanceStatusChip.iconOf(c),
-              label: AttendanceStatusChip.labelOf(c),
-              selected: _filter == c,
-              color: _categoryColor(tokens, c),
-              count: countOf(c),
-              onTap: () => setState(() => _filter = _filter == c ? null : c),
-            ),
-          ],
-        ],
-      ),
+      ],
     );
   }
 
@@ -797,7 +782,7 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
               Tooltip(
                 message: 'نسبة الحضور',
                 triggerMode: TooltipTriggerMode.longPress,
-                child: PercentDonut(percent: percent, size: 72, strokeWidth: 7),
+                child: PercentDonut(percent: percent, size: 88, strokeWidth: 8),
               ),
             ],
           ),

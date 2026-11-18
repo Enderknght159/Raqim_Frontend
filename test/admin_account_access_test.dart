@@ -50,7 +50,7 @@ Future<void> _pumpAccount(WidgetTester tester, UserProfile profile) async {
 }
 
 void main() {
-  testWidgets('general supervisor can edit account identity and password', (
+  testWidgets('general supervisor can edit name, username and password', (
     tester,
   ) async {
     await _pumpAccount(
@@ -72,11 +72,18 @@ void main() {
     final username = tester.widget<TextField>(
       find.byKey(const ValueKey('account-username')),
     );
-    expect(username.readOnly, isTrue);
+    expect(username.readOnly, isFalse);
     expect(username.controller?.text, 'frq-1');
+
+    final name = tester.widget<TextField>(
+      find.byKey(const ValueKey('account-name')),
+    );
+    expect(name.readOnly, isFalse);
+    expect(name.controller?.text, 'مدير المسجد');
+    expect(find.byKey(const ValueKey('account-phone')), findsOneWidget);
   });
 
-  testWidgets('non-admin has no identity card and no password tile', (
+  testWidgets('account without permissions still edits profile and logs out', (
     tester,
   ) async {
     await _pumpAccount(
@@ -91,9 +98,39 @@ void main() {
       ),
     );
 
-    expect(find.text('بيانات الحساب'), findsNothing);
+    expect(find.text('بيانات الحساب'), findsOneWidget);
+    expect(find.byKey(const ValueKey('account-name')), findsOneWidget);
+    expect(find.byKey(const ValueKey('account-username')), findsOneWidget);
     expect(find.text('تغيير كلمة المرور'), findsNothing);
+    expect(find.byKey(const ValueKey('account-phone')), findsNothing);
     expect(find.text('تبديل الحساب'), findsOneWidget);
+    expect(find.text('خروج'), findsOneWidget);
+  });
+
+  testWidgets('no-access account still sees profile, banner and logout', (
+    tester,
+  ) async {
+    await _pumpAccount(
+      tester,
+      const UserProfile(
+        id: 3,
+        name: 'حساب بلا صلاحيات',
+        username: 'frq-3',
+        mosqueName: 'جامع الفرقان',
+        mosqueCode: 'frq',
+        role: AppRole.student,
+        accountState: 'noAccess',
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('no-access-3')), findsOneWidget);
+    expect(find.byKey(const ValueKey('account-username')), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('خروج'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('خروج'), findsOneWidget);
   });
 }

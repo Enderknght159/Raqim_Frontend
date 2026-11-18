@@ -47,6 +47,8 @@ String adminLandingPath(UserProfile profile) {
 }
 
 String firstSectionPath(UserProfile profile) {
+  // An account with no usable surface still gets a profile + logout page.
+  if (profile.hasNoAccess) return '/admin/account';
   // A full admin lands on the admin surface; a dual-role student/supervisor
   // lands on their student surface first and can switch via the role button.
   if (profile.isAdmin) return '/admin/courses';
@@ -55,6 +57,15 @@ String firstSectionPath(UserProfile profile) {
   if (profile.hasTeacherSection || profile.isTeacher) return '/teacher/today';
   if (profile.isStudent || profile.isDemo) return '/my-progress';
   return '/my-progress';
+}
+
+/// Account page for the current surface. Accounts without permissions still
+/// reach it, because the profile/logout must never depend on a module grant.
+String accountPathFor(UserProfile profile) {
+  if (profile.hasNoAccess) return '/admin/account';
+  if (profile.isAdmin || profile.isSupervisor) return '/admin/account';
+  if (profile.hasTeacherSection || profile.isTeacher) return '/teacher/account';
+  return '/my-progress/profile';
 }
 
 /// UI-only guard for the teacher surface. The server still enforces scopes.

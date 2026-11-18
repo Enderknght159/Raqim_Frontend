@@ -92,6 +92,17 @@ void main() {
       ),
       '/my-progress',
     );
+    expect(
+      firstSectionPath(
+        const UserProfile(
+          id: 1,
+          name: 'noaccess',
+          role: AppRole.student,
+          accountState: 'noAccess',
+        ),
+      ),
+      '/admin/account',
+    );
   });
 }
 

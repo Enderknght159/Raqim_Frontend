@@ -5,17 +5,21 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/info_banner.dart';
 import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../auth/presentation/cubits/auth_cubit.dart';
 import '../../../auth/presentation/cubits/auth_state.dart';
+import '../../../../shared/account_details_card.dart';
 import '../../../../shared/account_switcher.dart';
-import '../../../../shared/permissions.dart';
 import 'package:raqim/core/widgets/adaptive_sheet.dart';
 
-/// E18 — Admin "حسابي": profile card + editable fields (like the student
-/// page) + change password + switch account + filled-red logout.
+/// E18 — Admin "حسابي": profile card + editable name/username + password
+/// (mosque admin) + switch account + filled-red logout.
+///
+/// The profile and logout stay available even when the account holds no
+/// permissions; only the password tile is restricted to the mosque admin.
 class AdminAccountScreen extends StatefulWidget {
   const AdminAccountScreen({super.key});
 
@@ -24,43 +28,6 @@ class AdminAccountScreen extends StatefulWidget {
 }
 
 class _AdminAccountScreenState extends State<AdminAccountScreen> {
-  final _name = TextEditingController();
-  final _username = TextEditingController();
-  final _phone = TextEditingController();
-  bool _initialized = false;
-  bool _saving = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_initialized) return;
-    _initialized = true;
-    AuthState? auth;
-    try {
-      auth = context.read<AuthCubit>().state;
-    } catch (_) {
-      auth = null;
-    }
-    if (auth is AuthAuthenticated) {
-      final profile = auth.profile;
-      _name.text = profile.name;
-      _username.text = profile.username ?? '';
-      _phone.text = profile.phone ?? '';
-    } else {
-      // Standalone render (widget tests / no auth scope).
-      _name.text = 'مدير المسجد';
-      _username.text = 'admin';
-    }
-  }
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _username.dispose();
-    _phone.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
@@ -81,6 +48,15 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            if (profile?.hasNoAccess == true)
+              InfoBanner(
+                key: ValueKey('no-access-${profile!.id}'),
+                icon: Icons.lock_outline,
+                color: tokens.info,
+                message:
+                    'لا توجد صلاحيات مرتبطة بحسابك حاليًا. '
+                    'يمكنك تعديل ملفك الشخصي أو تسجيل الخروج.',
+              ),
             AppCard(
               child: Row(
                 children: [
@@ -99,15 +75,26 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          profile?.name ?? _name.text,
+                          profile?.name ?? 'مدير المسجد',
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.w900),
                         ),
+                        if ((profile?.username ?? '').isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            '@${profile!.username}',
+                            textDirection: TextDirection.ltr,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: tokens.textMuted),
+                          ),
+                        ],
                         const SizedBox(height: 4),
                         Row(
                           children: [
                             StatusBadge(
-                              label: profile?.role.arabicName ?? 'أدمن',
+                              label: profile?.hasNoAccess == true
+                                  ? 'بدون صلاحيات'
+                                  : profile?.role.arabicName ?? 'أدمن',
                               color: tokens.info,
                             ),
                           ],
@@ -127,49 +114,13 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
                 ],
               ),
             ),
-            if (isGeneralSupervisor) ...[
-              const SizedBox(height: 16),
-              const SectionHeader(
-                icon: Icons.person_outline,
-                title: 'بيانات الحساب',
-              ),
-              const SizedBox(height: 8),
-              AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextField(
-                      controller: _name,
-                      decoration: const InputDecoration(labelText: 'الاسم'),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      key: const ValueKey('account-username'),
-                      controller: _username,
-                      readOnly: true,
-                      decoration: const InputDecoration(
-                        labelText: 'اسم المستخدم',
-                        helperText: 'لا يمكن تغيير اسم المستخدم من هنا',
-                        suffixIcon: Icon(Icons.lock_outline),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _phone,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(labelText: 'الهاتف'),
-                    ),
-                    const SizedBox(height: 10),
-                    AppButton(
-                      label: _saving ? 'جارٍ الحفظ…' : 'حفظ البيانات',
-                      variant: AppButtonVariant.secondary,
-                      loading: _saving,
-                      onPressed: _saving ? null : () => _save(context),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            const SizedBox(height: 16),
+            const SectionHeader(
+              icon: Icons.person_outline,
+              title: 'بيانات الحساب',
+            ),
+            const SizedBox(height: 8),
+            AccountDetailsCard(showPhone: isGeneralSupervisor),
             const SizedBox(height: 16),
             const SectionHeader(
               icon: Icons.security_outlined,
@@ -231,26 +182,6 @@ class _AdminAccountScreenState extends State<AdminAccountScreen> {
     final next = await context.read<AuthCubit>().logout();
     if (!context.mounted) return;
     context.go(next == null ? '/welcome' : '/');
-  }
-
-  Future<void> _save(BuildContext context) async {
-    if (_saving) return;
-    final profile = currentProfile(context);
-    if (profile?.isAdmin != true) return;
-    setState(() => _saving = true);
-    try {
-      await context.read<AuthCubit>().updateProfile(
-        name: _name.text.trim(),
-        phone: _phone.text.trim(),
-      );
-      if (!context.mounted) return;
-      _notice(context, 'تم حفظ البيانات');
-    } catch (e) {
-      if (!context.mounted) return;
-      _notice(context, 'تعذّر الحفظ: $e');
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
   }
 
   void _switchAccount(BuildContext context) {

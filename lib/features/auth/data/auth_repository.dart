@@ -241,7 +241,9 @@ class AuthRepository {
         if (item.userId == profile.id)
           StoredAccount(
             userId: profile.id,
-            username: item.username,
+            username: profile.username?.trim().isNotEmpty == true
+                ? profile.username!.trim()
+                : item.username,
             name: displayName ?? item.name,
             role: profile.role.value,
             access: item.access,
@@ -294,33 +296,19 @@ class AuthRepository {
 
   Future<UserProfile> updateMe({
     String? name,
+    String? username,
     String? email,
     String? phone,
   }) async {
-    await remote.updateMe(name: name, email: email, phone: phone);
+    await remote.updateMe(
+      name: name,
+      username: username,
+      email: email,
+      phone: phone,
+    );
     final profile = await me();
     final displayName = await _accountName(profile);
-    final saved = await accounts();
-    final updated = [
-      for (final item in saved)
-        if (item.userId == profile.id)
-          StoredAccount(
-            userId: profile.id,
-            username: item.username,
-            name: displayName,
-            role: profile.role.value,
-            access: item.access,
-            refresh: item.refresh,
-            profileJson: remote.lastMeJson ?? item.profileJson,
-            mosqueName: profile.mosqueName,
-            mosqueCode: profile.mosqueCode,
-          )
-        else
-          item,
-    ];
-    await storage.writeAccountsJson(
-      jsonEncode(updated.map((e) => e.toJson()).toList()),
-    );
+    await _persistAccountProfile(profile, displayName: displayName);
     return profile;
   }
 

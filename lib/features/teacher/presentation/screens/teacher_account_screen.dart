@@ -8,7 +8,9 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_chip.dart';
 import '../../../../core/widgets/responsive_page.dart';
 import '../../../../core/widgets/section_header.dart';
+import '../../../../shared/account_details_card.dart';
 import '../../../../shared/account_switcher.dart';
+import '../../../../shared/permissions.dart';
 import '../../../admin/domain/admin_models.dart';
 import '../../../admin/presentation/admin_shell.dart';
 import '../../../auth/presentation/cubits/auth_cubit.dart';
@@ -32,6 +34,16 @@ class _TeacherAccountScreenState extends State<TeacherAccountScreen> {
   }
 
   Future<void> _loadTeams() async {
+    final profile = currentProfile(context);
+    final canView =
+        profile == null ||
+        profile.isAdmin ||
+        profile.teacherCanView('teams') ||
+        profile.canView('teams');
+    if (!canView) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
     try {
       final teams = await AdminRepositoryScope.of(context).teams();
       if (!mounted) return;
@@ -47,7 +59,13 @@ class _TeacherAccountScreenState extends State<TeacherAccountScreen> {
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<AppTokens>()!;
-    final auth = context.watch<AuthCubit>().state;
+    AuthState? auth;
+    try {
+      auth = context.watch<AuthCubit>().state;
+    } catch (_) {
+      // Standalone widget tests may mount the screen without an AuthCubit.
+      auth = null;
+    }
     final profile = auth is AuthAuthenticated ? auth.profile : null;
 
     return ResponsivePage(
@@ -100,6 +118,13 @@ class _TeacherAccountScreenState extends State<TeacherAccountScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          const SectionHeader(
+            icon: Icons.person_outline,
+            title: 'بيانات الحساب',
+          ),
+          const SizedBox(height: 8),
+          const AccountDetailsCard(),
           const SizedBox(height: 16),
           const SectionHeader(
             icon: Icons.groups_outlined,

@@ -159,11 +159,21 @@ class AuthRemoteDataSource {
     }
   }
 
-  Future<void> updateMe({String? name, String? email, String? phone}) async {
+  Future<void> updateMe({
+    String? name,
+    String? username,
+    String? email,
+    String? phone,
+  }) async {
     try {
       await _dio.patch<dynamic>(
         ApiEndpoints.me,
-        data: {'name': ?name, 'email': ?email, 'phone': ?phone},
+        data: {
+          'name': ?name,
+          'username': ?username,
+          'email': ?email,
+          'phone': ?phone,
+        },
       );
     } on DioException catch (e) {
       throw e.error is ApiException

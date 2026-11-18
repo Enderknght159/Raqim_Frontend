@@ -88,6 +88,10 @@ class UserProfile {
   bool get isTeacher => role == AppRole.teacher;
   bool get isStudent => role == AppRole.student;
 
+  /// True when the backend reports no usable surface for this account. Those
+  /// accounts still own their profile and a logout action.
+  bool get hasNoAccess => accountState == 'noAccess';
+
   bool get hasKioskAbility => specialAbilities.contains('kiosk');
 
   bool get hasStudentSection =>
