@@ -58,14 +58,10 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
       _briefs ??= repo.courseBriefs();
 
   Future<_LastSessionData> _loadLastSession(AdminRepository repo) async {
-    final results = await Future.wait<Object?>([
-      repo.lastSession(),
-      _loadBriefs(repo),
-    ]);
-    return (
-      session: results[0] as AdminSessionRow?,
-      courses: results[1] as List<AdminCourseSummary>,
-    );
+    // Sequential on purpose: one request at a time per page section.
+    final session = await repo.lastSession();
+    final courses = await _loadBriefs(repo);
+    return (session: session, courses: courses);
   }
 
   @override

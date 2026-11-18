@@ -180,7 +180,6 @@ class _AdminContentScreenState extends State<AdminContentScreen> {
         cacheKey: 'admin-content-counts',
         revision: _revision,
         load: repo.generalStats,
-        showRefreshLine: false,
         skeleton: const Wrap(
           spacing: 16,
           children: [
@@ -1033,11 +1032,9 @@ class _ContentPane extends StatelessWidget {
           cacheKey: 'admin-content-assets',
           revision: revision,
           load: () async {
-            final lists = await Future.wait<List<AdminContentItem>>([
-              repo.matns(),
-              repo.subjects(),
-            ]);
-            return (matns: lists[0], subjects: lists[1]);
+            final matns = await repo.matns();
+            final subjects = await repo.subjects();
+            return (matns: matns, subjects: subjects);
           },
           skeleton: const ResponsiveGrid(
             minItemWidth: 200,

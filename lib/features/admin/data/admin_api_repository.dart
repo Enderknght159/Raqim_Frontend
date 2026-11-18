@@ -261,7 +261,10 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
       return cached;
     }
     final items = await getAllPages(ApiEndpoints.courses);
-    final result = await Future.wait(items.map(_courseSummary));
+    final result = <AdminCourseSummary>[];
+    for (final item in items) {
+      result.add(await _courseSummary(item));
+    }
     result.sort(_sortCourses);
     _coursesCache = result;
     _coursesAt = DateTime.now();
@@ -336,12 +339,11 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
 
   Future<AdminCourseSummary> _courseSummary(Map<String, dynamic> item) async {
     final id = asInt(item['id']);
-    final parallel = await Future.wait([
-      _safeGetList(ApiEndpoints.courseSessions(id)),
-      _safeGetMap(ApiEndpoints.reportCourseTotal(id)),
-    ]);
-    final sessions = parallel[0] as List<Map<String, dynamic>>;
-    final total = parallel[1] as Map<String, dynamic>;
+    // Section requests are queued one at a time; keep the requests inside the
+    // summary sequential too so a single card never fires several endpoints
+    // at once.
+    final sessions = await _safeGetList(ApiEndpoints.courseSessions(id));
+    final total = await _safeGetMap(ApiEndpoints.reportCourseTotal(id));
     // The line chart needs the whole attendance history, not just the last
     // session. Cap the window so a long course does not trigger hundreds of
     // summary calls on the landing page. The chart itself downsample to 8
@@ -436,21 +438,12 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
   Future<List<AdminSessionRow>> _sessionRows(
     List<Map<String, dynamic>> items,
   ) async {
-    const batchSize = 12;
     final summaries = <int, Map<String, dynamic>>{};
-    for (var start = 0; start < items.length; start += batchSize) {
-      final end = start + batchSize > items.length
-          ? items.length
-          : start + batchSize;
-      final slice = items.sublist(start, end);
-      final results = await Future.wait(
-        slice.map(
-          (item) => _safeGetMap(ApiEndpoints.sessionSummary(asInt(item['id']))),
-        ),
-      );
-      for (var i = 0; i < slice.length; i++) {
-        summaries[asInt(slice[i]['id'])] = results[i];
-      }
+    // Sequential on purpose: a course card must not burst several session
+    // summary endpoints at once.
+    for (final item in items) {
+      final id = asInt(item['id']);
+      summaries[id] = await _safeGetMap(ApiEndpoints.sessionSummary(id));
     }
     return [
       for (final item in items)
@@ -813,13 +806,13 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
     final teacherNames = {
       for (final t in teachers) asInt(t['id']): asString(t['name']),
     };
-    final counts = await Future.wait(
-      teams.map(
-        (team) => _safeGetList(
-          ApiEndpoints.teamStudents(asInt(team['id'])),
-        ).then((members) => members.length),
-      ),
-    );
+    final counts = <int>[];
+    for (final team in teams) {
+      final members = await _safeGetList(
+        ApiEndpoints.teamStudents(asInt(team['id'])),
+      );
+      counts.add(members.length);
+    }
     final result = <AdminTeamRow>[
       for (var index = 0; index < teams.length; index++)
         _teamRow(
@@ -1818,13 +1811,13 @@ class AdminApiRepository extends ApiRepositoryBase implements AdminRepository {
     final mine = teams
         .where((team) => asInt(team['teacherId']) == teacherId)
         .toList();
-    final counts = await Future.wait(
-      mine.map(
-        (team) => _safeGetList(
-          ApiEndpoints.teamStudents(asInt(team['id'])),
-        ).then((members) => members.length),
-      ),
-    );
+    final counts = <int>[];
+    for (final team in mine) {
+      final members = await _safeGetList(
+        ApiEndpoints.teamStudents(asInt(team['id'])),
+      );
+      counts.add(members.length);
+    }
     final teacherNames = teacherId == null
         ? <int, String>{}
         : <int, String>{teacherId: teacherName};

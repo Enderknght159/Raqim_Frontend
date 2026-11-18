@@ -83,14 +83,10 @@ class _AdminSessionScreenState extends State<AdminSessionScreen> {
   /// One request pair for the three cards that share the same dependency.
   Future<_AttendanceData> _loadAttendance() async {
     final repo = AdminRepositoryScope.of(context);
-    final results = await Future.wait<List<Object>>([
-      repo.sessionAttendance(widget.sessionId),
-      repo.sessionMembers(widget.sessionId),
-    ]);
-    return (
-      attendance: results[0] as List<AdminAttendanceRow>,
-      members: results[1] as List<AdminSessionMember>,
-    );
+    // Sequential: the page must not fire both endpoints at the same time.
+    final attendance = await repo.sessionAttendance(widget.sessionId);
+    final members = await repo.sessionMembers(widget.sessionId);
+    return (attendance: attendance, members: members);
   }
 
   void _reload() {

@@ -44,14 +44,9 @@ class _AchievementScreenState extends State<AchievementScreen> {
     final repo = StudentRepositoryScope.of(context);
     _exams = SectionMemo(repo.examsWithSubmissions);
     _matns = SectionMemo(() async {
-      final results = await Future.wait<Object>([
-        repo.matns(),
-        repo.latestMatnRecitations(),
-      ]);
-      return (
-        matns: results[0] as List<Matn>,
-        latest: results[1] as Map<int, MatnRecitation>,
-      );
+      final matns = await repo.matns();
+      final latest = await repo.latestMatnRecitations();
+      return (matns: matns, latest: latest);
     });
   }
 

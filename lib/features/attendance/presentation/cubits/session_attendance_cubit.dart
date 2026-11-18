@@ -159,14 +159,9 @@ class SessionAttendanceCubit extends Cubit<SessionAttendanceState> {
   Future<void> load() async {
     emit(state.copyWith(loading: true, clearError: true));
     try {
-      final results = await Future.wait<Object>([
-        _repository.sessionRow(sessionId),
-        _repository.sessionMembers(sessionId),
-        _repository.sessionAttendance(sessionId),
-      ]);
-      final session = results[0] as AdminSessionRow;
-      final members = results[1] as List<AdminSessionMember>;
-      final attendance = results[2] as List<AdminAttendanceRow>;
+      final session = await _repository.sessionRow(sessionId);
+      final members = await _repository.sessionMembers(sessionId);
+      final attendance = await _repository.sessionAttendance(sessionId);
       final registered = <int, DateTime>{
         for (final row in attendance)
           if (row.arrivalTime != null) row.studentId: row.arrivalTime!,

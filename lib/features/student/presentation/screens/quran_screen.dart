@@ -68,19 +68,13 @@ class _QuranScreenState extends State<QuranScreen> {
   Future<_QuranMapData> _loadMap() async {
     // A certificates failure must not hide the map: it only drops the
     // «مختبر» overlay, while the certificates card reports its own error.
-    final certsF = _certificates!(_revision).then<List<Certificate>>(
+    // Sequential: the page loads one endpoint at a time.
+    final memorizations = await _memorizations!(_revision);
+    final certs = await _certificates!(_revision).then<List<Certificate>>(
       (certs) => certs,
       onError: (Object _, StackTrace _) => const <Certificate>[],
     );
-    final results = await Future.wait<Object>([
-      _memorizations!(_revision),
-      certsF,
-    ]);
-    final certs = results[1] as List<Certificate>;
-    return (
-      memorizations: results[0] as List<Memorization>,
-      testedJuz: _testedJuz(certs),
-    );
+    return (memorizations: memorizations, testedJuz: _testedJuz(certs));
   }
 
   @override

@@ -10,16 +10,16 @@ import '../widgets/skeleton.dart';
 
 /// Limits how many section requests are in flight at once.
 ///
-/// Pages are built from several independent [AsyncSection] cards; without a
-/// cap, opening a busy page would fire every request simultaneously and make
-/// the first paint feel slower. Four concurrent requests keeps the UI
-/// responsive while still loading the above-the-fold cards first.
+/// Pages are built from several independent [AsyncSection] cards, so the
+/// scheduler runs their requests **one at a time in enqueue order**. This
+/// avoids firing every endpoint of a page simultaneously and keeps the first
+/// (above-the-fold) section ahead of the rest.
 class SectionScheduler {
   SectionScheduler._();
 
   static final SectionScheduler instance = SectionScheduler._();
 
-  static const int _maxConcurrent = 4;
+  static const int _maxConcurrent = 1;
 
   int _active = 0;
   final Queue<void Function()> _queue = Queue<void Function()>();
@@ -70,7 +70,7 @@ class SectionScheduler {
 ///
 /// * [cacheKey] enables the session-only [ScreenCache] (immediate stale paint).
 /// * [delay] staggers secondary sections so the first screenful wins the
-///   network/CPU budget.
+///   request queue.
 /// * [revision] lets a pull-to-refresh bump every section at once.
 class AsyncSection<T> extends StatefulWidget {
   const AsyncSection({
@@ -81,7 +81,6 @@ class AsyncSection<T> extends StatefulWidget {
     this.skeleton,
     this.delay = Duration.zero,
     this.revision = 0,
-    this.showRefreshLine = true,
     this.errorBuilder,
   });
 
@@ -91,7 +90,6 @@ class AsyncSection<T> extends StatefulWidget {
   final Widget? skeleton;
   final Duration delay;
   final int revision;
-  final bool showRefreshLine;
   final Widget Function(BuildContext context, VoidCallback retry)? errorBuilder;
 
   @override
@@ -101,7 +99,6 @@ class AsyncSection<T> extends StatefulWidget {
 class _AsyncSectionState<T> extends State<AsyncSection<T>> {
   T? _data;
   bool _hasData = false;
-  bool _refreshing = false;
   Object? _error;
   int _requestId = 0;
   Timer? _delayTimer;
@@ -139,13 +136,11 @@ class _AsyncSectionState<T> extends State<AsyncSection<T>> {
     if (cached == null) return;
     _data = cached;
     _hasData = true;
-    _refreshing = true;
   }
 
   void _schedule() {
     final id = ++_requestId;
     _delayTimer?.cancel();
-    _refreshing = _hasData;
     _error = null;
     Future<void> start() async {
       if (!mounted || id != _requestId) return;
@@ -157,13 +152,11 @@ class _AsyncSectionState<T> extends State<AsyncSection<T>> {
         setState(() {
           _data = value;
           _hasData = true;
-          _refreshing = false;
           _error = null;
         });
       } catch (error) {
         if (!mounted || id != _requestId) return;
         setState(() {
-          _refreshing = false;
           _error = error;
         });
       }
@@ -184,36 +177,13 @@ class _AsyncSectionState<T> extends State<AsyncSection<T>> {
   void _retry() {
     setState(() {
       _error = null;
-      _refreshing = _hasData;
     });
     _schedule();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_hasData) {
-      final content = widget.builder(context, _data as T);
-      if (!_refreshing || !widget.showRefreshLine) return content;
-      final tokens = Theme.of(context).extension<AppTokens>()!;
-      return Stack(
-        children: [
-          content,
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(2),
-              child: LinearProgressIndicator(
-                minHeight: 2,
-                color: tokens.brand,
-                backgroundColor: Colors.transparent,
-              ),
-            ),
-          ),
-        ],
-      );
-    }
+    if (_hasData) return widget.builder(context, _data as T);
     if (_error != null) {
       final custom = widget.errorBuilder;
       if (custom != null) return custom(context, _retry);
