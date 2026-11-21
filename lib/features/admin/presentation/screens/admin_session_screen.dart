@@ -896,6 +896,7 @@ class _FilterIconChip extends StatelessWidget {
           child: SizedBox(
             height: 44,
             child: Center(
+              widthFactor: 1,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 140),
                 padding: const EdgeInsets.symmetric(
